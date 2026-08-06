@@ -1,0 +1,529 @@
+# SKOS Integrity Shapes
+#
+# Self-contained SHACL shapes for SKOS concept schemes. No owl:imports, no
+# vendor extensions -- runs under pySHACL, TopBraid, Jena, or any conformant
+# SHACL processor against a bare concept scheme with nothing else loaded.
+#
+# Severity encodes *what kind* of problem it is, so a report can be triaged:
+#
+#   sh:Violation -- inconsistent with the SKOS data model (W3C SKOS Reference
+#                   integrity conditions S9, S13, S14, S27, S36, S37, S46, and
+#                   the domain/range conditions that make certain graphs
+#                   contradictory). These are defects, not opinions.
+#   sh:Warning   -- consistent with SKOS but contrary to the usage conventions
+#                   the Reference itself states, or to ANSI/NISO Z39.19 and
+#                   ISO 25964 thesaurus practice. Publishable data should not
+#                   have these.
+#   sh:Info      -- editorial completeness. Useful for release readiness, not
+#                   a correctness claim.
+#
+# Structure note: SHACL attaches sh:severity to a *shape*, not to an individual
+# constraint. So each check gets its own node shape rather than being bundled
+# by subject class -- otherwise every finding inherits one severity and the
+# triage collapses.
+#
+# To adapt for a project: copy this file, adjust severities to your release
+# gate, and pass it with --shapes. Nothing here depends on the rest of the skill.
+
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix owl:     <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:      <http://www.w3.org/ns/shacl#> .
+@prefix skos:    <http://www.w3.org/2004/02/skos/core#> .
+@prefix skosxl:  <http://www.w3.org/2008/05/skos-xl#> .
+@prefix xsd:     <http://www.w3.org/2001/XMLSchema#> .
+@prefix ix:      <https://w3id.org/skos-integrity-shapes#> .
+
+<https://w3id.org/skos-integrity-shapes>
+  a owl:Ontology ;
+  rdfs:label "SKOS Integrity Shapes" ;
+  rdfs:comment "SHACL shapes for the SKOS Reference integrity conditions plus Z39.19 / ISO 25964 thesaurus conventions." ;
+  sh:declare [ sh:prefix "skos" ;    sh:namespace "http://www.w3.org/2004/02/skos/core#"^^xsd:anyURI ] ;
+  sh:declare [ sh:prefix "skosxl" ;  sh:namespace "http://www.w3.org/2008/05/skos-xl#"^^xsd:anyURI ] ;
+  sh:declare [ sh:prefix "rdf" ;     sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ] ;
+  sh:declare [ sh:prefix "rdfs" ;    sh:namespace "http://www.w3.org/2000/01/rdf-schema#"^^xsd:anyURI ] ;
+  sh:declare [ sh:prefix "dcterms" ; sh:namespace "http://purl.org/dc/terms/"^^xsd:anyURI ] ;
+.
+
+# ===========================================================================
+# Class disjointness -- S9, S37
+# ===========================================================================
+
+ix:ConceptSchemeDisjointness
+  a sh:NodeShape ;
+  rdfs:label "S9 concept/scheme disjointness" ;
+  sh:targetClass skos:Concept ;
+  sh:not [ sh:class skos:ConceptScheme ] ;
+  sh:message "S9: skos:Concept and skos:ConceptScheme are disjoint -- a resource cannot be both. If this is a scheme doing double duty as a facet, model the facet as a top concept or a skos:Collection." ;
+  sh:severity sh:Violation ;
+.
+
+ix:CollectionDisjointness
+  a sh:NodeShape ;
+  rdfs:label "S37 collection disjointness" ;
+  sh:targetClass skos:Collection ;
+  sh:not [ sh:class skos:Concept ] ;
+  sh:not [ sh:class skos:ConceptScheme ] ;
+  sh:message "S37: skos:Collection is disjoint with both skos:Concept and skos:ConceptScheme." ;
+  sh:severity sh:Violation ;
+.
+
+# ===========================================================================
+# Lexical labels -- S12, S13, S14
+# ===========================================================================
+
+ix:PrefLabelPresence
+  a sh:NodeShape ;
+  rdfs:label "prefLabel present and unique per language (S14)" ;
+  sh:targetClass skos:Concept ;
+  sh:property [
+      sh:path skos:prefLabel ;
+      sh:minCount 1 ;
+      sh:nodeKind sh:Literal ;
+      sh:uniqueLang true ;
+      sh:severity sh:Violation ;
+      sh:message "S14 / labelling: a concept needs at least one skos:prefLabel and no more than one per language tag. Two preferred labels in one language means the concept was never disambiguated -- either split it into two concepts or demote one label to skos:altLabel." ;
+    ] ;
+.
+
+ix:LabelLanguageTag
+  a sh:NodeShape ;
+  rdfs:label "labels carry BCP 47 language tags" ;
+  sh:targetClass skos:Concept ;
+  sh:property [
+      sh:path skos:prefLabel ;
+      sh:nodeKind sh:Literal ;
+      sh:datatype rdf:langString ;
+      sh:severity sh:Warning ;
+      sh:message "Untagged label: every lexical label needs a BCP 47 language tag. An untagged literal cannot participate in language-aware retrieval, and it silently escapes the one-prefLabel-per-language rule (S14) that keeps a vocabulary unambiguous." ;
+    ] ;
+.
+
+ix:LabelNodeKind
+  a sh:NodeShape ;
+  rdfs:label "S12 labels are literals" ;
+  sh:targetClass skos:Concept ;
+  sh:property [ sh:path skos:altLabel ; sh:nodeKind sh:Literal ; sh:severity sh:Violation ;
+      sh:message "S12: lexical labels are plain (language-tagged) literals, never IRIs. If you need to describe a label as a resource in its own right -- provenance, acronym relations, transliteration -- that is what SKOS-XL is for." ] ;
+  sh:property [ sh:path skos:hiddenLabel ; sh:nodeKind sh:Literal ; sh:severity sh:Violation ;
+      sh:message "S12: lexical labels are plain (language-tagged) literals, never IRIs." ] ;
+.
+
+ix:LabelDisjointness
+  a sh:NodeShape ;
+  rdfs:label "S13 pref/alt/hidden disjointness" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "S13: skos:prefLabel, skos:altLabel and skos:hiddenLabel are pairwise disjoint. This concept carries the same literal on more than one of them. Keep the preferred form on prefLabel and delete the duplicate." ;
+      sh:select """
+        SELECT $this ?value
+        WHERE {
+          { $this skos:prefLabel ?value . $this skos:altLabel ?value . }
+          UNION
+          { $this skos:prefLabel ?value . $this skos:hiddenLabel ?value . }
+          UNION
+          { $this skos:altLabel ?value . $this skos:hiddenLabel ?value . }
+        }
+      """ ;
+    ] ;
+.
+
+ix:HomographWithoutQualifier
+  a sh:NodeShape ;
+  rdfs:label "duplicate prefLabel inside one scheme" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Duplicate preferred label within a scheme: two concepts in this scheme carry the identical prefLabel in the same language. Either they are the same concept and should be merged, or they are homographs, and Z39.19 (6.2.1) requires a parenthetical qualifier to tell them apart -- 'mercury (metal)' vs 'mercury (planet)'." ;
+      sh:select """
+        SELECT $this ?value
+        WHERE {
+          $this skos:prefLabel ?value ;
+                skos:inScheme ?scheme .
+          ?other skos:prefLabel ?value ;
+                 skos:inScheme ?scheme .
+          FILTER (?other != $this)
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Semantic relations -- S19/S20, S27, and the direct-link convention
+# ===========================================================================
+
+ix:AssociativeHierarchicalClash
+  a sh:NodeShape ;
+  rdfs:label "S27 related/broaderTransitive disjointness" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "S27: skos:related is disjoint with skos:broaderTransitive. This concept is associatively related to one of its own ancestors or descendants. A term cannot be both a kind or part of another term and merely associated with it -- decide which relationship is true and remove the other." ;
+      sh:select """
+        SELECT $this ?other
+        WHERE {
+          $this skos:related ?other .
+          { $this (skos:broader|^skos:narrower|skos:broaderTransitive|^skos:narrowerTransitive)+ ?other . }
+          UNION
+          { ?other (skos:broader|^skos:narrower|skos:broaderTransitive|^skos:narrowerTransitive)+ $this . }
+        }
+      """ ;
+    ] ;
+.
+
+ix:HierarchyCycle
+  a sh:NodeShape ;
+  rdfs:label "cycle in the hierarchy" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Hierarchy cycle: this concept is its own ancestor. SKOS itself tolerates it (skos:broaderTransitive is not declared irreflexive) but no thesaurus can be displayed, traversed, or query-expanded from a cyclic hierarchy. Break the cycle." ;
+      sh:select """
+        SELECT $this
+        WHERE { $this (skos:broader|^skos:narrower)+ $this . }
+      """ ;
+    ] ;
+.
+
+ix:SemanticRelationRange
+  a sh:NodeShape ;
+  rdfs:label "S19/S20 semantic relations link concepts only" ;
+  sh:targetClass skos:Concept ;
+  sh:property [ sh:path skos:broader ; sh:nodeKind sh:IRI ; sh:not [ sh:class skos:Collection ] ; sh:not [ sh:class skos:ConceptScheme ] ; sh:severity sh:Violation ;
+      sh:message "Semantic relations run between concepts only (S19/S20). Pointing broader/narrower/related at a Collection or a ConceptScheme makes the graph inconsistent, since Collection and Concept are disjoint. Node labels and facet groupings belong in a skos:Collection and are attached with skos:member -- they are not rungs in the hierarchy." ] ;
+  sh:property [ sh:path skos:narrower ; sh:nodeKind sh:IRI ; sh:not [ sh:class skos:Collection ] ; sh:not [ sh:class skos:ConceptScheme ] ; sh:severity sh:Violation ;
+      sh:message "Semantic relations run between concepts only (S19/S20)." ] ;
+  sh:property [ sh:path skos:related ; sh:nodeKind sh:IRI ; sh:not [ sh:class skos:Collection ] ; sh:not [ sh:class skos:ConceptScheme ] ; sh:severity sh:Violation ;
+      sh:message "Semantic relations run between concepts only (S19/S20)." ] ;
+.
+
+ix:AssertedTransitive
+  a sh:NodeShape ;
+  rdfs:label "transitive properties asserted rather than inferred" ;
+  sh:targetClass skos:Concept ;
+  sh:property [ sh:path skos:broaderTransitive ; sh:maxCount 0 ; sh:severity sh:Warning ;
+      sh:message "Convention: skos:broaderTransitive and skos:narrowerTransitive exist to be inferred, not asserted. Asserting them erases the difference between a direct parent and a remote ancestor -- which is exactly what breadcrumbs, tree displays and hierarchy exports depend on. Assert skos:broader; derive the closure with a reasoner or a property path." ] ;
+  sh:property [ sh:path skos:narrowerTransitive ; sh:maxCount 0 ; sh:severity sh:Warning ;
+      sh:message "Convention: skos:narrowerTransitive exists to be inferred, not asserted. Assert skos:broader and let the closure be derived." ] ;
+.
+
+ix:ReflexiveRelation
+  a sh:NodeShape ;
+  rdfs:label "self-referencing relation" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Reflexive relation: this concept is broader than, narrower than, or related to itself. Consistent with SKOS, but always an editing artifact." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          { $this skos:broader $this . }
+          UNION { $this skos:narrower $this . }
+          UNION { $this skos:related $this . }
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Scheme membership and hierarchy placement
+# ===========================================================================
+
+ix:SchemeMembership
+  a sh:NodeShape ;
+  rdfs:label "concept belongs to a scheme" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "No scheme: this concept has neither skos:inScheme nor skos:topConceptOf. A concept that belongs to no scheme cannot be exported, versioned, or governed as part of any vocabulary." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          FILTER NOT EXISTS { $this skos:inScheme ?s }
+          FILTER NOT EXISTS { $this skos:topConceptOf ?s2 }
+          FILTER NOT EXISTS { ?s3 skos:hasTopConcept $this }
+        }
+      """ ;
+    ] ;
+.
+
+ix:HierarchyOrphan
+  a sh:NodeShape ;
+  rdfs:label "concept has no parent and is not a top concept" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Hierarchy orphan: no broader concept and not declared a top concept. Every concept should be reachable by walking down from a top concept, or the vocabulary contains an island nobody can browse to." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          FILTER NOT EXISTS { $this skos:broader ?b }
+          FILTER NOT EXISTS { ?n skos:narrower $this }
+          FILTER NOT EXISTS { $this skos:topConceptOf ?s }
+          FILTER NOT EXISTS { ?s2 skos:hasTopConcept $this }
+        }
+      """ ;
+    ] ;
+.
+
+ix:TopConceptWithParent
+  a sh:NodeShape ;
+  rdfs:label "top concept that also has a parent" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Top concept with a parent: declared topmost in a scheme but also has a broader concept. SKOS states no integrity condition here, but it contradicts what 'top' means and will display the concept twice in a tree." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          { $this skos:topConceptOf ?s } UNION { ?s skos:hasTopConcept $this }
+          { $this skos:broader ?b } UNION { ?b skos:narrower $this }
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Notation -- S15 and the uniqueness convention (Reference 6.5.3)
+# ===========================================================================
+
+ix:NotationUniqueness
+  a sh:NodeShape ;
+  rdfs:label "notation unique within scheme" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Ambiguous notation: this concept shares a notation with another concept in the same scheme. A notation exists to identify a concept uniquely within its scheme (Reference 6.5.3); duplicated, it is useless as a handle for catalog records and legacy system mappings." ;
+      sh:select """
+        SELECT $this ?value
+        WHERE {
+          $this skos:notation ?value ;
+                skos:inScheme ?scheme .
+          ?other skos:notation ?value ;
+                 skos:inScheme ?scheme .
+          FILTER (?other != $this)
+        }
+      """ ;
+    ] ;
+.
+
+ix:NotationDatatype
+  a sh:NodeShape ;
+  rdfs:label "notation is a typed literal" ;
+  sh:targetClass skos:Concept ;
+  sh:property [
+      sh:path skos:notation ;
+      sh:not [ sh:datatype rdf:langString ] ;
+      sh:severity sh:Warning ;
+      sh:message "Notations are typed literals, not language-tagged ones (Reference 6.5.1, 6.5.4). A classification code is not a word in a language. Coin a datatype IRI for the notation system, or leave it as xsd:string." ;
+    ] ;
+.
+
+# ===========================================================================
+# Documentation -- editorial completeness
+# ===========================================================================
+
+ix:ConceptDocumentation
+  a sh:NodeShape ;
+  rdfs:label "concept has a definition or scope note" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Info ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Undocumented: neither skos:definition nor skos:scopeNote. Z39.19 (6.2.2) treats a scope note as required wherever a term's boundaries are not self-evident, and indexers cannot apply a term consistently without one. Informational while drafting; release-blocking for a published vocabulary." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          FILTER NOT EXISTS { $this skos:definition ?d }
+          FILTER NOT EXISTS { $this skos:scopeNote ?n }
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Mapping properties -- S46 and the cross-scheme convention
+# ===========================================================================
+
+ix:MappingStrengthClash
+  a sh:NodeShape ;
+  rdfs:label "S46 exactMatch disjointness" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "S46: skos:exactMatch is disjoint with skos:broadMatch and skos:relatedMatch (and, by symmetry and inversion, with skos:narrowMatch). This concept claims two incompatible mapping strengths to the same target." ;
+      sh:select """
+        SELECT $this ?other
+        WHERE {
+          $this skos:exactMatch ?other .
+          { $this skos:broadMatch ?other . }
+          UNION { $this skos:narrowMatch ?other . }
+          UNION { $this skos:relatedMatch ?other . }
+        }
+      """ ;
+    ] ;
+.
+
+ix:IntraSchemeMapping
+  a sh:NodeShape ;
+  rdfs:label "mapping property used within one scheme" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Mapping inside one scheme: this concept is mapped to another concept in the same scheme. Mapping properties are by convention for links between schemes (Reference 10.6.1); within a scheme use skos:broader / skos:related, which say the same thing without falsely signalling an alignment to an external vocabulary." ;
+      sh:select """
+        SELECT $this ?other
+        WHERE {
+          $this (skos:exactMatch|skos:closeMatch|skos:broadMatch|skos:narrowMatch|skos:relatedMatch) ?other ;
+                skos:inScheme ?scheme .
+          ?other skos:inScheme ?scheme .
+          FILTER (?other != $this)
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Collections -- S36 and node-label practice
+# ===========================================================================
+
+ix:MemberListIntegrity
+  a sh:NodeShape ;
+  rdfs:label "S36 memberList items are also members" ;
+  sh:targetClass skos:Collection ;
+  sh:severity sh:Violation ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "S36: every item in a skos:memberList must also be a value of skos:member. An ordered collection whose list and member set disagree renders differently depending on which property the consumer reads." ;
+      sh:select """
+        SELECT $this ?item
+        WHERE {
+          $this skos:memberList/rdf:rest*/rdf:first ?item .
+          FILTER NOT EXISTS { $this skos:member ?item }
+        }
+      """ ;
+    ] ;
+.
+
+ix:UnlabelledCollection
+  a sh:NodeShape ;
+  rdfs:label "collection without a label" ;
+  sh:targetClass skos:Collection ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Unlabelled collection: collections exist to carry node labels and facet indicators -- 'by material', 'by function'. An unlabelled one communicates nothing to a display and is indistinguishable from an accident." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          FILTER NOT EXISTS { $this rdfs:label ?l }
+          FILTER NOT EXISTS { $this skos:prefLabel ?p }
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Concept scheme metadata
+# ===========================================================================
+
+ix:SchemeTitle
+  a sh:NodeShape ;
+  rdfs:label "scheme has a title" ;
+  sh:targetClass skos:ConceptScheme ;
+  sh:property [ sh:path dcterms:title ; sh:minCount 1 ; sh:severity sh:Warning ;
+      sh:message "A concept scheme needs a dcterms:title. Without one the vocabulary cannot be listed, cited, or catalogued." ] ;
+.
+
+ix:SchemeProvenance
+  a sh:NodeShape ;
+  rdfs:label "scheme carries provenance metadata" ;
+  sh:targetClass skos:ConceptScheme ;
+  sh:property [ sh:path dcterms:created ; sh:minCount 1 ; sh:severity sh:Info ;
+      sh:message "A published scheme should carry dcterms:created, with dcterms:modified per release, so consumers can tell which version they hold." ] ;
+  sh:property [ sh:path dcterms:publisher ; sh:minCount 1 ; sh:severity sh:Info ;
+      sh:message "A published scheme should name a dcterms:publisher -- the body accountable for maintaining it and the address for questions about it." ] ;
+.
+
+ix:SchemeHasTopConcepts
+  a sh:NodeShape ;
+  rdfs:label "scheme declares top concepts" ;
+  sh:targetClass skos:ConceptScheme ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "No top concepts: this scheme declares no skos:hasTopConcept and no concept declares skos:topConceptOf on it. There is no entry point into the hierarchy." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          FILTER NOT EXISTS { $this skos:hasTopConcept ?c }
+          FILTER NOT EXISTS { ?c2 skos:topConceptOf $this }
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# SKOS-XL
+# ===========================================================================
+
+ix:XLLabelForm
+  a sh:NodeShape ;
+  rdfs:label "XL label has a literal form" ;
+  sh:targetClass skosxl:Label ;
+  sh:property [
+      sh:path skosxl:literalForm ;
+      sh:minCount 1 ;
+      sh:nodeKind sh:Literal ;
+      sh:uniqueLang true ;
+      sh:severity sh:Violation ;
+      sh:message "Every skosxl:Label needs at least one skosxl:literalForm, and no more than one per language. A label resource with no literal form is an identifier for nothing." ;
+    ] ;
+.
+
+ix:XLDumbDown
+  a sh:NodeShape ;
+  rdfs:label "XL labels have plain-SKOS equivalents" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "SKOS-XL without a dumbed-down form: this concept has skosxl:prefLabel but no plain skos:prefLabel. Reference B.3.4.1 defines the dumb-down precisely so plain-SKOS consumers still see a label -- and most consumers do not implement XL. Publish both, generating the plain form from the XL one." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          $this skosxl:prefLabel ?xl .
+          FILTER NOT EXISTS { $this skos:prefLabel ?p }
+        }
+      """ ;
+    ] ;
+.
