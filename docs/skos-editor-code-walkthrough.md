@@ -6,7 +6,7 @@ Most "build an app with AI" tutorials pick something with no ground truth — a 
 
 Everything below fits in one HTML file. No framework, no build step, no database. One component, done well.
 
-## What SKOS actually is (the five ideas you need)
+## What is SKOS (the five ideas you need)
 
 SKOS — Simple Knowledge Organization System — is a W3C standard for expressing taxonomies, thesauri, and controlled vocabularies as RDF. You do not need to "learn RDF" first. You need five ideas.
 
@@ -219,7 +219,7 @@ download("taxonomy.ttl",    toTurtle(model),  "text/turtle");
 download("taxonomy.jsonld", toJsonLd(model),  "application/ld+json");
 ```
 
-## The part that makes it *legitimate*: verify against an oracle
+## It's *legitimate*: verify against an oracle
 
 Here's where building with Claude stops being vibes and becomes engineering. Anyone can produce text that *looks* like Turtle. The question is whether an independent, standards-compliant tool reads it back as the graph you intended. So you check — with [rdflib](https://rdflib.readthedocs.io/), which is nobody's opinion; it's a reference implementation.
 
