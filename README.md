@@ -67,6 +67,26 @@ The point of this repo is that you can build it too — with an AI partner, but 
 - **DCMI / Dublin Core** — concept‑scheme metadata.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 
+## Deploy to a custom domain (Netlify + GoDaddy)
+
+The app lives at **`app.intentionalarrangement.com`**, hosted free on Netlify from this private repo. `netlify.toml` already sets the publish directory (`app/`), so there's no build step.
+
+**On Netlify** (one-time):
+1. [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project → GitHub** → authorize → pick `intentional-arrangement-skos`.
+2. Netlify reads `netlify.toml` (publish `app/`, no build command) → **Deploy**. You get a `random-name.netlify.app` URL.
+3. **Site configuration → Domain management → Add a domain** → `app.intentionalarrangement.com` → Netlify shows the DNS target (e.g. `your-site.netlify.app`).
+
+**On GoDaddy** (DNS, one record):
+1. **My Products → your domain → DNS → Manage Zones**.
+2. **Add** a record:
+   - **Type:** `CNAME`
+   - **Name/Host:** `app`
+   - **Value/Points to:** `your-site.netlify.app`  *(the exact target Netlify gave you)*
+   - **TTL:** 1 hour (default)
+3. Save. DNS propagates in minutes–an hour; Netlify then auto-issues HTTPS (Let's Encrypt).
+
+Every `git push` to `main` redeploys automatically. The repo stays **private**; only the built page is public at the domain.
+
 ## Roadmap
 
 - XLSX export/import in the app.

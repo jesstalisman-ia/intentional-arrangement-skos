@@ -1,0 +1,12 @@
+# Netlify deploy config — serves the self-contained app in app/ with no build step.
+[build]
+  publish = "app"
+  command = ""
+
+# Always serve the freshest single-file app (it's tiny; correctness > caching).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
