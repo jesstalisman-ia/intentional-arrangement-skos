@@ -2,7 +2,7 @@
 
 **A small, standards-first studio for building, validating, visualizing and publishing SKOS taxonomies — the browser app, plus a REST API and an MCP server over the same engine.**
 
-Built for readers and clients who want to stand up a *legitimate*, downloadable SKOS vocabulary and learn how it's done. Everything is open standards (W3C SKOS, ANSI/NISO Z39.19, ISO 25964, DCMI) and open source. The app is a single self-contained HTML file — no build step, no dependencies, runs from a file or GitHub Pages.
+Built for readers and clients who want to stand up a *legitimate*, downloadable SKOS vocabulary and learn how it's done. Open standards throughout (W3C SKOS, ANSI/NISO Z39.19, ISO 25964, DCMI), free and open source (MIT). The app is a single self-contained HTML file — no build step, no dependencies. It runs in any modern browser straight from the file. A hosted version is in the works; for now, download it and open it.
 
 > Informed building, not blind building. Augmentation, not automation.
 
@@ -12,7 +12,7 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 
 | Piece | What it is |
 |---|---|
-| **`app/`** | The **browser app** — one self-contained `index.html`. Open it or host it on GitHub Pages. |
+| **`app/`** | The **browser app** — one self-contained `index.html`. Download it and open it in any browser. |
 | **`api/`** | A tiny **REST API** (Flask + rdflib + pySHACL): validate a vocabulary, convert between RDF serializations. |
 | **`mcp-server/`** | An **MCP server** exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
 | **`docs/`** | The build essays — how this was made, and how to build it yourself. |
@@ -28,12 +28,12 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 
 ## Three ways to use it
 
-### 1. The app (browser / GitHub Pages)
+### 1. The app (in your browser)
 Open `app/index.html` directly, or serve it:
 ```bash
 cd app && python3 -m http.server 8080     # http://localhost:8080
 ```
-Pushing to `main` auto‑deploys the app to **GitHub Pages** via `.github/workflows/pages.yml` (enable Pages → "GitHub Actions" in repo settings).
+That's it — the tool is that single file. Hosting is planned (see below); for now you run it locally or just open the file.
 
 ### 2. The REST API
 ```bash
@@ -67,25 +67,14 @@ The point of this repo is that you can build it too — with an AI partner, but 
 - **DCMI / Dublin Core** — concept‑scheme metadata.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 
-## Deploy to a custom domain (Netlify + GoDaddy)
+## Hosting (planned)
 
-The app lives at **`app.intentionalarrangement.com`**, hosted free on Netlify from this private repo. `netlify.toml` already sets the publish directory (`app/`), so there's no build step.
+Not hosted yet — for now you run the app locally or open the file. When it goes online, the app is a single static file, so any of these fit:
 
-**On Netlify** (one-time):
-1. [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project → GitHub** → authorize → pick `intentional-arrangement-skos`.
-2. Netlify reads `netlify.toml` (publish `app/`, no build command) → **Deploy**. You get a `random-name.netlify.app` URL.
-3. **Site configuration → Domain management → Add a domain** → `app.intentionalarrangement.com` → Netlify shows the DNS target (e.g. `your-site.netlify.app`).
+- **GitHub Pages** — free, and since this repo is public it works out of the box: repo **Settings → Pages → Source: GitHub Actions**. It would land at `https://jesstalisman-ia.github.io/intentional-arrangement-skos/`.
+- **Netlify / Cloudflare Pages** — free, with a custom domain. `netlify.toml` points the publish directory at `app/`, so it's a one-click import; then add a domain in the host's dashboard and one CNAME record at your registrar.
 
-**On GoDaddy** (DNS, one record):
-1. **My Products → your domain → DNS → Manage Zones**.
-2. **Add** a record:
-   - **Type:** `CNAME`
-   - **Name/Host:** `app`
-   - **Value/Points to:** `your-site.netlify.app`  *(the exact target Netlify gave you)*
-   - **TTL:** 1 hour (default)
-3. Save. DNS propagates in minutes–an hour; Netlify then auto-issues HTTPS (Let's Encrypt).
-
-Every `git push` to `main` redeploys automatically. The repo stays **private**; only the built page is public at the domain.
+The app keeps all data in the visitor's own browser, so hosting it shares the *tool*, never anyone's vocabularies.
 
 ## Roadmap
 
