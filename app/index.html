@@ -831,6 +831,7 @@
           <label><input type="radio" name="fmt" value="rdfxml"><span>RDF/XML</span></label>
           <label><input type="radio" name="fmt" value="jsonld"><span>JSON-LD</span></label>
           <label><input type="radio" name="fmt" value="csv"><span>CSV</span></label>
+          <label><input type="radio" name="fmt" value="xlsx"><span>Excel</span></label>
           <label><input type="radio" name="fmt" value="rdfjson"><span>RDF/JSON</span></label>
           <label><input type="radio" name="fmt" value="markdown"><span>Markdown</span></label>
         </div></div>
@@ -1246,23 +1247,23 @@ function toJsonLd(model, opts){
 // CSV / spreadsheet serialization (one row per concept, flat)
 // ============================================================================
 function csvCell(s){ s = String(s == null ? "" : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-function toCsv(model){
+function modelToGrid(model){
   const cols = ["id","uri","prefLabel","altLabel","hiddenLabel","definition","scopeNote","notation",
     "broader","related","exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch","artifacts","topConcept"];
   const fmt = arr => (arr || []).map(l => l.lang ? l.val + "@" + l.lang : l.val).join(" | ");
   const fmtArt = arr => (arr || []).map(a => (a.title || "(untitled)") + " [" + (a.type || "link") + "] " + (a.url || "")).join(" | ");
   const ids = model.order && model.order.length ? model.order : Object.keys(model.concepts);
-  const rows = [cols.join(",")];
+  const grid = [cols];
   for (const id of ids){
     const c = model.concepts[id]; if (!c) continue;
-    const row = [ id, model.base + id, fmt(c.pref), fmt(c.alt), fmt(c.hidden), fmt(c.definition), fmt(c.scopeNote),
+    grid.push([ id, model.base + id, fmt(c.pref), fmt(c.alt), fmt(c.hidden), fmt(c.definition), fmt(c.scopeNote),
       c.notation || "", (c.broader || []).join(" | "), (c.related || []).join(" | "),
       (c.exactMatch || []).join(" | "), (c.closeMatch || []).join(" | "), (c.broadMatch || []).join(" | "),
-      (c.narrowMatch || []).join(" | "), (c.relatedMatch || []).join(" | "), fmtArt(c.artifacts), c.top ? "yes" : "" ];
-    rows.push(row.map(csvCell).join(","));
+      (c.narrowMatch || []).join(" | "), (c.relatedMatch || []).join(" | "), fmtArt(c.artifacts), c.top ? "yes" : "" ]);
   }
-  return rows.join("\r\n") + "\r\n";
+  return grid;
 }
+function toCsv(model){ return gridToCsv(modelToGrid(model)); }
 
 // ============================================================================
 // Spreadsheet import — CSV and Excel (.xlsx) → model. Client-side only, no
@@ -1456,6 +1457,60 @@ function csvTemplate(){
     ["","Puppy","","","A young dog.","","","Dog","","",""]
   ];
   return [cols.join(",")].concat(rows.map(r => r.map(csvCell).join(","))).join("\r\n") + "\r\n";
+}
+// ---- Excel .xlsx export: build a ZIP (CRC32 + native CompressionStream) with
+// one worksheet using inline strings. No external library. ----
+const _crcTable = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } return t; })();
+function _crc32(bytes){ let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = _crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function _colName(i){ let s = "", n = i + 1; while (n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); } return s; }
+async function _zip(files){
+  const deflate = typeof CompressionStream !== "undefined";
+  const local = [], central = []; let offset = 0;
+  for (const f of files){
+    const name = new TextEncoder().encode(f.name), raw = f.data, crc = _crc32(raw);
+    let comp = raw, method = 0;
+    if (deflate){ const ab = await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer(); comp = new Uint8Array(ab); method = 8; }
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0, true); lh.setUint16(8, method, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, comp.length, true); lh.setUint32(22, raw.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    local.push(new Uint8Array(lh.buffer), name, comp);
+    const cd = new DataView(new ArrayBuffer(46));
+    cd.setUint32(0, 0x02014b50, true); cd.setUint16(4, 20, true); cd.setUint16(6, 20, true); cd.setUint16(8, 0, true); cd.setUint16(10, method, true);
+    cd.setUint16(12, 0, true); cd.setUint16(14, 0x21, true); cd.setUint32(16, crc, true); cd.setUint32(20, comp.length, true); cd.setUint32(24, raw.length, true);
+    cd.setUint16(28, name.length, true); cd.setUint32(42, offset, true);
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + comp.length;
+  }
+  let centralSize = 0; for (const c of central) centralSize += c.length;
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(8, files.length, true); eocd.setUint16(10, files.length, true);
+  eocd.setUint32(12, centralSize, true); eocd.setUint32(16, offset, true);
+  return new Blob([...local, ...central, new Uint8Array(eocd.buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function _xlsxSheet(grid){
+  const esc = s => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+  let body = "";
+  grid.forEach((row, ri) => {
+    let cells = "";
+    row.forEach((val, ci) => { if (val === "" || val == null) return; cells += `<c r="${_colName(ci)}${ri+1}" t="inlineStr"><is><t xml:space="preserve">${esc(val)}</t></is></c>`; });
+    body += `<row r="${ri+1}">${cells}</row>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+async function toXlsx(model){
+  const enc = new TextEncoder(), grid = modelToGrid(model);
+  const CT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>';
+  const RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const WB = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Taxonomy" sheetId="1" r:id="rId1"/></sheets></workbook>';
+  const WBRELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>';
+  return _zip([
+    { name: "[Content_Types].xml", data: enc.encode(CT) },
+    { name: "_rels/.rels", data: enc.encode(RELS) },
+    { name: "xl/workbook.xml", data: enc.encode(WB) },
+    { name: "xl/_rels/workbook.xml.rels", data: enc.encode(WBRELS) },
+    { name: "xl/worksheets/sheet1.xml", data: enc.encode(_xlsxSheet(grid)) }
+  ]);
 }
 
 // ============================================================================
@@ -2408,7 +2463,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
@@ -3322,19 +3377,23 @@ function renderExport(){
   if(fmt==="turtle"){ text=Core.toTurtle(model,opts); mime="text/turtle"; ext="ttl"; }
   else if(fmt==="jsonld"){ text=Core.toJsonLd(model,opts); mime="application/ld+json"; ext="jsonld"; }
   else if(fmt==="csv"){ text=Core.toCsv(model); mime="text/csv"; ext="csv"; }
+  else if(fmt==="xlsx"){ text=Core.toCsv(model); mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; ext="xlsx"; }
   else if(fmt==="rdfjson"){ text=Core.toRdfJson(model,opts); mime="application/rdf+json"; ext="rj"; }
   else if(fmt==="markdown"){ text=Core.toMarkdown(model); mime="text/markdown"; ext="md"; }
   else { text=Core.toRdfXml(model,opts); mime="application/rdf+xml"; ext="rdf"; }
   $('#expCode').textContent=text;
   const n=model.order.length;
-  $('#expMeta').textContent=`${n} concepts · ${text.split("\n").length} lines · ${fmt.toUpperCase()}`;
+  $('#expMeta').textContent = ext==="xlsx"
+    ? `${n} concepts · Excel workbook (preview shown as CSV) · XLSX`
+    : `${n} concepts · ${text.split("\n").length} lines · ${fmt.toUpperCase()}`;
   window._export={text,mime,ext};
 }
 $$('#expFormat input, #expLabel input').forEach(r=>r.onchange=renderExport);
 $('#expDc').onchange=renderExport;
 $('#expCopy').onclick=()=>{ copyText(window._export.text); };
-$('#expDownload').onclick=()=>{ const {text,mime,ext}=window._export;
+$('#expDownload').onclick=async ()=>{ const {text,mime,ext}=window._export;
   const slug=(model.scheme.title||"taxonomy").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"taxonomy";
+  if(ext==="xlsx"){ try{ const blob=await Core.toXlsx(model); downloadBlob(slug+".xlsx", blob); toast("Downloaded "+slug+".xlsx"); }catch(e){ toast("Excel export failed: "+e.message); } return; }
   downloadFile(slug+"."+ext, text, mime); toast("Downloaded "+slug+"."+ext); };
 
 // ---------- validation ----------
@@ -3564,6 +3623,15 @@ function downloadFile(name,text,mime){
     a.click();
     setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} URL.revokeObjectURL(url); }, 2000);
   }catch(e){ showText(name, text); }
+}
+function downloadBlob(name, blob){
+  try{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=name; a.rel="noopener"; a.style.display="none";
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} URL.revokeObjectURL(url); }, 2000);
+  }catch(e){ toast("Download failed: "+e.message); }
 }
 function copyText(text){
   const okToast=()=>toast("Copied to clipboard");

@@ -21,7 +21,7 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 
 1. **SKOS editor** — concepts as URIs, one `prefLabel` per language, `altLabel`/`hiddenLabel`, `definition`/`scopeNote`, `notation`, true poly‑hierarchy (`broader`/`narrower`), `related`, and the SKOS mapping properties. Readable **or opaque UUID** identifiers.
 2. **Business view** — a read‑friendly browse of the vocabulary (breadcrumb, definition, synonyms, broader/narrower) for the people who aren't taxonomists.
-3. **Import / Export** — export to **Turtle, RDF/XML, JSON‑LD, RDF/JSON, CSV** and **Markdown**; import SKOS from RDF (Turtle, RDF/XML, JSON‑LD, RDF/JSON) or a **spreadsheet** (CSV or Excel `.xlsx`, unzipped in the browser — no library, no upload). Building in a spreadsheet? See the [spreadsheet tutorial](docs/spreadsheet-import.md) and the [CSV template](docs/templates/skos-import-template.csv).
+3. **Import / Export** — export to **Turtle, RDF/XML, JSON‑LD, RDF/JSON, CSV, Excel `.xlsx`** and **Markdown**; import SKOS from RDF (Turtle, RDF/XML, JSON‑LD, RDF/JSON) or a **spreadsheet** (CSV or Excel `.xlsx`). Excel is zipped/unzipped in the browser — no library, no upload — and spreadsheet import/export round‑trip. Building in a spreadsheet? See the [spreadsheet tutorial](docs/spreadsheet-import.md) and the [CSV template](docs/templates/skos-import-template.csv).
 4. **qSKOS validator** — the SKOS quality checks in the edit loop: missing/duplicate preferred labels (S14), label disjointness (S13), `related`/`broader` clashes (S27), cyclic hierarchy, orphans, undocumented concepts, and more — with one‑click fixes.
 5. **Concept‑model visualizer** — a force‑directed bubble‑and‑line view of the scheme, synced to the editor.
 6. **DCMI scheme metadata** — Dublin Core metadata for the concept scheme (title, description, creator, publisher, created, rights, language) and identifiers.
@@ -78,7 +78,6 @@ The app keeps all data in the visitor's own browser, so hosting it shares the *t
 
 ## Roadmap
 
-- XLSX **export** from the app (spreadsheet import already works; export is still CSV‑only).
 - Trim remaining inert code paths for an even leaner single file.
 
 ## License
