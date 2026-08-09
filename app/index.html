@@ -3552,6 +3552,9 @@ function buildOntoFromTriples(triples, prefixes){
   refs.forEach(u=>{ if(/\/ns\/dcat/.test(u))onto.imports.dcat=true; else if(/\/ns\/prov/.test(u))onto.imports.prov=true; else if(/foaf\/0\.1/.test(u))onto.imports.foaf=true; else if(/purl\.org\/dc\/terms/.test(u))onto.imports.dcterms=true; });
   return onto;
 }
+// Open / close the Import dialog.
+$('#btnImport').onclick=()=>{ $('#importModal').classList.add('show'); $('#importText').focus(); };
+$('#importClose').onclick=$('#importCancel').onclick=()=>$('#importModal').classList.remove('show');
 $('#importGo').onclick=()=>{
   const txt=$('#importText').value.trim(); if(!txt){ toast("Nothing to import"); return; }
   try{
