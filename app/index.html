@@ -872,11 +872,12 @@
 
 <div class="modal-bg" id="importModal">
   <div class="modal">
-    <div class="modal-h">Import Turtle / RDF <button class="btn sm" id="importClose">✕</button></div>
+    <div class="modal-h">Import taxonomy <button class="btn sm" id="importClose">✕</button></div>
     <div class="modal-b">
-      <p class="subtle" style="margin-top:0">Paste Turtle below, or choose a file. Loads a <b>SKOS taxonomy</b> (Turtle, RDF/XML, JSON-LD or RDF/JSON). SKOS-XL labels are resolved to plain labels. This creates a new project.</p>
-      <input type="file" id="importFile" accept=".ttl,.rdf,.xml,.jsonld,.json,.nt,.n3,.csv,.xlsx,.txt" style="margin-bottom:10px">
-      <textarea id="importText" placeholder="@prefix skos: &lt;http://www.w3.org/2004/02/skos/core#&gt; .  # …paste a SKOS taxonomy (Turtle / RDF-XML / JSON-LD / RDF-JSON)…"></textarea>
+      <p class="subtle" style="margin-top:0">Choose a file or paste below, then <b>Import &amp; replace</b>. Loads a <b>SKOS taxonomy</b> from RDF (Turtle, RDF/XML, JSON-LD, RDF/JSON) or a <b>spreadsheet</b> (CSV or Excel .xlsx). SKOS-XL labels resolve to plain labels. This creates a new project.</p>
+      <input type="file" id="importFile" accept=".ttl,.rdf,.xml,.jsonld,.json,.nt,.n3,.csv,.xlsx,.txt" style="margin-bottom:8px">
+      <p class="subtle" style="margin:0 0 10px">Building in a spreadsheet? <a href="#" id="importTemplate">Download the CSV template</a> — one row per concept; the <code>broader</code> column names the parent.</p>
+      <textarea id="importText" placeholder="Paste Turtle / RDF-XML / JSON-LD / RDF-JSON, or CSV (prefLabel,broader,altLabel,definition …)"></textarea>
     </div>
     <div class="modal-f">
       <button class="btn" id="importCancel">Cancel</button>
@@ -1261,6 +1262,200 @@ function toCsv(model){
     rows.push(row.map(csvCell).join(","));
   }
   return rows.join("\r\n") + "\r\n";
+}
+
+// ============================================================================
+// Spreadsheet import — CSV and Excel (.xlsx) → model. Client-side only, no
+// network. Template columns (header row, case-insensitive; underscores/spaces
+// ignored): id, prefLabel, altLabel, hiddenLabel, definition, scopeNote,
+// notation, broader, narrower, related, exactMatch, closeMatch, broadMatch,
+// narrowMatch, relatedMatch, topConcept. One row per concept. Multi-value
+// cells are separated by " | "; broader/narrower/related name other rows by
+// their id or prefLabel. This round-trips with toCsv().
+// ============================================================================
+function parseCsvText(text){
+  text = String(text).replace(/^﻿/, "");
+  const nl = text.search(/\r?\n/);
+  const firstLine = text.slice(0, nl >= 0 ? nl : text.length);
+  const c = { ",": (firstLine.match(/,/g)||[]).length, ";": (firstLine.match(/;/g)||[]).length, "\t": (firstLine.match(/\t/g)||[]).length };
+  const delim = c["\t"] > c[","] && c["\t"] > c[";"] ? "\t" : (c[";"] > c[","] ? ";" : ",");
+  const rows = []; let row = [], field = "", inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (inQ){
+      if (ch === '"'){ if (text[i+1] === '"'){ field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === delim){ row.push(field); field = ""; }
+    else if (ch === "\n"){ row.push(field); rows.push(row); row = []; field = ""; }
+    else if (ch !== "\r") field += ch;
+  }
+  if (field.length || row.length){ row.push(field); rows.push(row); }
+  while (rows.length && rows[rows.length-1].every(x => String(x).trim() === "")) rows.pop();
+  return rows;
+}
+function gridToCsv(grid){ return grid.map(r => r.map(csvCell).join(",")).join("\r\n") + "\r\n"; }
+function looksLikeCsv(text){
+  const head = String(text).slice(0, 400);
+  if (/@prefix|@base|<\?xml|<rdf:RDF|"@context"|^\s*[\[{]/.test(head)) return false;
+  const first = (String(text).split(/\r?\n/)[0] || "").toLowerCase();
+  return /(^|[,;\t])\s*"?\s*(id|uri|preflabel|pref_label|pref label|label|term|name|broader|parent)\s*"?\s*([,;\t]|$)/.test(first);
+}
+function gridToModel(grid){
+  if (!grid || !grid.length) throw new Error("empty spreadsheet");
+  const norm = h => String(h).trim().toLowerCase().replace(/[\s_]+/g, "");
+  const headers = grid[0].map(norm);
+  const alias = {
+    id:"id", uri:"uri",
+    preflabel:"pref", label:"pref", term:"pref", name:"pref",
+    altlabel:"alt", altlabels:"alt", synonym:"alt", synonyms:"alt", alt:"alt",
+    hiddenlabel:"hidden", hidden:"hidden",
+    definition:"definition", def:"definition", description:"definition",
+    scopenote:"scopeNote", scope:"scopeNote", note:"scopeNote",
+    notation:"notation", code:"notation",
+    broader:"broader", parent:"broader", broaderterm:"broader", bt:"broader",
+    narrower:"narrower", nt:"narrower",
+    related:"related", rt:"related",
+    exactmatch:"exactMatch", closematch:"closeMatch", broadmatch:"broadMatch",
+    narrowmatch:"narrowMatch", relatedmatch:"relatedMatch",
+    topconcept:"top", top:"top", istop:"top"
+  };
+  const colOf = {};
+  headers.forEach((h, i) => { const k = alias[h]; if (k !== undefined && colOf[k] === undefined) colOf[k] = i; });
+  if (colOf.pref === undefined && colOf.id === undefined)
+    throw new Error("Spreadsheet needs a prefLabel (or id) column. Download the CSV template for the expected columns.");
+  const model = newModel();
+  model.concepts = {}; model.order = [];
+  const dl = model.defaultLang || "en";
+  const cell = (r, k) => colOf[k] === undefined ? "" : (r[colOf[k]] !== undefined ? String(r[colOf[k]]) : "");
+  const splitText = v => String(v || "").split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean);
+  const splitRef  = v => String(v || "").split(/\s*[|;]\s*|\r?\n/).map(s => s.trim()).filter(Boolean);
+  const toLit = v => { const m = /^(.*?)@([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)$/.exec(v); return m ? { val: m[1].trim(), lang: m[2] } : { val: v, lang: dl }; };
+  const slug = s => (String(s||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)) || "concept";
+  const labelToId = {};
+  const pending = [];
+  for (let i = 1; i < grid.length; i++){
+    const r = grid[i];
+    if (!r || r.every(x => String(x).trim() === "")) continue;
+    let rawId = cell(r, "id").trim().replace(/[^A-Za-z0-9_.-]/g, "-").replace(/^-+|-+$/g, "");
+    const prefVals = splitText(cell(r, "pref"));
+    if (!rawId){ const uri = cell(r, "uri").trim(); if (uri) rawId = (uri.split(/[\/#]/).filter(Boolean).pop() || "").replace(/[^A-Za-z0-9_.-]/g, "-"); }
+    if (!rawId) rawId = slug(prefVals[0] || "concept");
+    const id = uniqueLocalIn(model.concepts, rawId);
+    const cpt = emptyConcept(id);
+    prefVals.forEach(v => cpt.pref.push(toLit(v)));
+    splitText(cell(r, "alt")).forEach(v => cpt.alt.push(toLit(v)));
+    splitText(cell(r, "hidden")).forEach(v => cpt.hidden.push(toLit(v)));
+    splitText(cell(r, "definition")).forEach(v => cpt.definition.push(toLit(v)));
+    splitText(cell(r, "scopeNote")).forEach(v => cpt.scopeNote.push(toLit(v)));
+    const nota = cell(r, "notation").trim(); if (nota) cpt.notation = nota;
+    ["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].forEach(k => splitRef(cell(r, k)).forEach(v => cpt[k].push(v)));
+    const topv = cell(r, "top").trim().toLowerCase(); if (["yes","y","true","1","x","top"].includes(topv)) cpt.top = true;
+    model.concepts[id] = cpt; model.order.push(id);
+    (cpt.pref || []).forEach(l => { if (l.val) labelToId[l.val.trim().toLowerCase()] = id; });
+    pending.push({ id, b: splitRef(cell(r, "broader")), n: splitRef(cell(r, "narrower")), rel: splitRef(cell(r, "related")) });
+  }
+  let stubs = 0;
+  const resolve = ref => {
+    if (model.concepts[ref]) return ref;
+    const byLabel = labelToId[ref.trim().toLowerCase()]; if (byLabel) return byLabel;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(ref)) return null; // an IRI/CURIE, not a local row
+    const sid = uniqueLocalIn(model.concepts, slug(ref));
+    const sc = emptyConcept(sid); sc.pref.push({ val: ref, lang: dl });
+    model.concepts[sid] = sc; model.order.push(sid); labelToId[ref.trim().toLowerCase()] = sid; stubs++;
+    return sid;
+  };
+  for (const p of pending){
+    const cpt = model.concepts[p.id];
+    for (const ref of p.b){ const pid = resolve(ref); if (pid && pid !== p.id && !cpt.broader.includes(pid)) cpt.broader.push(pid); }
+    for (const ref of p.n){ const cid = resolve(ref); if (cid && cid !== p.id){ const ch = model.concepts[cid]; if (ch && !ch.broader.includes(p.id)) ch.broader.push(p.id); } }
+    for (const ref of p.rel){ const rid = resolve(ref); if (rid && rid !== p.id && !cpt.related.includes(rid)) cpt.related.push(rid); }
+  }
+  for (const id of model.order){ const cpt = model.concepts[id]; if (!cpt.broader.length) cpt.top = true; }
+  model._importStubs = stubs;
+  return model;
+}
+function csvToModel(text){ return gridToModel(parseCsvText(text)); }
+// ---- Excel .xlsx: unzip with native DecompressionStream, read the first sheet ----
+async function _inflateRaw(bytes){
+  if (typeof DecompressionStream === "undefined")
+    throw new Error("this browser can't unzip .xlsx — save the sheet as CSV and import that");
+  const ds = new DecompressionStream("deflate-raw");
+  const ab = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function _unzip(arrayBuffer){
+  const dv = new DataView(arrayBuffer), bytes = new Uint8Array(arrayBuffer);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65536; i--)
+    if (dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  if (eocd < 0) throw new Error("not a valid .xlsx file (no ZIP directory)");
+  const count = dv.getUint16(eocd + 10, true); let off = dv.getUint32(eocd + 16, true);
+  const entries = {};
+  for (let n = 0; n < count && dv.getUint32(off, true) === 0x02014b50; n++){
+    const method = dv.getUint16(off + 10, true), compSize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true), extraLen = dv.getUint16(off + 30, true), commLen = dv.getUint16(off + 32, true);
+    const localOff = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(off + 46, off + 46 + nameLen));
+    entries[name] = { method, compSize, localOff };
+    off += 46 + nameLen + extraLen + commLen;
+  }
+  const read = async name => {
+    const e = entries[name]; if (!e) return null;
+    const lnameLen = dv.getUint16(e.localOff + 26, true), lextraLen = dv.getUint16(e.localOff + 28, true);
+    const start = e.localOff + 30 + lnameLen + lextraLen;
+    const comp = bytes.subarray(start, start + e.compSize);
+    const raw = e.method === 0 ? comp : await _inflateRaw(comp);
+    return new TextDecoder("utf-8").decode(raw);
+  };
+  return { entries, read };
+}
+async function parseXlsx(arrayBuffer){
+  const zip = await _unzip(arrayBuffer), DP = new DOMParser();
+  const shared = [];
+  const ssXml = await zip.read("xl/sharedStrings.xml");
+  if (ssXml){ const doc = DP.parseFromString(ssXml, "application/xml");
+    for (const si of doc.getElementsByTagName("si")){ let s = ""; for (const t of si.getElementsByTagName("t")) s += t.textContent; shared.push(s); } }
+  let sheetPath = null;
+  const wbXml = await zip.read("xl/workbook.xml"), relsXml = await zip.read("xl/_rels/workbook.xml.rels");
+  if (wbXml && relsXml){
+    const sheet = DP.parseFromString(wbXml, "application/xml").getElementsByTagName("sheet")[0];
+    const rid = sheet && (sheet.getAttribute("r:id") || sheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"));
+    if (rid) for (const rel of DP.parseFromString(relsXml, "application/xml").getElementsByTagName("Relationship"))
+      if (rel.getAttribute("Id") === rid){ let t = rel.getAttribute("Target"); sheetPath = t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, ""); break; }
+  }
+  if (!sheetPath || !zip.entries[sheetPath])
+    sheetPath = Object.keys(zip.entries).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+  if (!sheetPath) throw new Error("no worksheet found in .xlsx");
+  const ws = DP.parseFromString(await zip.read(sheetPath), "application/xml");
+  const colIdx = ref => { const m = /^([A-Z]+)/.exec(ref); if (!m) return 0; let n = 0; for (const ch of m[1]) n = n*26 + (ch.charCodeAt(0)-64); return n-1; };
+  const grid = [];
+  for (const row of ws.getElementsByTagName("row")){
+    const cells = [];
+    for (const cEl of row.getElementsByTagName("c")){
+      const idx = cEl.getAttribute("r") ? colIdx(cEl.getAttribute("r")) : cells.length, t = cEl.getAttribute("t");
+      let val = "";
+      if (t === "s"){ const v = cEl.getElementsByTagName("v")[0]; val = v ? (shared[parseInt(v.textContent, 10)] || "") : ""; }
+      else if (t === "inlineStr"){ const is = cEl.getElementsByTagName("t")[0]; val = is ? is.textContent : ""; }
+      else { const v = cEl.getElementsByTagName("v")[0]; val = v ? v.textContent : ""; }
+      cells[idx] = val;
+    }
+    for (let i = 0; i < cells.length; i++) if (cells[i] === undefined) cells[i] = "";
+    grid.push(cells);
+  }
+  return grid;
+}
+// A ready-to-fill CSV template (header + example rows showing hierarchy, a
+// synonym, and an external mapping).
+function csvTemplate(){
+  const cols = ["id","prefLabel","altLabel","hiddenLabel","definition","scopeNote","notation","broader","related","exactMatch","topConcept"];
+  const rows = [
+    ["","Animals","","","Living creatures in this collection.","","","","","","yes"],
+    ["","Dog","Canine | Hound","","A domesticated canine.","Use for pet dogs, not wild canids.","","Animals","Cat","http://www.wikidata.org/entity/Q144",""],
+    ["","Cat","Feline","","A domesticated feline.","","","Animals","Dog","",""],
+    ["","Puppy","","","A young dog.","","","Dog","","",""]
+  ];
+  return [cols.join(",")].concat(rows.map(r => r.map(csvCell).join(","))).join("\r\n") + "\r\n";
 }
 
 // ============================================================================
@@ -2213,7 +2408,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
@@ -3301,6 +3496,19 @@ function buildOntoFromTriples(triples, prefixes){
 $('#importGo').onclick=()=>{
   const txt=$('#importText').value.trim(); if(!txt){ toast("Nothing to import"); return; }
   try{
+    // Spreadsheet path (CSV, or an .xlsx already turned into CSV by the file picker).
+    if(Core.looksLikeCsv(txt)){
+      const m = Core.csvToModel(txt);
+      const nC = m.order.length;
+      if(!nC){ toast("No rows found in this spreadsheet"); return; }
+      const impName = (m.scheme&&m.scheme.title) || window._importGraphName || "Imported taxonomy";
+      createProject(impName, m);
+      selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show');
+      const stub = m._importStubs ? ` (+${m._importStubs} parent stub${m._importStubs===1?"":"s"})` : "";
+      toast(`Imported “${impName}” — ${nC} concept${nC===1?"":"s"}${stub} (new project)`);
+      switchTab("build");
+      return;
+    }
     const { triples, prefixes } = Core.parseTriples(txt);
     const m = Core.triplesToModel(triples, prefixes);           // SKOS concepts (may be empty)
     const onto = buildOntoFromTriples(triples, prefixes);       // OWL classes/properties (may be empty)
@@ -3319,8 +3527,25 @@ $('#importGo').onclick=()=>{
     if((nK||nP) && !nC) switchTab("onto");
   }catch(e){ toast("Parse error: "+e.message); }
 };
-// Read a chosen file into the import textarea (local FileReader; no network).
-$('#importFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>$('#importText').value=r.result; r.readAsText(f); };
+// Read a chosen file into the import textarea (all local; no network).
+// RDF and CSV load as text; .xlsx is unzipped in-browser and shown as CSV.
+$('#importFile').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
+  window._importGraphName = f.name.replace(/\.[^.]+$/,'');
+  try{
+    if(ext==='xlsx'||ext==='xlsm'){
+      const grid=await Core.parseXlsx(await f.arrayBuffer());
+      $('#importText').value=Core.gridToCsv(grid);
+      toast("Spreadsheet loaded — review, then Import & replace");
+    }else{
+      const r=new FileReader(); r.onload=()=>$('#importText').value=r.result; r.readAsText(f);
+    }
+  }catch(err){ toast("Couldn't read file: "+err.message); }
+  e.target.value="";
+};
+// Download the fill-in CSV template.
+if($('#importTemplate')) $('#importTemplate').onclick=(ev)=>{ ev.preventDefault(); downloadFile("skos-import-template.csv", Core.csvTemplate(), "text/csv"); };
 $('#btnNew').onclick=async ()=>{ const nm=await askPrompt("Name your new project:","New taxonomy","Create"); if(nm===null) return; createProject(nm.trim()||"Untitled", newModel()); toast("Created “"+(nm.trim()||"Untitled")+"”"); };
 
 $('#addTop').onclick=()=>addConcept(null);

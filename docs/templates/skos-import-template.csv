@@ -1,0 +1,5 @@
+id,prefLabel,altLabel,hiddenLabel,definition,scopeNote,notation,broader,related,exactMatch,topConcept
+,Animals,,,Living creatures in this collection.,,,,,,yes
+,Dog,Canine | Hound,,A domesticated canine.,"Use for pet dogs, not wild canids.",,Animals,Cat,http://www.wikidata.org/entity/Q144,
+,Cat,Feline,,A domesticated feline.,,,Animals,Dog,,
+,Puppy,,,A young dog.,,,Dog,,,
