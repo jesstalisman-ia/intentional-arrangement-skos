@@ -4,9 +4,9 @@ You don't have to write RDF by hand to start a SKOS taxonomy. You can build it i
 
 The one thing a spreadsheet can't tell the app on its own is what each column *means*. That's what the template is for. Fill in the columns below and the app knows which text is a preferred label, which is a synonym, and which concept is the parent of which.
 
-**Download the template:** [`skos-import-template.csv`](templates/skos-import-template.csv)
+**Download the template** — [Excel `.xlsx`](templates/skos-import-template.xlsx) (opens as a formatted grid) or [CSV](templates/skos-import-template.csv). You can also get the CSV from inside the app: open **Import**, then click *Download the CSV template*.
 
-You can also get it from inside the app: open **Import**, then click *Download the CSV template*.
+![The SKOS import template as a spreadsheet, showing all columns with example rows](images/template-spreadsheet.png)
 
 ## The columns
 
@@ -26,6 +26,8 @@ One row per concept. A header row on top. Only `prefLabel` is required; leave an
 | `related` | A concept that belongs alongside this one without being its parent or child. |
 | `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch` | Links to concepts in someone else's vocabulary, written as full web addresses (IRIs). |
 | `topConcept` | Put `yes` on the concepts that sit at the top of the tree. Optional — the app also treats any concept with no parent as a top concept. |
+
+![How a row becomes a concept: prefLabel is the name, altLabel holds synonyms separated by a pipe, broader names the parent, exactMatch links to another vocabulary](images/template-annotated.png)
 
 ## The two rules that matter
 
