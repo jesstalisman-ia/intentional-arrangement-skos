@@ -28,6 +28,8 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 
 ## Three ways to use it
 
+> New here? The [install & setup guide](docs/install.md) walks through standing up the editor — hosted, local, or your own deployed copy.
+
 ### 1. The app (in your browser)
 Open `app/index.html` directly, or serve it:
 ```bash
