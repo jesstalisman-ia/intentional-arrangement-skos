@@ -3319,6 +3319,8 @@ $('#importGo').onclick=()=>{
     if((nK||nP) && !nC) switchTab("onto");
   }catch(e){ toast("Parse error: "+e.message); }
 };
+// Read a chosen file into the import textarea (local FileReader; no network).
+$('#importFile').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>$('#importText').value=r.result; r.readAsText(f); };
 $('#btnNew').onclick=async ()=>{ const nm=await askPrompt("Name your new project:","New taxonomy","Create"); if(nm===null) return; createProject(nm.trim()||"Untitled", newModel()); toast("Created “"+(nm.trim()||"Untitled")+"”"); };
 
 $('#addTop').onclick=()=>addConcept(null);
