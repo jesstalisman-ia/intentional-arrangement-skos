@@ -15,7 +15,7 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 | **`app/`** | The **browser app** — one self-contained `index.html`. Download it and open it in any browser. |
 | **`api/`** | A tiny **REST API** (Flask + rdflib + pySHACL): validate a vocabulary, convert between RDF serializations. |
 | **`mcp-server/`** | An **MCP server** exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
-| **`docs/`** | The build essays — how this was made, and how to build it yourself. |
+| **`docs/`** | Build essays plus how‑to guides — [install](docs/install.md), [workspace (passcode, projects, autosave)](docs/workspace.md), [spreadsheet import](docs/spreadsheet-import.md), and the [SKOS reference](docs/skos-reference.md). |
 
 ## The app — six components
 
@@ -24,7 +24,18 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 3. **Import / Export** — export to **Turtle, RDF/XML, JSON‑LD, RDF/JSON, CSV, Excel `.xlsx`** and **Markdown**; import SKOS from RDF (Turtle, RDF/XML, JSON‑LD, RDF/JSON) or a **spreadsheet** (CSV or Excel `.xlsx`). Excel is zipped/unzipped in the browser — no library, no upload — and spreadsheet import/export round‑trip. Building in a spreadsheet? See the [spreadsheet tutorial](docs/spreadsheet-import.md) and the [CSV template](docs/templates/skos-import-template.csv).
 4. **qSKOS validator** — the SKOS quality checks in the edit loop: missing/duplicate preferred labels (S14), label disjointness (S13), `related`/`broader` clashes (S27), cyclic hierarchy, orphans, undocumented concepts, and more — with one‑click fixes.
 5. **Concept‑model visualizer** — a force‑directed bubble‑and‑line view of the scheme, synced to the editor.
-6. **DCMI scheme metadata** — Dublin Core metadata for the concept scheme (title, description, creator, publisher, created, rights, language) and identifiers.
+6. **DCMI scheme metadata** — Dublin Core metadata for the concept scheme (title, description, creator, publisher, created, issued, modified, rights, language) and identifiers.
+
+## Your workspace
+
+The editor holds several taxonomies at once, saves every change automatically, and can sit behind a passcode:
+
+- **Local passcode** — an optional per‑browser lock (salted SHA‑256 in local storage) with "keep me signed in," a Lock button, and reset. It's a convenience lock, **not** encryption, and nothing is uploaded.
+- **Welcome screen** — open an existing taxonomy or start a new one; delete inline.
+- **Guided setup** — a new project starts with its Dublin Core metadata; only the **title** is required, and the created/published/modified dates auto‑fill.
+- **Autosave** — every change persists to the browser, with a **✓ Saved** indicator. Manage projects (open, rename, duplicate, delete) from the **Projects** button.
+
+Full walkthrough: [docs/workspace.md](docs/workspace.md).
 
 ## Three ways to use it
 

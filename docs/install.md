@@ -69,4 +69,4 @@ The browser editor is the whole tool. If you also want to validate or convert vo
 
 ---
 
-New to the format? Start with [building a taxonomy in a spreadsheet](spreadsheet-import.md) and the [SKOS reference](skos-reference.md).
+Next: [your workspace — passcode, projects, and autosave](workspace.md), [building a taxonomy in a spreadsheet](spreadsheet-import.md), and the [SKOS reference](skos-reference.md).
