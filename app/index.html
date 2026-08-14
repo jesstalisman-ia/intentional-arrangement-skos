@@ -2476,6 +2476,7 @@ const PKEY = "skosStudio.projects.v2", CKEY = "skosStudio.currentPid.v2", OLDKEY
 let model, selected = null, valAuto = false, lastIssues = [], currentPid = null;
 
 // ---------- model ----------
+const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under Creative Commons Attribution-NoDerivatives 4.0 International. To view a copy of this license, visit https://creativecommons.org/licenses/by-nd/4.0/";
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
     scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), modified:"", rights:"", lang:"en" },
@@ -4908,7 +4909,7 @@ function initProjects(){
     let migrated=null; try{ const old=localStorage.getItem(OLDKEY); if(old) migrated=JSON.parse(old); }catch(e){}
     const pid=newPid();
     if(migrated&&migrated.concepts){ projs[pid]={id:pid,name:(migrated.scheme&&migrated.scheme.title)||"My taxonomy",created:nowTs(),updated:nowTs(),model:migrated}; }
-    else { projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:Core.parseTurtle(EXAMPLE_TTL)}; }
+    else { const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em}; }
     saveProjects(projs); currentPid=pid;
   } else {
     currentPid=localStorage.getItem(CKEY); if(!currentPid||!projs[currentPid]) currentPid=Object.keys(projs)[0];

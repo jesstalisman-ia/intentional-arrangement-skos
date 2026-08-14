@@ -84,4 +84,10 @@ The app keeps all data in the visitor's own browser, so hosting it shares the *t
 
 ## License
 
-[MIT](LICENSE).
+Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under
+[Creative Commons Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)](https://creativecommons.org/licenses/by-nd/4.0/).
+See [LICENSE](LICENSE).
+
+This covers the editor and the example taxonomy shipped with it. Taxonomies and
+ontologies **you** create with the tool are your own — the tool does not apply
+this license to your work.
