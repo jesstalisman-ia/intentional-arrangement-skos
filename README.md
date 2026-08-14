@@ -48,7 +48,7 @@ Open `app/index.html` directly, or serve it:
 ```bash
 cd app && python3 -m http.server 8080     # http://localhost:8080
 ```
-That's it — the tool is that single file. Hosting is planned (see below); for now you run it locally or just open the file.
+That's it — the tool is that single file. It's also [hosted on GitHub Pages](https://jesstalisman-ia.github.io/intentional-arrangement-skos/), so you can just use it there.
 
 ### 2. The REST API
 ```bash
@@ -82,18 +82,18 @@ The point of this repo is that you can build it too — with an AI partner, but 
 - **DCMI / Dublin Core** — concept‑scheme metadata.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 
-## Hosting (planned)
+## Hosting
 
-Not hosted yet — for now you run the app locally or open the file. When it goes online, the app is a single static file, so any of these fit:
+The app is **live on GitHub Pages** at https://jesstalisman-ia.github.io/intentional-arrangement-skos/ (repo **Settings → Pages → Source: GitHub Actions**). Because it's a single static file, you can host your own copy anywhere:
 
-- **GitHub Pages** — free, and since this repo is public it works out of the box: repo **Settings → Pages → Source: GitHub Actions**. It would land at `https://jesstalisman-ia.github.io/intentional-arrangement-skos/`.
+- **GitHub Pages** — free: fork, then **Settings → Pages → Source: GitHub Actions**. Lands at `https://<you>.github.io/intentional-arrangement-skos/`.
 - **Netlify / Cloudflare Pages** — free, with a custom domain. `netlify.toml` points the publish directory at `app/`, so it's a one-click import; then add a domain in the host's dashboard and one CNAME record at your registrar.
 
 The app keeps all data in the visitor's own browser, so hosting it shares the *tool*, never anyone's vocabularies.
 
 ## Roadmap
 
-- Trim remaining inert code paths for an even leaner single file.
+See **[ROADMAP.md](ROADMAP.md)** for what's shipped, in progress, and planned — and how to request features or report bugs.
 
 ## License
 
