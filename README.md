@@ -2,9 +2,11 @@
 
 **A small, standards-first studio for building, validating, visualizing and publishing SKOS taxonomies — the browser app, plus a REST API and an MCP server over the same engine.**
 
-Built for readers and clients who want to stand up a *legitimate*, downloadable SKOS vocabulary and learn how it's done. Open standards throughout (W3C SKOS, ANSI/NISO Z39.19, ISO 25964, DCMI), free and open source (MIT). The app is a single self-contained HTML file — no build step, no dependencies. It runs in any modern browser straight from the file. A hosted version is in the works; for now, download it and open it.
+Built for readers and clients who want to stand up a *legitimate*, downloadable SKOS vocabulary and learn how it's done. Open standards throughout (W3C SKOS, ANSI/NISO Z39.19, ISO 25964, DCMI). The app is a single self-contained HTML file — no build step, no dependencies. **Use it hosted** at **https://jesstalisman-ia.github.io/intentional-arrangement-skos/**, or download the file and open it in any browser.
 
 > Informed building, not blind building. Augmentation, not automation.
+
+📍 **[Roadmap](ROADMAP.md)** — what's shipped and what's next · 💡 **[Request a feature](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)** or [report a bug](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml).
 
 ---
 

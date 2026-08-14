@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📬 Prefer email?
+    url: mailto:Hello@ontologypipeline.com
+    about: Not on GitHub? Send feature requests or feedback by email instead.
+  - name: 📖 Documentation
+    url: https://github.com/jesstalisman-ia/intentional-arrangement-skos/tree/main/docs
+    about: Install, workspace, spreadsheet import, and the SKOS reference.

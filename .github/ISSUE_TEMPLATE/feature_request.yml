@@ -1,0 +1,48 @@
+name: ✨ Feature request
+description: Suggest a capability or improvement for the SKOS editor, API, or MCP server.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping shape the tool. Please check [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on a matching one helps it rise.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task or goal, and what gets in the way today.
+      placeholder: "When I import a spreadsheet, I want to…"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like the tool to do?
+      description: Describe the capability. Rough is fine.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Editor (build)
+        - Business view / browse
+        - Import / Export
+        - Validation (qSKOS)
+        - Visualizer / graph
+        - Scheme metadata (Dublin Core)
+        - Projects / workspace / login
+        - REST API
+        - MCP server
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Examples, a sample file, links, or how you're using the tool. Optional.
+    validations:
+      required: false

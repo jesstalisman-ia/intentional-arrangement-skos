@@ -1,0 +1,32 @@
+name: 🐛 Bug report
+description: Something in the tool didn't work as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the editor
+        2. Import this file…
+        3. …
+    validations:
+      required: false
+  - type: input
+    id: env
+    attributes:
+      label: Browser & device
+      placeholder: "e.g. Chrome 128 on macOS, or Safari on iPhone"
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: Your taxonomies live only in your browser — feel free to attach an exported Turtle/CSV file if it helps reproduce the issue.
