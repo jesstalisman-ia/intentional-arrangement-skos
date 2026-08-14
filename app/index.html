@@ -859,9 +859,10 @@
     <div class="card">
       <div class="val-bar">
         <span class="h" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)">Mode</span>
-        <div class="seg" id="valMode"><button data-m="manual" class="on">Manual</button><button data-m="auto">Automatic</button></div>
+        <div class="seg" id="valMode"><button data-m="manual" class="on" title="You re-check by clicking Run validation">Manual</button><button data-m="auto" title="Re-checks automatically a moment after each edit">Automatic</button></div>
         <button class="btn sm primary" id="valRun">Run validation</button>
         <div class="sev-sum" id="valSummary"></div>
+        <span class="val-when" id="valWhen" style="margin-left:auto;font-size:12px;color:var(--faint)"></span>
       </div>
       <div class="val-bar" id="autofixBar" style="display:none;border-top:0"></div>
       <div class="val-list" id="valList"><div class="val-clean">Run validation to check your taxonomy against qSKOS quality criteria.</div></div>
@@ -877,14 +878,19 @@
   <div class="modal">
     <div class="modal-h">Import taxonomy <button class="btn sm" id="importClose">✕</button></div>
     <div class="modal-b">
-      <p class="subtle" style="margin-top:0">Choose a file or paste below, then <b>Import &amp; replace</b>. Loads a <b>SKOS taxonomy</b> from RDF (Turtle, RDF/XML, JSON-LD, RDF/JSON) or a <b>spreadsheet</b> (CSV or Excel .xlsx). SKOS-XL labels resolve to plain labels. This creates a new project.</p>
+      <p class="subtle" style="margin-top:0">Choose a file or paste below, then <b>Import</b>. Loads a <b>SKOS taxonomy</b> from RDF (Turtle, RDF/XML, JSON-LD, RDF/JSON) or a <b>spreadsheet</b> (CSV or Excel .xlsx). SKOS-XL labels resolve to plain labels.</p>
       <input type="file" id="importFile" accept=".ttl,.rdf,.xml,.jsonld,.json,.nt,.n3,.csv,.xlsx,.txt" style="margin-bottom:8px">
       <p class="subtle" style="margin:0 0 10px">Building in a spreadsheet? <a href="#" id="importTemplate">Download the CSV template</a> — one row per concept; the <code>broader</code> column names the parent.</p>
       <textarea id="importText" placeholder="Paste Turtle / RDF-XML / JSON-LD / RDF-JSON, or CSV (prefLabel,broader,altLabel,definition …)"></textarea>
+      <fieldset style="border:1px solid var(--line,#e3e6ea);border-radius:10px;padding:10px 12px;margin:12px 0 0">
+        <legend style="font-size:12.5px;font-weight:600;color:var(--muted,#4b5563);padding:0 6px">Where should it go?</legend>
+        <label style="display:block;margin:3px 0;font-size:13.5px"><input type="radio" name="impDest" value="new" checked> Create a <b>new project</b> — your other projects stay untouched</label>
+        <label style="display:block;margin:3px 0;font-size:13.5px"><input type="radio" name="impDest" value="merge"> Merge into the <b>current project</b> <span id="impCurName" class="subtle"></span> — adds concepts, never overwrites</label>
+      </fieldset>
     </div>
     <div class="modal-f">
       <button class="btn" id="importCancel">Cancel</button>
-      <button class="btn primary" id="importGo">Import &amp; replace</button>
+      <button class="btn primary" id="importGo">Import</button>
     </div>
   </div>
 </div>
@@ -1447,6 +1453,7 @@ function gridToModel(grid){
     throw new Error("Spreadsheet needs a prefLabel (or id) column. Download the CSV template for the expected columns.");
   const model = newModel();
   model.concepts = {}; model.order = [];
+  model.scheme.title = "";   // don't inherit the "My Taxonomy" default — let the importer name it
   const dl = model.defaultLang || "en";
   const cell = (r, k) => colOf[k] === undefined ? "" : (r[colOf[k]] !== undefined ? String(r[colOf[k]]) : "");
   const splitText = v => String(v || "").split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean);
@@ -2595,7 +2602,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const PKEY = "skosStudio.projects.v2", CKEY = "skosStudio.currentPid.v2", OLDKEY = "skosStudio.model.v1";
 const AKEY = "iaskos.auth.v1", SKEY = "iaskos.session.v1";
-let model, selected = null, valAuto = false, lastIssues = [], currentPid = null;
+let model, selected = null, valAuto = false, lastIssues = [], currentPid = null, lastValidatedTs = 0;
 
 // ---------- model ----------
 const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under Creative Commons Attribution-NoDerivatives 4.0 International. To view a copy of this license, visit https://creativecommons.org/licenses/by-nd/4.0/";
@@ -2614,6 +2621,9 @@ function genUuid32(){
   return u;
 }
 function uniqueUuid(){ let id=genUuid32(); while(model.concepts[id]) id=genUuid32(); return id; }
+// A readable PascalCase identifier from a label ("Month journal" -> "MonthJournal").
+function slugId(s){ const parts=String(s||"").trim().split(/[^A-Za-z0-9]+/).filter(Boolean); return parts.map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(""); }
+function uniqueLocalExcept(base, keepId){ base=base||"Concept"; let id=base, n=1; while(model.concepts[id] && id!==keepId) id=base+(++n); return id; }
 function genConceptId(text){
   if((model.idStyle||"text")==="uuid") return uniqueUuid();
   const base=Core.safeLocal(text||"Concept")||"Concept"; let id=base,n=1; while(model.concepts[id]) id=base+(++n); return id;
@@ -2896,6 +2906,12 @@ function renderEditor(){
   const uuidBtn=document.createElement("button"); uuidBtn.className="btn sm"; uuidBtn.textContent="⟳ UUID"; uuidBtn.title="Assign a fresh 32-character UUID identifier"; uuidBtn.style.marginBottom="6px";
   uuidBtn.onclick=()=>{ renameConcept(selected, uniqueUuid()); renderEditor(); toast("Assigned new UUID"); };
   idrow.appendChild(uuidBtn);
+  const syncBtn=document.createElement("button"); syncBtn.className="btn sm"; syncBtn.textContent="↦ from label"; syncBtn.title="Set the identifier (URI) from the preferred label"; syncBtn.style.marginBottom="6px";
+  syncBtn.onclick=()=>{ const lab=(c.pref||[]).find(l=>l.val&&l.val.trim()); if(!lab){ toast("Add a preferred label first"); return; }
+    const base=slugId(lab.val); if(!base){ toast("That label has no usable characters for an identifier"); return; }
+    if(base===selected){ toast("The identifier already matches the label"); return; }
+    const nid=uniqueLocalExcept(base, selected); const nn=renameConcept(selected, nid); renderEditor(); toast("Identifier set to “"+nn+"”"); };
+  idrow.appendChild(syncBtn);
   idrow.appendChild(fldInput("Notation", c.notation||"", v=>{ c.notation=v; save(); }));
   const topWrap=document.createElement("label"); topWrap.className="toggle"; topWrap.style.paddingBottom="6px";
   const topCb=document.createElement("input"); topCb.type="checkbox"; topCb.checked=!!c.top;
@@ -2903,6 +2919,15 @@ function renderEditor(){
   topWrap.appendChild(topCb); topWrap.appendChild(document.createTextNode("Top concept"));
   idrow.appendChild(topWrap);
   host.appendChild(idrow);
+
+  // Near-duplicate identifier warning (e.g. MonthJournal vs Monthjournal — different URIs).
+  const lc=selected.toLowerCase();
+  const twin=Object.keys(model.concepts).find(k=>k!==selected && k.toLowerCase()===lc);
+  if(twin){
+    const w=document.createElement("div"); w.style.cssText="font-size:12px;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:6px 9px;margin:0 0 8px";
+    w.textContent="⚠ Another concept has a near-identical identifier (“"+twin+"”). These are different URIs and different concepts — rename or merge one to avoid confusion.";
+    host.appendChild(w);
+  }
 
   host.appendChild(labelGroup("Preferred labels", c, "pref", true));
   host.appendChild(labelGroup("Alternative labels", c, "alt", false));
@@ -2954,6 +2979,8 @@ function labelGroup(title, c, field, isPref){
     lang.oninput=()=>{ L.lang=lang.value.trim(); save(); scheduleAuto(); };
     const val=document.createElement("input"); val.className="val"; val.value=L.val||""; val.placeholder=isPref?"preferred label":"label"; val.dataset.field=field;
     val.oninput=()=>{ L.val=val.value; save(); updateTreeLabel(); scheduleAuto(); };
+    // Trim on blur so a whitespace-only label doesn't silently persist as an empty literal.
+    val.onchange=()=>{ const t=val.value.trim(); if(t!==val.value){ val.value=t; L.val=t; save(); updateTreeLabel(); } afterChange(); };
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
     rm.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); afterChange(); };
     row.append(lang,val,rm); g.appendChild(row);
@@ -3542,8 +3569,15 @@ const CHECK_DOC={
 };
 function runValidation(){
   lastIssues=Core.validate(model);
+  lastValidatedTs=nowTs();
   renderValidation();
   updateBadge();
+  updateValWhen();
+}
+function relTime(ts){ if(!ts) return ""; const s=Math.round((nowTs()-ts)/1000); if(s<5) return "just now"; if(s<60) return s+"s ago"; const m=Math.round(s/60); if(m<60) return m+"m ago"; try{ return "at "+new Date(ts).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }catch(e){ return m+"m ago"; } }
+function updateValWhen(){ const el=$('#valWhen'); if(!el) return;
+  const mode = valAuto ? "Automatic — re-checks as you edit" : "Manual — click Run validation";
+  el.textContent = (lastValidatedTs ? ("Last checked "+relTime(lastValidatedTs)) : "Not checked yet") + " · " + mode;
 }
 // auto-fix definitions: which issue codes each fix resolves
 const AUTOFIX=[
@@ -3613,9 +3647,9 @@ function jumpToConcept(id){
   setTimeout(()=>{ const el=$$('.trow.sel')[0]; if(el) el.scrollIntoView({block:"center"}); },30);
 }
 $('#valRun').onclick=runValidation;
-$$('#valMode button').forEach(b=>b.onclick=()=>{ $$('#valMode button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); valAuto=b.dataset.m==="auto"; if(valAuto) runValidation(); });
+$$('#valMode button').forEach(b=>b.onclick=()=>{ $$('#valMode button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); valAuto=b.dataset.m==="auto"; if(valAuto) runValidation(); else updateValWhen(); });
 let autoT; function scheduleAuto(){ if(!valAuto) return; clearTimeout(autoT); autoT=setTimeout(runValidation,400); }
-function afterChange(){ if(valAuto) scheduleAuto(); else { /* keep badge fresh cheaply */ updateBadgeQuick(); } if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
+function afterChange(){ if(valAuto) scheduleAuto(); else { /* keep badge fresh cheaply */ updateBadgeQuick(); } updateValWhen(); if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
 function updateBadge(){
   const counts={error:0,warning:0,info:0}; lastIssues.forEach(it=>counts[it.severity]++);
   const b=$('#vBadge');
@@ -3678,40 +3712,100 @@ function buildOntoFromTriples(triples, prefixes){
   return onto;
 }
 // Open / close the Import dialog.
-$('#btnImport').onclick=()=>{ $('#importModal').classList.add('show'); $('#importText').focus(); };
+$('#btnImport').onclick=()=>{
+  const cur=(loadProjects()[currentPid]||{}).name||"current project";
+  const el=$('#impCurName'); if(el) el.textContent="“"+cur+"”";
+  const rn=document.querySelector('input[name="impDest"][value="new"]'); if(rn) rn.checked=true;
+  $('#importModal').classList.add('show'); $('#importText').focus();
+};
 $('#importClose').onclick=$('#importCancel').onclick=()=>$('#importModal').classList.remove('show');
+// Additive merge: fold an imported model's concepts into `target`, never
+// overwriting or removing anything that's already there. Returns {added,updated}.
+function mergeModelInto(target, incoming){
+  target.concepts = target.concepts || {}; target.order = target.order || Object.keys(target.concepts);
+  const litKey=l=>((l&&l.lang||"")+"|"+(l&&l.val||"")).toLowerCase();
+  const unionLits=(o,k,src)=>{ o[k]=o[k]||[]; const seen=new Set(o[k].map(litKey)); for(const l of (src||[])) if(l&&l.val&&!seen.has(litKey(l))){ o[k].push(l); seen.add(litKey(l)); } };
+  const unionArr =(o,k,src)=>{ o[k]=o[k]||[]; const seen=new Set(o[k]); for(const v of (src||[])) if(v!=null&&!seen.has(v)){ o[k].push(v); seen.add(v); } };
+  let added=0, updated=0;
+  for(const id of (incoming.order||Object.keys(incoming.concepts))){
+    const src=incoming.concepts[id]; if(!src) continue;
+    let dst=target.concepts[id];
+    if(!dst){ target.concepts[id]=JSON.parse(JSON.stringify(src)); if(!target.order.includes(id)) target.order.push(id); added++; }
+    else{
+      unionLits(dst,'pref',src.pref); unionLits(dst,'alt',src.alt); unionLits(dst,'hidden',src.hidden);
+      unionLits(dst,'definition',src.definition); unionLits(dst,'scopeNote',src.scopeNote);
+      unionArr(dst,'broader',src.broader); unionArr(dst,'related',src.related);
+      ['exactMatch','closeMatch','broadMatch','narrowMatch','relatedMatch'].forEach(k=>unionArr(dst,k,src[k]));
+      if(!dst.notation && src.notation) dst.notation=src.notation;
+      updated++;
+    }
+  }
+  return {added, updated};
+}
+// Quick health read on an imported/merged model — surfaces silent hierarchy failures
+// (a flat tree from a broader column that didn't match shows up as many components).
+function importHealth(m){
+  const ids=m.order&&m.order.length?m.order:Object.keys(m.concepts);
+  const idset=new Set(ids), adj={}; ids.forEach(id=>adj[id]=[]);
+  let roots=0, orphans=0;
+  for(const id of ids){ const c=m.concepts[id]||{}; const par=(c.broader||[]).filter(p=>idset.has(p));
+    if(!par.length){ if(c.top) roots++; else orphans++; }
+    for(const p of par){ adj[id].push(p); adj[p].push(id); } }
+  const seen=new Set(); let components=0;
+  for(const id of ids){ if(seen.has(id)) continue; components++; const st=[id];
+    while(st.length){ const x=st.pop(); if(seen.has(x)) continue; seen.add(x); for(const y of adj[x]) if(!seen.has(y)) st.push(y); } }
+  const total=ids.length;
+  const flat = total>=5 && components >= Math.max(3, Math.ceil(total*0.6));
+  return { total, roots, orphans, components, flat };
+}
+// Build the ⚠ hint appended to an import toast when something looks off.
+function importWarn(h){
+  const bits=[];
+  if(h.orphans>0) bits.push(`${h.orphans} orphan${h.orphans===1?"":"s"}`);
+  if(h.flat) bits.push(`${h.components} disconnected pieces — the broader column may not have matched`);
+  return bits.length ? ` · ⚠ ${bits.join(" · ")}` : "";
+}
 $('#importGo').onclick=()=>{
   const txt=$('#importText').value.trim(); if(!txt){ toast("Nothing to import"); return; }
+  const dest=(document.querySelector('input[name="impDest"]:checked')||{}).value||"new";
   try{
-    // Spreadsheet path (CSV, or an .xlsx already turned into CSV by the file picker).
+    let m, onto=null, nC=0, nK=0, nP=0, isCsv=false;
     if(Core.looksLikeCsv(txt)){
-      const m = Core.csvToModel(txt);
-      const nC = m.order.length;
+      isCsv=true; m=Core.csvToModel(txt); nC=m.order.length;
       if(!nC){ toast("No rows found in this spreadsheet"); return; }
-      const impName = (m.scheme&&m.scheme.title) || window._importGraphName || "Imported taxonomy";
-      createProject(impName, m);
-      selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show');
-      const stub = m._importStubs ? ` (+${m._importStubs} parent stub${m._importStubs===1?"":"s"})` : "";
-      toast(`Imported “${impName}” — ${nC} concept${nC===1?"":"s"}${stub} (new project)`);
+    } else {
+      const { triples, prefixes } = Core.parseTriples(txt);
+      m=Core.triplesToModel(triples, prefixes);
+      onto=buildOntoFromTriples(triples, prefixes);
+      nC=m.order.length; nK=onto.order.classes.length; nP=onto.order.props.length;
+      if(!nC && !nK && !nP){ toast("No skos:Concept or owl:Class / property found in this file"); return; }
+      if(nK||nP){ m.onto=onto; if(onto.base && (nK+nP)>=nC){ m.base=onto.base; if(onto.prefix) m.prefix=onto.prefix; } }
+      if(!m.order) m.order=Object.keys(m.concepts);
+    }
+    const stub = m._importStubs ? ` · +${m._importStubs} parent stub${m._importStubs===1?"":"s"}` : "";
+
+    if(dest==="merge"){
+      const cur=loadProjects()[currentPid];
+      if(!cur){ toast("No current project to merge into"); return; }
+      if(nC===0 && (nK||nP)){ toast("This file has no SKOS concepts to merge — import it as a new project instead."); return; }
+      const res=mergeModelInto(model, m);
+      save(); selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show'); boot();
+      const h=importHealth(model);
+      toast(`Merged into “${cur.name}” — ${res.added} added, ${res.updated} updated${stub}${importWarn(h)}`);
       switchTab("build");
       return;
     }
-    const { triples, prefixes } = Core.parseTriples(txt);
-    const m = Core.triplesToModel(triples, prefixes);           // SKOS concepts (may be empty)
-    const onto = buildOntoFromTriples(triples, prefixes);       // OWL classes/properties (may be empty)
-    const nC=m.order.length, nK=onto.order.classes.length, nP=onto.order.props.length;
-    if(!nC && !nK && !nP){ toast("No skos:Concept or owl:Class / property found in this file"); return; }
-    if(nK||nP){ m.onto=onto; if(onto.base && (nK+nP)>=nC){ m.base=onto.base; if(onto.prefix) m.prefix=onto.prefix; } }
-    if(!m.order) m.order=Object.keys(m.concepts);
-    // Non-destructive: import into a NEW project so existing projects are never overwritten.
-    const impName = (onto&&onto.title) || (m.scheme&&m.scheme.title)
-      || (window._importGraphName)
-      || ((nK||nP) && onto.iri ? onto.iri.split(/[\/#]/).filter(Boolean).pop() : "")
-      || ((nK||nP) ? "Imported ontology" : "Imported taxonomy");
+
+    // dest === "new": build a fresh project; other projects are never touched.
+    const impName = (onto&&onto.title) || (m.scheme&&m.scheme.title) || window._importGraphName
+      || ((nK||nP) && onto&&onto.iri ? onto.iri.split(/[\/#]/).filter(Boolean).pop() : "")
+      || ((nK||nP)&&!nC ? "Imported ontology" : "Imported taxonomy");
     createProject(impName, m);
-    selected=null; openIds.clear(); $('#importModal').classList.remove('show');
-    toast(`Imported “${impName}” — ${nC} concept${nC===1?"":"s"}, ${nK} class${nK===1?"":"es"}, ${nP} propert${nP===1?"y":"ies"} (new project)`);
-    if((nK||nP) && !nC) switchTab("onto");
+    selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show');
+    const h=importHealth(m);
+    const cls=(nK||nP)?`, ${nK} class${nK===1?"":"es"}, ${nP} propert${nP===1?"y":"ies"}`:"";
+    toast(`New project “${impName}” — ${nC} concept${nC===1?"":"s"}${cls} · ${h.roots} top · other projects untouched${stub}${importWarn(h)}`);
+    if((nK||nP) && !nC) switchTab("onto"); else switchTab("build");
   }catch(e){ toast("Parse error: "+e.message); }
 };
 // Read a chosen file into the import textarea (all local; no network).
