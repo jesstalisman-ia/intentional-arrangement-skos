@@ -293,6 +293,8 @@
       <button class="btn" id="btnNew" title="Create a new project">New</button>
       <button class="btn" id="btnImport" title="Import a Turtle / RDF file">Import…</button>
       <button class="btn primary" id="btnExport" title="Export as Turtle, RDF/XML, JSON-LD or spreadsheet">Export…</button>
+      <span class="saved-chip" id="savedChip">✓ Saved</span>
+      <button class="btn" id="btnLock" title="Lock the editor with your passcode" style="display:none">Lock</button>
       <span class="vbadge" id="vBadge"></span>
     </div>
   </header>
@@ -974,6 +976,123 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<style>
+/* ---- Saved chip ---- */
+.saved-chip{font-size:12px;color:#1e7a46;opacity:0;transition:opacity .2s;white-space:nowrap;align-self:center}
+.saved-chip.show{opacity:1}
+/* ---- Onboarding gate: login / welcome / new-project setup ---- */
+#gate{position:fixed;inset:0;z-index:10000;display:none;align-items:flex-start;justify-content:center;overflow:auto;background:rgba(18,22,27,.55);backdrop-filter:blur(3px);padding:40px 16px}
+#gate.show{display:flex}
+#gate .gcard{background:var(--card,#fff);color:var(--fg,#1a1f24);width:min(620px,100%);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.30);padding:28px 30px 24px;margin:auto 0}
+#gate .gbrand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:16px;margin-bottom:6px;color:#1e7a46}
+#gate h2{font-size:22px;margin:.15em 0 .1em;letter-spacing:-.3px}
+#gate .gsub{color:var(--muted,#6b7280);font-size:13.5px;line-height:1.5;margin:0 0 16px}
+#gate .gview{display:none} #gate .gview.on{display:block}
+#gate label.fl{display:block;font-size:12.5px;font-weight:600;color:var(--muted,#4b5563);margin:12px 0 4px}
+#gate label.fl .req{color:#c0392b}
+#gate input[type=text],#gate input[type=password],#gate input[type=date],#gate textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line,#d0d5dd);border-radius:9px;font:inherit;font-size:14px;background:var(--card,#fff);color:inherit}
+#gate textarea{min-height:62px;resize:vertical}
+#gate .grow2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#gate .gactions{display:flex;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}
+#gate .gbtn{padding:10px 16px;border-radius:9px;border:1px solid var(--line,#d0d5dd);background:var(--card,#fff);color:inherit;font:inherit;font-weight:600;cursor:pointer}
+#gate .gbtn.primary{background:#1e7a46;border-color:#1e7a46;color:#fff}
+#gate .gbtn.primary:disabled{opacity:.5;cursor:not-allowed}
+#gate .gbtn.ghost{border-color:transparent;background:transparent;color:var(--muted,#6b7280)}
+#gate .gnote{font-size:12px;color:var(--muted,#5b6470);background:var(--soft,#f4f6f8);border-radius:9px;padding:11px 12px;line-height:1.55;margin-top:14px}
+#gate .gcheck{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted,#4b5563)}
+#gate .gcheck input{width:auto}
+#gate .plist{display:flex;flex-direction:column;gap:8px;max-height:min(46vh,360px);overflow:auto;margin:6px 0 4px}
+#gate .pitem{display:flex;align-items:center;gap:12px;border:1px solid var(--line,#e3e6ea);border-radius:11px;padding:11px 13px}
+#gate .pitem:hover{border-color:#1e7a46}
+#gate .pi-main{flex:1;min-width:0;cursor:pointer}
+#gate .pi-name{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#gate .pi-meta{font-size:12px;color:var(--muted,#6b7280);margin-top:1px}
+#gate .pi-del{border:none;background:transparent;color:#b0b7c0;font-size:15px;cursor:pointer;padding:4px 9px;border-radius:7px;line-height:1}
+#gate .pi-del:hover{background:#fdecec;color:#c0392b}
+#gate .gerr{color:#c0392b;font-size:12.5px;margin-top:8px;min-height:1em}
+#gate .gnew{width:100%;margin-top:12px;padding:12px;border:1.5px dashed var(--line,#c7ccd3);border-radius:11px;background:transparent;color:#1e7a46;font-weight:700;cursor:pointer}
+#gate .gnew:hover{border-color:#1e7a46;background:#f2f9f5}
+</style>
+<div id="gate" role="dialog" aria-modal="true" aria-label="Get started">
+  <div class="gcard">
+    <div class="gbrand">◈ Intentional Arrangement SKOS</div>
+
+    <div class="gview" id="gv-setpass">
+      <h2>Set a passcode</h2>
+      <p class="gsub">Lock this editor on this browser, so your taxonomies aren't opened by anyone else who uses this computer.</p>
+      <form id="setpassForm" autocomplete="on">
+        <label class="fl">Your name (optional)</label>
+        <input type="text" id="spName" autocomplete="name" placeholder="e.g. Jessica">
+        <div class="grow2">
+          <div><label class="fl">Passcode</label><input type="password" id="spPass" autocomplete="new-password"></div>
+          <div><label class="fl">Confirm passcode</label><input type="password" id="spPass2" autocomplete="new-password"></div>
+        </div>
+        <div class="gerr" id="spErr"></div>
+        <div class="gactions">
+          <button type="submit" class="gbtn primary">Set passcode &amp; continue</button>
+          <button type="button" class="gbtn ghost" id="spSkip">Skip — no passcode</button>
+        </div>
+      </form>
+      <div class="gnote"><b>Please note:</b> this is a convenience lock for this browser, not encryption. Your taxonomies live in this browser and are never uploaded. Anyone with access to this computer's browser data could still read them, and a forgotten passcode can't be recovered — you'd reset it and keep your work.</div>
+    </div>
+
+    <div class="gview" id="gv-login">
+      <h2>Welcome back</h2>
+      <p class="gsub">Enter your passcode to unlock the editor.</p>
+      <form id="loginForm" autocomplete="on">
+        <input type="text" id="loName" autocomplete="username" style="display:none" tabindex="-1" aria-hidden="true">
+        <label class="fl">Passcode</label>
+        <input type="password" id="loPass" autocomplete="current-password">
+        <div class="gerr" id="loErr"></div>
+        <label class="gcheck" style="margin-top:12px"><input type="checkbox" id="loRemember" checked> Keep me signed in on this browser</label>
+        <div class="gactions">
+          <button type="submit" class="gbtn primary">Unlock</button>
+          <button type="button" class="gbtn ghost" id="loReset">Forgot passcode?</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="gview" id="gv-welcome">
+      <h2 id="gwTitle">Welcome</h2>
+      <p class="gsub">Open a taxonomy you're working on, or start a new project.</p>
+      <div class="plist" id="gwList"></div>
+      <button class="gnew" id="gwNew">＋ Start a new project</button>
+      <div class="gactions" style="justify-content:flex-end">
+        <button type="button" class="gbtn ghost" id="gwLock" style="display:none">Lock</button>
+      </div>
+    </div>
+
+    <div class="gview" id="gv-setup">
+      <h2>New project</h2>
+      <p class="gsub">Describe your taxonomy with Dublin Core metadata. Only the title is required — you can change any of this later in the editor.</p>
+      <form id="setupForm">
+        <label class="fl">Title <span class="req">*</span></label>
+        <input type="text" id="suTitle" placeholder="e.g. Product taxonomy">
+        <div class="grow2">
+          <div><label class="fl">Project name</label><input type="text" id="suName" placeholder="defaults to the title"></div>
+          <div><label class="fl">Author (creator)</label><input type="text" id="suCreator" autocomplete="name"></div>
+        </div>
+        <label class="fl">Publisher</label>
+        <input type="text" id="suPublisher">
+        <label class="fl">Description</label>
+        <textarea id="suDesc" placeholder="What this vocabulary covers and who it's for."></textarea>
+        <div class="grow2">
+          <div><label class="fl">Date created</label><input type="date" id="suCreated"></div>
+          <div><label class="fl">Date published</label><input type="date" id="suIssued"></div>
+        </div>
+        <label class="fl">Date modified</label>
+        <input type="date" id="suModified">
+        <div class="gerr" id="suErr"></div>
+        <div class="gactions">
+          <button type="submit" class="gbtn primary" id="suCreate" disabled>Create project</button>
+          <button type="button" class="gbtn ghost" id="suBack">← Back</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+
 <script>// ============================================================================
 // TXMST — core logic (pure, testable). Exposed as global `Core`.
 // Model → triples, Turtle/RDF-XML serialization, Turtle import,
@@ -1046,6 +1165,7 @@ function buildTriples(model, opts){
     if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
     if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
     if (model.scheme.created) add(s, dct("created"), lit(model.scheme.created, "", NS.xsd + "date"));
+    if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
     if (model.scheme.rights) add(s, dct("rights"), lit(model.scheme.rights, L));
   }
@@ -1991,7 +2111,7 @@ function triplesToModel(triples, prefixes){
   const STD = { skos:1, skosxl:1, rdf:1, rdfs:1, dcterms:1, xsd:1 };
   if (prefixes) for (const [k, v] of Object.entries(prefixes)) if (v === base && !STD[k]){ prefix = k; break; }
   const model = { base, prefix, defaultLang: "en", idStyle: "text",
-    scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", modified: "", rights: "", lang: "en" },
+    scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", issued: "", modified: "", rights: "", lang: "en" },
     concepts: {}, order: [] };
   const localOf = u => (u.startsWith(base) ? u.slice(base.length) : u);
   // Only genuine SKOS concepts become concepts. An owl:Class/property that merely carries
@@ -2038,6 +2158,7 @@ function triplesToModel(triples, prefixes){
       else if (pv === D + "creator") model.scheme.creator = o.v;
       else if (pv === D + "publisher") model.scheme.publisher = o.v;
       else if (pv === D + "created") model.scheme.created = o.v;
+      else if (pv === D + "issued") model.scheme.issued = o.v;
       else if (pv === D + "modified") model.scheme.modified = o.v;
       else if (pv === D + "rights") model.scheme.rights = o.v;
       else if (pv === P + "hasTopConcept" && o.t === "iri"){ const c = ensure(o.v); if(c) c.top = true; }
@@ -2473,13 +2594,14 @@ root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTu
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const PKEY = "skosStudio.projects.v2", CKEY = "skosStudio.currentPid.v2", OLDKEY = "skosStudio.model.v1";
+const AKEY = "iaskos.auth.v1", SKEY = "iaskos.session.v1";
 let model, selected = null, valAuto = false, lastIssues = [], currentPid = null;
 
 // ---------- model ----------
 const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under Creative Commons Attribution-NoDerivatives 4.0 International. To view a copy of this license, visit https://creativecommons.org/licenses/by-nd/4.0/";
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
-    scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), modified:"", rights:"", lang:"en" },
+    scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", lang:"en" },
     concepts:{}, order:[] };
 }
 // 32-char hex UUID (dashes stripped), guaranteed unique within the model
@@ -2507,7 +2629,9 @@ function save(){
   if(!currentPid || !projs[currentPid]){ currentPid = currentPid || newPid(); projs[currentPid] = { id:currentPid, name:(model.scheme.title||"Untitled"), created:nowTs() }; }
   projs[currentPid].model = model; projs[currentPid].updated = nowTs();
   saveProjects(projs); try{ localStorage.setItem(CKEY, currentPid); }catch(e){}
+  flashSaved();
 }
+function flashSaved(){ const c=document.getElementById('savedChip'); if(!c) return; c.classList.add('show'); clearTimeout(window._savedT); window._savedT=setTimeout(()=>c.classList.remove('show'),1100); }
 
 function uid(base){ base = base || "Concept"; let n=1, id=base; while(model.concepts[id]){ id = base+(++n); } return id; }
 function addConcept(parentId){
@@ -2898,7 +3022,7 @@ const SCHEME_FIELDS=[
   ["defaultLang","Default language","lang"],
   ["title","dcterms:title","text"],["description","dcterms:description","area"],
   ["creator","dcterms:creator","text"],["publisher","dcterms:publisher","text"],
-  ["created","dcterms:created (date)","date"],["modified","dcterms:modified (date)","date"],["rights","dcterms:rights","text"],
+  ["created","dcterms:created (date)","date"],["issued","dcterms:issued (date published)","date"],["modified","dcterms:modified (date)","date"],["rights","dcterms:rights","text"],
 ];
 function renderScheme(){
   const g=$('#schemeGrid'); g.innerHTML="";
@@ -4917,5 +5041,94 @@ function initProjects(){
   model=loadProjects()[currentPid].model; if(!model.order||!model.order.length) model.order=Object.keys(model.concepts);
   try{ localStorage.setItem(CKEY,currentPid); }catch(e){}
 }
-initProjects(); boot();
+// ================= Onboarding gate: local passcode + welcome + new-project setup =================
+const NOPASS = "iaskos.nopass.v1";
+const $g = (id)=>document.getElementById(id);
+function gateShow(view){ document.querySelectorAll('#gate .gview').forEach(v=>v.classList.remove('on')); const el=$g(view); if(el) el.classList.add('on'); $g('gate').classList.add('show'); }
+function gateHide(){ $g('gate').classList.remove('show'); }
+async function _sha256(str){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function _salt(){ const a=new Uint8Array(16); crypto.getRandomValues(a); return [...a].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function authGet(){ try{ return JSON.parse(localStorage.getItem(AKEY)); }catch(e){ return null; } }
+async function authSet(pass,name){ const salt=_salt(); const hash=await _sha256(salt+'::'+pass); localStorage.setItem(AKEY, JSON.stringify({salt,hash,name:name||''})); localStorage.removeItem(NOPASS); }
+async function authCheck(pass){ const a=authGet(); if(!a) return false; return (await _sha256(a.salt+'::'+pass))===a.hash; }
+function sessActive(){ return localStorage.getItem(SKEY)==='1' || sessionStorage.getItem(SKEY)==='1'; }
+function sessSet(remember){ if(remember) localStorage.setItem(SKEY,'1'); else sessionStorage.setItem(SKEY,'1'); }
+function sessClear(){ localStorage.removeItem(SKEY); sessionStorage.removeItem(SKEY); }
+function lockNow(){ sessClear(); $g('loPass').value=''; $g('loErr').textContent=''; gateShow('gv-login'); setTimeout(()=>{try{$g('loPass').focus();}catch(e){}},50); }
+
+function gateWelcome(){
+  const a=authGet();
+  $g('gwTitle').textContent = (a&&a.name)? ('Welcome, '+a.name) : 'Welcome';
+  $g('gwLock').style.display = a? '' : 'none';
+  const host=$g('gwList'); host.innerHTML='';
+  const list=Object.values(loadProjects()).sort((x,y)=>(y.updated||0)-(x.updated||0));
+  if(!list.length){ prefillSetup(); gateShow('gv-setup'); return; }
+  for(const p of list){
+    const n=p.model&&p.model.order? p.model.order.length : (p.model&&p.model.concepts?Object.keys(p.model.concepts).length:0);
+    let dt=''; try{ dt=new Date(p.updated).toLocaleDateString(); }catch(e){}
+    const row=document.createElement('div'); row.className='pitem';
+    const main=document.createElement('div'); main.className='pi-main';
+    const nm=document.createElement('div'); nm.className='pi-name'; nm.textContent=p.name;
+    const mt=document.createElement('div'); mt.className='pi-meta'; mt.textContent=`${n} concept${n===1?'':'s'} · ${dt}`;
+    main.append(nm,mt);
+    main.onclick=()=>{ switchTo(p.id); gateHide(); toast('Opened “'+p.name+'”'); };
+    const del=document.createElement('button'); del.className='pi-del'; del.title='Delete project'; del.textContent='✕';
+    del.onclick=async(e)=>{ e.stopPropagation(); if(await askConfirm('Delete project “'+p.name+'”? This cannot be undone.','Delete project')){ const ps=loadProjects(); delete ps[p.id]; saveProjects(ps); if(p.id===currentPid){ const rest=Object.keys(ps); if(rest.length) switchTo(rest[0]); } setProjectChip(); gateWelcome(); } };
+    row.append(main,del); host.appendChild(row);
+  }
+  gateShow('gv-welcome');
+}
+function prefillSetup(){
+  const a=authGet(), t=todayISO();
+  $g('suTitle').value=''; $g('suName').value=''; $g('suCreator').value=(a&&a.name)||'';
+  $g('suPublisher').value=''; $g('suDesc').value='';
+  $g('suCreated').value=t; $g('suIssued').value=t; $g('suModified').value=t;
+  $g('suErr').textContent=''; $g('suCreate').disabled=true;
+}
+function initGate(){
+  $g('setpassForm').onsubmit=async(e)=>{ e.preventDefault();
+    const p=$g('spPass').value, p2=$g('spPass2').value, err=$g('spErr');
+    if(p.length<4){ err.textContent='Use at least 4 characters.'; return; }
+    if(p!==p2){ err.textContent='The two passcodes don’t match.'; return; }
+    await authSet(p, $g('spName').value.trim()); sessSet(true);
+    if($g('btnLock')) $g('btnLock').style.display='';
+    gateWelcome();
+  };
+  $g('spSkip').onclick=()=>{ localStorage.setItem(NOPASS,'1'); gateWelcome(); };
+  $g('loginForm').onsubmit=async(e)=>{ e.preventDefault();
+    const err=$g('loErr');
+    if(!await authCheck($g('loPass').value)){ err.textContent='Incorrect passcode.'; $g('loPass').select(); return; }
+    err.textContent=''; sessSet($g('loRemember').checked); gateWelcome();
+  };
+  $g('loReset').onclick=async()=>{ if(await askConfirm('Reset your passcode? Your taxonomies stay on this browser; you’ll just set a new passcode.','Reset passcode')){ localStorage.removeItem(AKEY); sessClear(); $g('spErr').textContent=''; gateShow('gv-setpass'); } };
+  $g('gwNew').onclick=()=>{ prefillSetup(); gateShow('gv-setup'); setTimeout(()=>{try{$g('suTitle').focus();}catch(e){}},50); };
+  $g('gwLock').onclick=lockNow;
+  $g('suTitle').oninput=()=>{ $g('suCreate').disabled = $g('suTitle').value.trim()===''; };
+  $g('suBack').onclick=()=>{ gateWelcome(); };
+  $g('setupForm').onsubmit=(e)=>{ e.preventDefault();
+    const title=$g('suTitle').value.trim(); if(!title){ $g('suErr').textContent='A title is required.'; return; }
+    const m=newModel();
+    m.scheme.title=title;
+    m.scheme.creator=$g('suCreator').value.trim();
+    m.scheme.publisher=$g('suPublisher').value.trim();
+    m.scheme.description=$g('suDesc').value.trim();
+    m.scheme.created=$g('suCreated').value||todayISO();
+    m.scheme.issued=$g('suIssued').value||'';
+    m.scheme.modified=$g('suModified').value||todayISO();
+    const name=$g('suName').value.trim()||title;
+    createProject(name, m); gateHide(); toast('Created “'+name+'”'); switchTab('build');
+  };
+  // header affordances
+  const brandH1=document.querySelector('header .brand h1'); if(brandH1){ brandH1.style.cursor='pointer'; brandH1.title='Back to the welcome screen'; brandH1.onclick=gateWelcome; }
+  if($g('btnLock')){ $g('btnLock').style.display=authGet()?'':'none'; $g('btnLock').onclick=lockNow; }
+  // redirect the in-app "New" actions to the guided setup
+  if($g('btnNew')) $g('btnNew').onclick=()=>{ prefillSetup(); gateShow('gv-setup'); setTimeout(()=>{try{$g('suTitle').focus();}catch(e){}},50); };
+  if($g('projNew')) $g('projNew').onclick=()=>{ $g('projectsModal').classList.remove('show'); prefillSetup(); gateShow('gv-setup'); };
+  // entry decision
+  const a=authGet();
+  if(a && !sessActive()){ lockNow(); }
+  else if(a || localStorage.getItem(NOPASS)){ gateWelcome(); }
+  else { gateShow('gv-setpass'); }
+}
+initProjects(); boot(); initGate();
 </script>
