@@ -743,6 +743,8 @@
     <div class="card">
       <div class="card-h"><h2>Proposed terms</h2>
         <div class="seg" id="propFilter" style="margin-left:auto"><button data-f="pending" class="on">Pending</button><button data-f="approved">Approved</button><button data-f="rejected">Rejected</button><button data-f="all">All</button></div>
+        <button class="btn sm" id="propDownloadMd" title="Download a proposals report with all decisions (Markdown)">⤓ Report</button>
+        <button class="btn sm" id="propDownloadCsv" title="Download all proposals and decisions (CSV)">⤓ CSV</button>
         <button class="btn sm primary" id="btnProposeFromList">＋ New proposal</button>
       </div>
       <div class="prop-list" id="proposalList"></div>
@@ -4017,12 +4019,19 @@ function renderProposals(){
     if(p.altLabels&&p.altLabels.length) h+=`<div class="pfield">Synonyms: ${p.altLabels.map(escapeHtml).join(", ")}</div>`;
     if(p.scopeNote) h+=`<div class="pfield">Scope: ${escapeHtml(p.scopeNote)}</div>`;
     if(p.rationale) h+=`<div class="pfield">Rationale: ${escapeHtml(p.rationale)}</div>`;
+    if(p.status!=="pending"){ let dd=""; try{ dd=p.decidedTs?new Date(p.decidedTs).toLocaleDateString():""; }catch(e){}
+      h+=`<div class="pfield">Decision: <b>${escapeHtml(p.resolution||p.status)}</b>${p.decidedBy?" · by "+escapeHtml(p.decidedBy):""}${dd?" · "+dd:""}</div>`;
+      if(p.decisionNote) h+=`<div class="pfield">Note: ${escapeHtml(p.decisionNote)}</div>`; }
     if(p.artifacts&&p.artifacts.length) h+=`<div class="prop-arts">${p.artifacts.map(a=>{const m=artMeta(a.type);return `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${m.icon} ${escapeHtml(a.title||a.url)}</a>`;}).join("")}</div>`;
     card.innerHTML=h;
     const acts=document.createElement("div"); acts.className="pacts";
     if(p.status==="pending"){
-      const ap=document.createElement("button"); ap.className="btn sm primary"; ap.textContent="Approve → add to taxonomy"; ap.onclick=()=>approveProposal(p.id);
-      const rj=document.createElement("button"); rj.className="btn sm"; rj.textContent="Reject"; rj.onclick=()=>{ p.status="rejected"; save(); updateProposalPill(); renderProposals(); };
+      const placeWrap=document.createElement("div"); placeWrap.className="pfield"; placeWrap.style.cssText="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap";
+      const lab=document.createElement("span"); lab.textContent="Add under"; lab.style.cssText="font-size:12.5px;color:var(--muted)";
+      const sel=document.createElement("select"); sel.className="prop-parent"; sel.style.cssText="min-width:200px;max-width:100%"; fillParentSelect(sel, p.parentId||"");
+      placeWrap.append(lab,sel); card.appendChild(placeWrap);
+      const ap=document.createElement("button"); ap.className="btn sm primary"; ap.textContent="Approve → add to taxonomy"; ap.onclick=()=>approveProposal(p.id, sel.value);
+      const rj=document.createElement("button"); rj.className="btn sm"; rj.textContent="Reject"; rj.onclick=()=>rejectProposal(p.id);
       acts.append(ap,rj);
     } else if(p.status==="approved"&&p.approvedId&&model.concepts[p.approvedId]){
       const v=document.createElement("button"); v.className="btn sm"; v.textContent="View in taxonomy"; v.onclick=()=>{ switchTab("browse"); selectBrowse(p.approvedId); }; acts.append(v);
@@ -4031,8 +4040,10 @@ function renderProposals(){
     acts.appendChild(del); card.appendChild(acts); host.appendChild(card);
   }
 }
-function approveProposal(pid){
+function approveProposal(pid, parentIdArg){
   const p=(model.proposals||[]).find(x=>x.id===pid); if(!p) return;
+  const parentId = (parentIdArg!==undefined) ? parentIdArg : p.parentId;   // "" / falsy => top concept
+  const top = !(parentId && model.concepts[parentId]);
   const id=genConceptId(p.term);
   const c=Core.emptyConcept(id);
   c.pref=[{lang:model.defaultLang,val:p.term}];
@@ -4040,13 +4051,68 @@ function approveProposal(pid){
   if(p.scopeNote) c.scopeNote=[{lang:model.defaultLang,val:p.scopeNote}];
   (p.altLabels||[]).forEach(s=>{ if(s) c.alt.push({lang:model.defaultLang,val:s}); });
   c.artifacts=(p.artifacts||[]).map(a=>({type:a.type,title:a.title,url:a.url}));
-  if(p.parentId&&model.concepts[p.parentId]) c.broader=[p.parentId]; else c.top=true;
+  if(top) c.top=true; else c.broader=[parentId];
   seedHistory(c, "Created from approved proposal"+(p.submitter?` (proposed by ${p.submitter})`:""));
   model.concepts[id]=c; model.order.push(id);
-  p.status="approved"; p.approvedId=id;
-  save(); renderTree(); renderBrowse(); updateProposalPill(); renderProposals(); toast("“"+p.term+"” added to the taxonomy");
+  p.status="approved"; p.approvedId=id; p.parentId = top?null:parentId;
+  p.decidedBy=getEditor(); p.decidedTs=nowTs();
+  p.resolution = top ? "Approved as a top concept" : ("Approved under “"+plabel(parentId)+"”");
+  save(); renderTree(); renderBrowse(); updateProposalPill(); renderProposals();
+  toast("“"+p.term+"” added "+(top?"as a top concept":"under “"+plabel(parentId)+"”"));
 }
+async function rejectProposal(pid){
+  const p=(model.proposals||[]).find(x=>x.id===pid); if(!p) return;
+  const reason=await askPrompt("Reason for rejecting “"+p.term+"” (optional):", "", "Reject");
+  if(reason===null) return;
+  p.status="rejected"; p.decidedBy=getEditor(); p.decidedTs=nowTs(); p.resolution="Rejected";
+  if(reason.trim()) p.decisionNote=reason.trim();
+  save(); updateProposalPill(); renderProposals(); toast("Proposal rejected");
+}
+// ---- Proposals log: documented + downloadable, decisions included ----
+function proposalsCsv(model){
+  const q=s=>{ s=String(s==null?"":s); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const cols=["term","status","parent","resolution","approved_id","definition","synonyms","scope_note","rationale","submitter","submitted","decided_by","decided","artifacts"];
+  const rows=[cols.join(",")];
+  (model.proposals||[]).forEach(p=>{
+    const parent = p.parentId&&model.concepts[p.parentId]?plabel(p.parentId):(p.parentId?p.parentId:(p.status==="approved"?"(top concept)":""));
+    const iso=t=>{ try{ return t?new Date(t).toISOString().slice(0,10):""; }catch(e){ return ""; } };
+    rows.push([ p.term, p.status, parent, p.resolution||"", p.approvedId||"", p.definition||"", (p.altLabels||[]).join(" | "),
+      p.scopeNote||"", p.rationale||"", p.submitter||"", iso(p.created), p.decidedBy||"", iso(p.decidedTs),
+      (p.artifacts||[]).map(a=>(a.title||a.url)+" <"+a.url+">").join(" | ") ].map(q).join(","));
+  });
+  return rows.join("\r\n")+"\r\n";
+}
+function proposalsMarkdown(model){
+  const props=model.proposals||[];
+  const title=(model.scheme&&model.scheme.title)||"Taxonomy";
+  const today=(()=>{ try{ return new Date().toISOString().slice(0,10); }catch(e){ return ""; } })();
+  let md="# Proposed terms — "+title+"\n\n_"+props.length+" proposal"+(props.length===1?"":"s")+(today?" · exported "+today:"")+"_\n\n";
+  for(const [st,label] of [["pending","Pending"],["approved","Approved"],["rejected","Rejected"]]){
+    const list=props.filter(p=>p.status===st); if(!list.length) continue;
+    md+="## "+label+" ("+list.length+")\n\n";
+    list.forEach(p=>{
+      md+="### "+p.term+"\n"; if(p.definition) md+=p.definition+"\n\n";
+      const parent = p.parentId&&model.concepts[p.parentId]?plabel(p.parentId):(p.parentId||"Top level");
+      const f=[];
+      if(p.status==="pending") f.push(["Suggested parent", parent]); else f.push(["Decision", p.resolution||p.status]);
+      if(p.altLabels&&p.altLabels.length) f.push(["Synonyms", p.altLabels.join(", ")]);
+      if(p.scopeNote) f.push(["Scope note", p.scopeNote]);
+      if(p.rationale) f.push(["Rationale", p.rationale]);
+      if(p.submitter) f.push(["Proposed by", p.submitter]);
+      if(p.decidedBy) f.push(["Decided by", p.decidedBy]);
+      if(p.decisionNote) f.push(["Decision note", p.decisionNote]);
+      f.forEach(([k,v])=>{ md+="- **"+k+":** "+v+"\n"; });
+      if(p.artifacts&&p.artifacts.length) md+="- **Links:** "+p.artifacts.map(a=>"["+(a.title||a.url)+"]("+a.url+")").join(", ")+"\n";
+      md+="\n";
+    });
+  }
+  if(!props.length) md+="_No proposals yet._\n";
+  return md;
+}
+function propSlug(){ return (model.scheme.title||"taxonomy").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"taxonomy"; }
 $$('#propFilter button').forEach(b=>b.onclick=()=>{ $$('#propFilter button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); propFilter=b.dataset.f; renderProposals(); });
+if($('#propDownloadMd')) $('#propDownloadMd').onclick=()=>{ downloadFile(propSlug()+"-proposals.md", proposalsMarkdown(model), "text/markdown"); toast("Downloaded proposals report"); };
+if($('#propDownloadCsv')) $('#propDownloadCsv').onclick=()=>{ downloadFile(propSlug()+"-proposals.csv", proposalsCsv(model), "text/csv"); toast("Downloaded proposals CSV"); };
 
 // ================= ONTOLOGY MODELING (OWL DL over reused vocabularies) =================
 const ONTO_NS={ rdf:"http://www.w3.org/1999/02/22-rdf-syntax-ns#", rdfs:"http://www.w3.org/2000/01/rdf-schema#",
@@ -5257,6 +5323,7 @@ const TOUR_STEPS = [
   { title:"Linked data", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Linked artifacts'), body:"Attach documents, images, or links as <b>linked artifacts</b>, and map to external vocabularies with <b>exactMatch</b> and friends — connecting your concept to the wider web of data." },
   { title:"Concept scheme & Dublin Core", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#schemeGrid')||$('#schemeBox'), body:"Give the vocabulary itself a record. Open <b>Concept scheme, identifiers &amp; Dublin Core metadata</b> to set the <b>title, creator, publisher, dates, rights and language</b>. This Dublin Core metadata travels with every export." },
   { title:"UUIDs for every concept — in one click", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#btnAssignUuids'), body:"A hidden gem in that same section: click <b>Assign UUIDs to all terms</b> to switch <i>every</i> concept to a stable, opaque UUID at once. UUIDs never collide and never need renaming — ideal before you publish or hand the vocabulary off." },
+  { title:"Proposals — suggest & review terms", target:()=>document.querySelector('.tab[data-tab=proposals]'), body:"Not everyone edits directly. In <b>Proposals</b>, people suggest new terms; a reviewer sets each one's parent (or makes it a <b>top concept</b>) and <b>approves</b> it into the taxonomy, or <b>rejects</b> it with a reason. Every decision is recorded, and the whole log downloads as CSV or a report." },
   { title:"Validate and export", target:()=>document.querySelector('.tab[data-tab=validate]'), body:"Check quality against qSKOS in <b>Validate</b>, then take your taxonomy out — Turtle, RDF/XML, JSON-LD, CSV, Excel — in <b>Export</b>." },
   { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime from the <b>☰</b> menu (Help → Take a quick tour)." },
 ];
