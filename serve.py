@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman
+# Licensed under Creative Commons Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)
+# https://creativecommons.org/licenses/by-nd/4.0/
 """No-cache static server for the Intentional Arrangement SKOS app.
     python3 serve.py            # http://localhost:8080  (serves ./app)
     python3 serve.py 8090
