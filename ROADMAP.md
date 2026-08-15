@@ -8,6 +8,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+- **Glossary (on-ramp)** — a staging bucket for **candidate terms**, the first tab because it comes before building. Import a flat list from paste, a text/markdown file (bullets, numbering, headings), CSV, or `.xlsx`; keep a list **unlinked** or associate it with a taxonomy; then **promote** terms into that taxonomy as SKOS top concepts you can arrange. Matches how people actually start — collect first, structure later.
 - **Workspace & onboarding** — optional local passcode (per-browser lock, salted hash, not encryption), a welcome screen to open or start a taxonomy, and guided new-project setup with Dublin Core metadata (title required; created/published/modified auto-filled).
 - **Autosave** — every change persists to the browser, with a visible "✓ Saved" indicator.
 - **Spreadsheet import & export** — CSV and Excel `.xlsx`, both round-tripping, unzipped/zipped in the browser (no library, no upload). [Template](docs/templates/skos-import-template.xlsx) + [tutorial](docs/spreadsheet-import.md).
@@ -24,7 +25,6 @@ Nothing in active development right now — the **Planned** items below are cand
 
 ## 💡 Planned
 
-- **Glossary mode (on-ramp)** — capture terms and definitions as a plain glossary, then promote them into SKOS. Matches how people actually start.
 - **Schema Binding / projection export and import** — export or import the model (and a "projection map") toward implementation targets: Pydantic, SwiftData, Cypher/neosemantics, MongoDB, Obsidian properties.
 - **Import diagnostics, deepened** — an inline report (not just a toast) after import/merge.
 - **Validation** — a persistent "edited since last check" state and clearer manual/automatic explanation.

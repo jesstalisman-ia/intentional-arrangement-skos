@@ -322,6 +322,7 @@
   </details>
 
   <div class="tabs" id="tabs">
+    <button class="tab" data-tab="glossary">Glossary <span class="pill" id="pillGloss">0</span></button>
     <button class="tab active" data-tab="build">Build <span class="pill" id="pillCount">0</span></button>
     <button class="tab" data-tab="browse">Business view</button>
     <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
@@ -895,6 +896,49 @@
       <div class="val-list" id="valList"><div class="val-clean">Run validation to check your taxonomy against qSKOS quality criteria.</div></div>
       <div class="check-info" id="checkInfo"></div>
     </div>
+  </section>
+
+  <!-- GLOSSARY: candidate-terms bucket / on-ramp -->
+  <style>
+    .gloss-import{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--border-soft)}
+    #glossPaste{flex:1;min-width:260px;min-height:64px;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border);border-radius:9px;font:inherit;font-size:13.5px;background:var(--surface);color:var(--text);resize:vertical}
+    .gloss-import .col{display:flex;flex-direction:column;gap:8px}
+    .gloss-list{display:flex;flex-direction:column;max-height:calc(100vh - 340px);overflow:auto}
+    .gloss-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border-soft)}
+    .gloss-row .gt{flex:1;min-width:0;font-size:14px}
+    .gloss-row .gt .gnote{display:block;font-size:12px;color:var(--faint)}
+    .gloss-row.done .gt{color:var(--faint);text-decoration:line-through}
+    .gloss-row .gtag{font-size:11px;color:var(--ok);white-space:nowrap}
+    .gloss-empty{padding:36px;text-align:center;color:var(--faint)}
+    .gloss-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border-soft);flex-wrap:wrap}
+  </style>
+  <section class="panel" data-panel="glossary">
+    <div class="card">
+      <div class="card-h" style="flex-wrap:wrap;gap:8px">
+        <h2>Glossary</h2>
+        <select id="glossSelect" title="Choose a candidate list" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--surface);color:var(--text)"></select>
+        <button class="btn sm" id="glossNew">+ New list</button>
+        <button class="btn sm" id="glossRename">Rename</button>
+        <button class="btn sm" id="glossDelete">Delete</button>
+        <span class="sp" style="margin-left:auto"></span>
+        <label style="font-size:12.5px;color:var(--muted);display:inline-flex;align-items:center;gap:6px">Taxonomy
+          <select id="glossLink" title="Link this list to a taxonomy (or leave unlinked)" style="padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:var(--surface);color:var(--text)"></select>
+        </label>
+      </div>
+      <div class="gloss-import">
+        <textarea id="glossPaste" placeholder="Paste candidate terms — one per line, a markdown list (- term), or CSV (term, note). These are just raw terms, not a hierarchy yet."></textarea>
+        <div class="col">
+          <input type="file" id="glossFile" accept=".txt,.md,.markdown,.csv,.tsv,.xlsx" style="font-size:12px">
+          <button class="btn sm primary" id="glossAdd">Add terms</button>
+        </div>
+      </div>
+      <div class="gloss-list" id="glossList"></div>
+      <div class="gloss-bar">
+        <button class="btn sm primary" id="glossPromoteAll">Promote all → taxonomy</button>
+        <span class="subtle" id="glossMeta" style="font-size:12px;color:var(--faint);margin-left:auto"></span>
+      </div>
+    </div>
+    <p class="subtle" style="padding:8px 4px;font-size:12px;color:var(--faint)">A staging bucket for unstructured <b>candidate terms</b> — a garage before the taxonomy. Import a flat list, link it to a taxonomy, then <b>promote</b> terms into it as SKOS concepts (as top concepts you can then arrange). Lists can also sit unlinked until you're ready.</p>
   </section>
 
   <!-- SPARQL -->
@@ -3579,6 +3623,7 @@ function switchTab(name){
   if(name==="shacl") renderShacl();
   if(name==="validate") { if(valAuto) runValidation(); }
   if(name==="sparql"){ if(!window._sqInit){ initSamples(); window._sqInit=true; } setTimeout(()=>{ try{ $('#nlQuery').focus(); }catch(e){} },0); }
+  if(name==="glossary") renderGlossary();
   
 }
 $$('#tabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
@@ -5622,6 +5667,97 @@ function buildNavContents(){
 function positionNav(){ const b=document.getElementById('navBtn'), m=document.getElementById('navMenu'); if(!b||!m) return; const r=b.getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; let left=Math.min(Math.max(8,r.left), window.innerWidth-254); m.style.left=left+'px'; }
 function toggleNav(){ const m=document.getElementById('navMenu'); if(!m) return; if(m.classList.contains('on')){ closeNav(); return; } buildNavContents(); m.classList.add('on'); positionNav(); }
 function closeNav(){ const m=document.getElementById('navMenu'); if(m) m.classList.remove('on'); }
+
+// ================= Glossary: candidate-terms buckets → promote to SKOS =================
+const GKEY="iaskos.glossaries.v1";
+let currentGid=null;
+function loadGloss(){ try{ return JSON.parse(localStorage.getItem(GKEY))||{}; }catch(e){ return {}; } }
+function saveGloss(g){ try{ localStorage.setItem(GKEY, JSON.stringify(g)); }catch(e){ toast("Storage full"); } }
+function glossNewId(){ return "g"+nowTs().toString(36)+Math.random().toString(36).slice(2,5); }
+function parseFlatTerms(text){
+  text=String(text||"").replace(/\r/g,"");
+  const out=[], seen=new Set();
+  const push=(t,n)=>{ t=(t||"").trim(); if(!t) return; const k=t.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push({term:t, note:(n||"").trim()}); };
+  if(Core.looksLikeCsv(text)){
+    const rows=Core.parseCsvText(text); let start=0;
+    const h=(rows[0]||[]).map(x=>String(x).toLowerCase().trim());
+    if(h.some(x=>["term","label","name","concept","preflabel","pref label"].includes(x))) start=1;
+    for(let i=start;i<rows.length;i++){ const r=rows[i]||[]; push(r[0], r[1]); }
+    return out;
+  }
+  for(let line of text.split("\n")){
+    line=line.replace(/^\s*[-*+]\s+/,"").replace(/^\s*\d+[.)]\s+/,"").replace(/^#+\s+/,"").trim();
+    if(!line || /^[-=*_]{3,}$/.test(line)) continue;                       // skip dividers
+    line=line.replace(/\[([^\]]+)\]\([^)]*\)/g,"$1").replace(/[*_`]/g,"").trim(); // strip md
+    push(line, "");
+  }
+  return out;
+}
+function glossActive(){ const g=loadGloss(); if(currentGid && g[currentGid]) return g[currentGid]; const ks=Object.keys(g); currentGid=ks[0]||null; return currentGid?g[currentGid]:null; }
+function updateGlossPill(){ const b=$('#pillGloss'); if(!b) return; const a=glossActive(); const n=a?a.terms.filter(t=>!t.conceptId).length:0; b.textContent=n; }
+function renderGlossary(){
+  const g=loadGloss(), sel=$('#glossSelect'), link=$('#glossLink'), list=$('#glossList'); if(!sel) return;
+  const keys=Object.keys(g).sort((a,b)=>(g[b].updated||0)-(g[a].updated||0));
+  if(!currentGid || !g[currentGid]) currentGid=keys[0]||null;
+  sel.innerHTML = keys.length ? keys.map(k=>`<option value="${k}" ${k===currentGid?"selected":""}>${escapeHtml(g[k].name)}</option>`).join("") : '<option value="">— no lists yet —</option>';
+  // project link dropdown
+  const projs=loadProjects(); const cur=currentGid?g[currentGid]:null;
+  link.innerHTML = '<option value="">Unlinked</option>'+Object.values(projs).sort((a,b)=>(b.updated||0)-(a.updated||0)).map(p=>`<option value="${p.id}" ${cur&&cur.projectId===p.id?"selected":""}>${escapeHtml(p.name)}</option>`).join("");
+  // terms
+  list.innerHTML="";
+  if(!cur){ list.innerHTML='<div class="gloss-empty">No candidate lists yet. Click <b>+ New list</b>, then paste or import a flat list of terms.</div>'; $('#glossMeta').textContent=""; updateGlossPill(); return; }
+  if(!cur.terms.length){ list.innerHTML='<div class="gloss-empty">Empty. Paste terms above (one per line, a markdown list, or CSV) or choose a file, then <b>Add terms</b>.</div>'; }
+  else for(const t of cur.terms){
+    const row=document.createElement("div"); row.className="gloss-row"+(t.conceptId?" done":"");
+    const cell=document.createElement("div"); cell.className="gt"; cell.innerHTML=escapeHtml(t.term)+(t.note?`<span class="gnote">${escapeHtml(t.note)}</span>`:"");
+    row.appendChild(cell);
+    if(t.conceptId){ const tag=document.createElement("span"); tag.className="gtag"; tag.textContent="✓ promoted"; row.appendChild(tag); }
+    else { const pr=document.createElement("button"); pr.className="btn sm primary"; pr.textContent="Promote →"; pr.onclick=()=>promoteTerm(currentGid,t.id); row.appendChild(pr); }
+    const rm=document.createElement("button"); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from list"; rm.onclick=()=>{ const gg=loadGloss(); const b=gg[currentGid]; if(!b)return; b.terms=b.terms.filter(x=>x.id!==t.id); b.updated=nowTs(); saveGloss(gg); renderGlossary(); };
+    row.appendChild(rm); list.appendChild(row);
+  }
+  const pend=cur.terms.filter(t=>!t.conceptId).length, prom=cur.terms.length-pend;
+  $('#glossMeta').textContent=`${cur.terms.length} term${cur.terms.length===1?"":"s"} · ${pend} candidate · ${prom} promoted`+(cur.projectId&&projs[cur.projectId]?` · linked to “${projs[cur.projectId].name}”`:" · unlinked");
+  updateGlossPill();
+}
+function glossAddTerms(text){
+  const parsed=parseFlatTerms(text); if(!parsed.length){ toast("No terms found"); return; }
+  const g=loadGloss(); if(!currentGid || !g[currentGid]){ const id=glossNewId(); g[id]={id,name:"Candidate terms",projectId:(loadProjects()[currentPid]?currentPid:null),created:nowTs(),updated:nowTs(),terms:[]}; currentGid=id; }
+  const b=g[currentGid]; const have=new Set(b.terms.map(t=>t.term.toLowerCase()));
+  let added=0; for(const p of parsed){ if(have.has(p.term.toLowerCase())) continue; have.add(p.term.toLowerCase()); b.terms.push({id:glossNewId(),term:p.term,note:p.note,conceptId:null}); added++; }
+  b.updated=nowTs(); saveGloss(g); renderGlossary(); toast(`Added ${added} term${added===1?"":"s"}${added<parsed.length?" ("+(parsed.length-added)+" already present)":""}`);
+}
+function promoteTerm(gid,tid){
+  const g=loadGloss(), b=g[gid]; if(!b) return; const t=b.terms.find(x=>x.id===tid); if(!t||t.conceptId) return;
+  const projs=loadProjects(); const pid=b.projectId;
+  if(!pid || !projs[pid]){ toast("Link this list to a taxonomy first (the Taxonomy dropdown, top-right)"); return; }
+  const isCur=(pid===currentPid); const m=isCur?model:projs[pid].model;
+  m.concepts=m.concepts||{}; m.order=m.order||Object.keys(m.concepts);
+  const base=(m.idStyle==="uuid")?genUuid32():(slugId(t.term)||"Term");
+  const cid=uniqueLocalIn(m.concepts, base);
+  const c=Core.emptyConcept(cid); c.pref=[{lang:m.defaultLang||"en",val:t.term}]; if(t.note) c.definition=[{lang:m.defaultLang||"en",val:t.note}]; c.top=true;
+  m.concepts[cid]=c; m.order.push(cid);
+  if(isCur){ save(); renderTree(); afterChange(); }
+  else { projs[pid].model=m; projs[pid].updated=nowTs(); saveProjects(projs); }
+  t.conceptId=cid; b.updated=nowTs(); saveGloss(g); renderGlossary();
+  toast(`Promoted “${t.term}” to “${projs[pid].name}”`);
+}
+function promoteAll(){
+  const g=loadGloss(), b=g[currentGid]; if(!b) return;
+  const pend=b.terms.filter(t=>!t.conceptId); if(!pend.length){ toast("Nothing left to promote"); return; }
+  if(!b.projectId || !loadProjects()[b.projectId]){ toast("Link this list to a taxonomy first"); return; }
+  for(const t of pend.slice()) promoteTerm(currentGid, t.id);
+}
+if($('#glossSelect')) $('#glossSelect').onchange=()=>{ currentGid=$('#glossSelect').value||null; renderGlossary(); };
+if($('#glossLink')) $('#glossLink').onchange=()=>{ const g=loadGloss(), b=g[currentGid]; if(!b) return; b.projectId=$('#glossLink').value||null; b.updated=nowTs(); saveGloss(g); renderGlossary(); };
+if($('#glossNew')) $('#glossNew').onclick=async ()=>{ const nm=await askPrompt("Name this candidate list:","Candidate terms","Create"); if(nm===null) return; const g=loadGloss(); const id=glossNewId(); g[id]={id,name:nm.trim()||"Candidate terms",projectId:(loadProjects()[currentPid]?currentPid:null),created:nowTs(),updated:nowTs(),terms:[]}; currentGid=id; saveGloss(g); renderGlossary(); };
+if($('#glossRename')) $('#glossRename').onclick=async ()=>{ const g=loadGloss(), b=g[currentGid]; if(!b){ toast("No list selected"); return; } const nm=await askPrompt("Rename list:",b.name,"Rename"); if(nm===null) return; b.name=nm.trim()||b.name; b.updated=nowTs(); saveGloss(g); renderGlossary(); };
+if($('#glossDelete')) $('#glossDelete').onclick=async ()=>{ const g=loadGloss(), b=g[currentGid]; if(!b){ toast("No list selected"); return; } if(!await askConfirm(`Delete the list “${b.name}”? (Concepts already promoted stay in the taxonomy.)`,"Delete list")) return; delete g[currentGid]; currentGid=null; saveGloss(g); renderGlossary(); };
+if($('#glossAdd')) $('#glossAdd').onclick=()=>{ const t=$('#glossPaste').value; if(!t.trim()){ toast("Paste some terms, or choose a file"); return; } glossAddTerms(t); $('#glossPaste').value=""; };
+if($('#glossFile')) $('#glossFile').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const ext=(f.name.split('.').pop()||'').toLowerCase();
+  try{ if(ext==='xlsx'||ext==='xlsm'){ const grid=await Core.parseXlsx(await f.arrayBuffer()); glossAddTerms(Core.gridToCsv(grid)); } else { const r=new FileReader(); r.onload=()=>glossAddTerms(r.result); r.readAsText(f); } }
+  catch(err){ toast("Couldn't read file: "+err.message); } e.target.value=""; };
+if($('#glossPromoteAll')) $('#glossPromoteAll').onclick=promoteAll;
 
 initProjects(); boot(); initGate(); initTour(); initNav();
 </script>

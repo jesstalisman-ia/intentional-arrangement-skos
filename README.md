@@ -93,7 +93,7 @@ The app keeps all data in the visitor's own browser, so hosting it shares the *t
 
 ## Roadmap & feedback
 
-**[ROADMAP.md](ROADMAP.md)** tracks what's shipped, in progress, and planned. Recent highlights: a local passcode, a welcome screen, and guided Dublin Core setup; autosave; CSV/Excel import and export; safe imports (choose a destination — a new project or merge into the current one — with a post-import health check); a **Proposals** workflow (readers propose new terms; a taxonomist reviews and approves); and this documentation hub. Next up: a **navigation redesign**.
+**[ROADMAP.md](ROADMAP.md)** tracks what's shipped, in progress, and planned. Recent highlights: a **Glossary** on-ramp (stage candidate terms from a paste, text/markdown/CSV/Excel file, then promote them into a taxonomy); a local passcode, a welcome screen, and guided Dublin Core setup; autosave; CSV/Excel import and export; safe imports (choose a destination — a new project or merge into the current one — with a post-import health check); a **Proposals** workflow (readers propose new terms; a taxonomist reviews and approves); and this documentation hub.
 
 Ideas and bugs genuinely shape this list:
 
