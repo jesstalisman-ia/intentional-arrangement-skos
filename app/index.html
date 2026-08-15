@@ -5333,7 +5333,9 @@ function initNav(){
     '#navMenu .nav-item .rt{margin-left:auto;color:var(--faint,#9099a3);font-size:12px}';
   document.head.appendChild(st);
   const b=document.createElement('button'); b.id='navBtn'; b.className='btn primary'; b.title='Menu — navigate, docs, feedback'; b.setAttribute('aria-label','Menu'); b.setAttribute('aria-haspopup','menu'); b.innerHTML='<span class="ham">☰</span> Menu';
-  acts.insertBefore(b, acts.firstChild);
+  b.style.alignSelf='center'; b.style.marginRight='14px';
+  const header=document.querySelector('header.top')||acts.closest('header')||acts.parentElement;
+  header.insertBefore(b, header.firstChild);
   const m=document.createElement('div'); m.id='navMenu'; m.setAttribute('role','menu'); document.body.appendChild(m);
   b.onclick=(e)=>{ e.stopPropagation(); toggleNav(); };
   document.addEventListener('click',(e)=>{ const mm=document.getElementById('navMenu'); if(mm && mm.classList.contains('on') && !mm.contains(e.target) && e.target!==b) closeNav(); });
