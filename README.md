@@ -91,9 +91,17 @@ The app is **live on GitHub Pages** at https://jesstalisman-ia.github.io/intenti
 
 The app keeps all data in the visitor's own browser, so hosting it shares the *tool*, never anyone's vocabularies.
 
-## Roadmap
+## Roadmap & feedback
 
-See **[ROADMAP.md](ROADMAP.md)** for what's shipped, in progress, and planned — and how to request features or report bugs.
+**[ROADMAP.md](ROADMAP.md)** tracks what's shipped, in progress, and planned. Recent highlights: a local passcode, a welcome screen, and guided Dublin Core setup; autosave; CSV/Excel import and export; safe imports (choose a destination — a new project or merge into the current one — with a post-import health check); and this documentation hub. Next up: a **Proposals** workflow (propose new terms for review) and a **navigation redesign**.
+
+Ideas and bugs genuinely shape this list:
+
+- **Request a feature** → [feature request](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)
+- **Report a bug** → [bug report](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
+- **Prefer email?** → Hello@ontologypipeline.com
+
+Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that matches helps it rise.
 
 ## License
 
