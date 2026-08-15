@@ -710,7 +710,8 @@
   #gsvg.panning{cursor:grabbing}
   .gedge{stroke:var(--faint);stroke-width:1.4}
   .gedge.ge-subClassOf{stroke:var(--accent);stroke-width:1.7}
-  .gedge.ge-broader{stroke:var(--teal);stroke-width:1.7}
+  .gedge.ge-broader{stroke:#4a9d6f;stroke-width:1.9}
+  .gedge.ge-altLabel{stroke:#3aa6b5;stroke-width:1.2;stroke-dasharray:1.5 3}
   .gedge.ge-related{stroke:var(--faint);stroke-dasharray:2 4}
   .gedge.ge-equivalentClass{stroke:var(--ok);stroke-width:1.7}
   .gedge.ge-disjointWith{stroke:var(--err);stroke-dasharray:5 4}
@@ -725,8 +726,10 @@
   .gnode.gn-ext circle{fill:var(--surface-2);stroke:var(--faint);stroke-dasharray:3 2}
   .gnode.sel circle{filter:drop-shadow(0 0 0 2px var(--accent));stroke-width:3}
   .gnode.from circle{stroke:var(--accent);stroke-width:3;filter:drop-shadow(0 0 4px var(--accent))}
-  .gnlabel{fill:var(--text);font-size:11px;font-family:var(--sans);text-anchor:middle;paint-order:stroke;stroke:var(--surface);stroke-width:3px;pointer-events:none}
-  .gnode.gn-ext .gnlabel{fill:var(--muted);font-style:italic}
+  .gnlabel{fill:var(--text);font-size:11px;font-weight:600;font-family:var(--sans);text-anchor:middle;paint-order:stroke;stroke:var(--surface);stroke-width:3.5px;pointer-events:none}
+  .gnode.gn-ext .gnlabel{fill:var(--muted);font-style:italic;font-weight:500}
+  .gnode.gn-alt circle{fill:#e4f4f6;stroke:#3aa6b5;stroke-width:1.5}
+  .gnode.gn-alt .gnlabel{fill:#22808d;font-size:9px;font-weight:500;font-style:normal}
   .graph-hint{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--faint);background:var(--surface);border:1px solid var(--border-soft);border-radius:7px;padding:4px 9px;pointer-events:none}
   .graph-legend{position:absolute;right:12px;bottom:10px;display:flex;gap:12px;font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border-soft);border-radius:7px;padding:5px 10px}
   .graph-legend .lg{display:inline-flex;align-items:center;gap:5px}
@@ -767,6 +770,7 @@
         <button class="btn sm" id="gDelete">Delete</button>
         <span class="gsep"></span>
         <label class="gtog"><input type="checkbox" id="gShowConcepts" checked> Concepts</label>
+        <label class="gtog"><input type="checkbox" id="gShowAlt"> Alt labels</label>
         <label class="gtog"><input type="checkbox" id="gShowClasses" checked> Classes</label>
         <label class="gtog"><input type="checkbox" id="gShowProps" checked> Relations</label>
         <label class="gtog"><input type="checkbox" id="gShowExternal" checked> Vocabulary</label>
@@ -4801,7 +4805,9 @@ function graphBuild(){
   if(showC){ for(const id of model.order) add("c:"+id,"concept",plabel(id),id);
     for(const id of model.order){ const c=model.concepts[id];
       (c.broader||[]).forEach(b=>{ if(model.concepts[b]) edges.push({s:"c:"+id,t:"c:"+b,rel:"broader"}); });
-      (c.related||[]).forEach(r=>{ if(model.concepts[r]&&id<r) edges.push({s:"c:"+id,t:"c:"+r,rel:"related"}); }); } }
+      (c.related||[]).forEach(r=>{ if(model.concepts[r]&&id<r) edges.push({s:"c:"+id,t:"c:"+r,rel:"related"}); }); }
+    if($('#gShowAlt')&&$('#gShowAlt').checked){ for(const id of model.order){ const c=model.concepts[id];
+      (c.alt||[]).forEach((L,i)=>{ if(L&&L.val){ const k="a:"+id+":"+i; add(k,"alt",L.val,null); edges.push({s:"c:"+id,t:k,rel:"altLabel"}); } }); } } }
   if(showK){ const o=model.onto;
     for(const id of o.order.classes) add("C:"+id,"class",o.classes[id].label||id,id);
     const resolve=uri=>{ if(uri.startsWith(ontoBase())){ const lid=uri.slice(ontoBase().length); if(o.classes[lid]) return "C:"+lid; } if(showX){ add("x:"+uri,"ext",ontoQname(uri),null,uri); return "x:"+uri; } return null; };
@@ -4814,7 +4820,7 @@ function graphBuild(){
   // radius + degree
   const deg={}; edges.forEach(e=>{ deg[e.s]=(deg[e.s]||0)+1; deg[e.t]=(deg[e.t]||0)+1; });
   nodes.forEach(n=>{ n.r = n.kind==="concept"?Math.min(28,11+Math.sqrt(gDescCount(n.refId))*3.2)
-    : n.kind==="class"?Math.min(28,12+(deg[n.key]||0)*1.1) : 8; });
+    : n.kind==="class"?Math.min(28,12+(deg[n.key]||0)*1.1) : n.kind==="alt"?5 : 8; });
   G.nodes=nodes; G.edges=edges.filter(e=>byKey[e.s]&&byKey[e.t]); G.byKey=byKey;
   if(G.sel&&!byKey[G.sel.key]&&G.sel.kind!=="edge") G.sel=null;
 }
@@ -4854,7 +4860,7 @@ function graphTick(){
   for(let i=0;i<N.length;i++){ const a=N[i]; for(let j=i+1;j<N.length;j++){ const b=N[j];
     let dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy; if(d2<1) d2=1; const d=Math.sqrt(d2), f=kRep/d2, fx=dx/d*f, fy=dy/d*f;
     a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; } }
-  for(const e of G.edges){ const a=G.byKey[e.s], b=G.byKey[e.t]; let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, f=(d-linkDist)*kLink, fx=dx/d*f, fy=dy/d*f; a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; }
+  for(const e of G.edges){ const a=G.byKey[e.s], b=G.byKey[e.t]; const ld=e.rel==="altLabel"?34:linkDist, kl=e.rel==="altLabel"?0.06:kLink; let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, f=(d-ld)*kl, fx=dx/d*f, fy=dy/d*f; a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; }
   const cx=G.W/2, cy=G.H/2;
   for(const n of N){ n.vx+=(cx-n.x)*cen; n.vy+=(cy-n.y)*cen;
     if((G.drag&&G.drag.node===n)) continue; if(n.pinned){ n.vx=0; n.vy=0; continue; }
@@ -4903,8 +4909,8 @@ function graphInspector(){
 
 // ---- pointer: node drag / connect ----
 function graphNodeDown(ev,n){ ev.stopPropagation(); ev.preventDefault(); $('#gMenu').style.display="none";
-  if(G.mode==="connect"){ graphConnectPick(n); return; }
-  graphSelect(n);
+  if(G.mode==="connect"){ if(n.kind!=="alt") graphConnectPick(n); return; }
+  if(n.kind!=="alt") graphSelect(n);  // alt-label satellites are visual: draggable but not selectable
   const p=graphLocal(ev.clientX,ev.clientY); G.drag={node:n,dx:n.x-p.x,dy:n.y-p.y,moved:false}; n.pinned=true;
   window.addEventListener("pointermove",graphDragMove); window.addEventListener("pointerup",graphDragUp,{once:true});
 }
@@ -4985,7 +4991,7 @@ if(document.querySelector('[data-panel=graph]')){
   $('#gDelete').onclick=()=>{ if(!G.sel)return; if(G.sel.kind==="edge") graphRemoveEdge(G.sel.e); else if(G.sel.node&&G.sel.node.kind!=="ext") graphDeleteNode(G.sel.node); };
   $('#gRelayout').onclick=()=>{ for(const n of G.nodes){ n.pinned=false; } graphReheat(1); };
   $('#gFit').onclick=graphFit;
-  ["gShowConcepts","gShowClasses","gShowProps","gShowExternal"].forEach(id=>$('#'+id).onchange=()=>{ graphRender(); graphReheat(0.4); });
+  ["gShowConcepts","gShowClasses","gShowProps","gShowExternal","gShowAlt"].forEach(id=>{ const el=$('#'+id); if(el) el.onchange=()=>{ graphRender(); graphReheat(0.4); }; });
   $('#gsvg').addEventListener("pointerdown",graphCanvasDown);
   $('#gsvg').addEventListener("wheel",graphWheel,{passive:false});
   window.addEventListener("keydown",ev=>{ if((ev.key==="Delete"||ev.key==="Backspace")&&G.sel&&$('.panel[data-panel=graph]').classList.contains('active')&&document.activeElement.tagName!=="INPUT"){ ev.preventDefault(); $('#gDelete').onclick(); } });
