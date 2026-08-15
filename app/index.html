@@ -328,6 +328,7 @@
     <button class="tab" data-tab="graph">Graph</button>
     <button class="tab" data-tab="export">Export RDF</button>
     <button class="tab" data-tab="validate">Validate <span class="pill" id="pillVal">qSKOS</span></button>
+    <button class="tab" data-tab="sparql">SPARQL <span class="pill" id="pillSparql">ask</span></button>
   </div>
 
   <!-- BUILD -->
@@ -892,7 +893,35 @@
   </section>
 
   <!-- SPARQL -->
-  
+  <style>
+    #sqTable{width:100%;border-collapse:collapse;font-size:13px}
+    #sqTable th{text-align:left;padding:7px 10px;border-bottom:2px solid var(--line,#d0d5dd);font-size:12px;color:var(--muted,#5b6470);position:sticky;top:0;background:var(--card,#fff)}
+    #sqTable td{padding:6px 10px;border-bottom:1px solid var(--line,#eef0f3);vertical-align:top}
+    #sqTable td.iri{font-family:var(--mono,ui-monospace,monospace);color:#1a67c9}
+    #sqStatus .err{color:#c0392b}
+    #sparql{width:100%;box-sizing:border-box;min-height:130px;border:0;border-top:1px solid var(--line,#e7eaee);border-bottom:1px solid var(--line,#e7eaee);padding:12px 14px;font-family:var(--mono,ui-monospace,monospace);font-size:13px;resize:vertical;background:var(--surface,#fafbfc);color:inherit}
+  </style>
+  <section class="panel" data-panel="sparql">
+    <div class="card">
+      <div class="sq-nl" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line,#e7eaee)">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint,#9099a3)">Ask in plain language</span>
+        <input id="nlQuery" placeholder="e.g. children of Workflows · concepts without a definition · synonyms of Assets" style="flex:1;min-width:240px;padding:8px 11px;border:1px solid var(--line,#d0d5dd);border-radius:9px;font:inherit;font-size:14px;background:var(--card,#fff);color:inherit">
+        <button class="btn sm primary" id="nlGen">Generate query</button>
+      </div>
+      <div class="sq-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 14px">
+        <select id="sqSamples" style="padding:6px 9px;border:1px solid var(--line,#d0d5dd);border-radius:7px;font-size:13px;background:var(--card,#fff);color:inherit"><option value="">Sample queries…</option></select>
+        <label class="toggle" style="font-size:13px;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="sqXl"> include SKOS-XL triples</label>
+        <span class="subtle" style="margin-left:auto;font-size:12px;color:var(--faint,#9099a3)">⌘/Ctrl + Enter to run · runs locally in your browser</span>
+        <button class="btn sm primary" id="sqRun">Run</button>
+      </div>
+      <textarea id="sparql" spellcheck="false" placeholder="SELECT ?concept ?label WHERE { ?concept a skos:Concept ; skos:prefLabel ?label . } ORDER BY ?label"></textarea>
+      <div class="sq-result">
+        <div class="sq-status" id="sqStatus" style="padding:8px 14px;font-size:12.5px;color:var(--muted,#5b6470)"></div>
+        <div class="table-wrap" style="overflow:auto;max-height:52vh"><table class="res" id="sqTable"></table></div>
+      </div>
+    </div>
+    <p class="subtle" style="padding:8px 4px;font-size:12px;color:var(--faint,#9099a3)">The natural-language box maps common questions to SPARQL you can edit. Supported: <code>SELECT</code>/<code>DISTINCT</code>, BGP, <code>a</code>, prefixes &amp; IRIs, <code>OPTIONAL</code>, <code>FILTER</code>, single-predicate paths <code>p+</code>/<code>p*</code>, <code>COUNT</code>/<code>SUM</code> with <code>GROUP BY</code>, <code>ORDER BY</code>, <code>LIMIT</code>. Prefix <code>:</code> is your base namespace. Everything runs in your browser — nothing is uploaded.</p>
+  </section>
 </div>
 
 <div class="modal-bg" id="importModal">
@@ -3533,6 +3562,7 @@ function switchTab(name){
   if(name==="graph") graphOpen();
   if(name==="shacl") renderShacl();
   if(name==="validate") { if(valAuto) runValidation(); }
+  if(name==="sparql"){ if(!window._sqInit){ initSamples(); window._sqInit=true; } setTimeout(()=>{ try{ $('#nlQuery').focus(); }catch(e){} },0); }
   
 }
 $$('#tabs .tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
@@ -3697,7 +3727,93 @@ const SAMPLES=[
   ["External mappings","SELECT ?concept ?target WHERE {\n  ?concept skos:exactMatch ?target .\n}"],
 ];
 function initSamples(){ const s=$('#sqSamples'); SAMPLES.forEach((q,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=q[0]; s.appendChild(o); });
-  s.onchange=()=>{ if(s.value!==""){ $('#sparql').value=SAMPLES[+s.value][1]; s.value=""; } }; }
+  s.onchange=()=>{ if(s.value!==""){ $('#sparql').value=SAMPLES[+s.value][1]; s.value=""; runSparql(); } }; }
+// ---------- SPARQL: in-browser engine (local only; nothing is uploaded) ----------
+function shortenIri(u){ for(const [p,ns] of Object.entries(Core.NS)) if(u.startsWith(ns)) return p+":"+u.slice(ns.length); return u; }
+function runSparql(){
+  const q=$('#sparql').value; const status=$('#sqStatus'); const table=$('#sqTable');
+  if(!q.trim()){ status.textContent="Type a query, or use the Ask box / a sample."; table.innerHTML=""; return; }
+  const {triples}=Core.buildTriples(model,{dc:true, xl:$('#sqXl')&&$('#sqXl').checked, dumbDown:true});
+  let res, err=null; const t0=performance.now();
+  try{ res=Core.sparql(q,triples,{base:model.base}); }catch(e){ err=e; }
+  const dt=(performance.now()-t0).toFixed(1);
+  if(err){ status.innerHTML=`<span class="err">✕ ${escapeHtml(err.message)}</span>`; table.innerHTML=""; return; }
+  status.innerHTML=`${res.rows.length} row${res.rows.length===1?"":"s"} · ${res.vars.length} column${res.vars.length===1?"":"s"} · ${dt} ms · queried ${triples.length} triples`;
+  let html="<thead><tr>"+res.vars.map(v=>`<th>?${escapeHtml(v)}</th>`).join("")+"</tr></thead><tbody>";
+  for(const row of res.rows.slice(0,1000)){
+    html+="<tr>"+res.vars.map(v=>{ const t=row[v];
+      if(!t) return "<td></td>";
+      if(t.t==="iri"){ const disp=t.v.startsWith(model.base)?":"+t.v.slice(model.base.length):shortenIri(t.v); return `<td class="iri" title="${escapeHtml(t.v)}">${escapeHtml(disp)}</td>`; }
+      return `<td>${escapeHtml(t.v)}${t.lang?` <span class="subtle">@${t.lang}</span>`:""}</td>`;
+    }).join("")+"</tr>";
+  }
+  html+="</tbody>";
+  if(res.rows.length>1000) html+=`<tfoot><tr><td colspan="${res.vars.length}" class="subtle">Showing first 1000 of ${res.rows.length} rows.</td></tr></tfoot>`;
+  table.innerHTML=html;
+}
+// ---------- Natural language → SPARQL (offline, rule-based) ----------
+const NL_EXAMPLES=["all concepts","top concepts","children of X","descendants of X","parents of X","concepts without a definition","synonyms of X","related to X","search <word>","how many children does X have","count children per parent","external mappings","define X"];
+function nlEntity(q){ let best=null,bestLen=0; for(const id of (model.order||Object.keys(model.concepts))){ const lab=plabel(id); if(!lab) continue; const l=lab.toLowerCase(); if(l.length>bestLen && q.indexOf(l)>=0){ best=id; bestLen=l.length; } } return best; }
+function nlToSparql(question){
+  const q=" "+question.toLowerCase().replace(/\s+/g," ").trim()+" ";
+  const ent=nlEntity(q); const E=ent?(":"+ent):null; const EN=ent?plabel(ent):"";
+  const has=(...ws)=>ws.some(w=>q.indexOf(w)>=0);
+  if(E && has("how many child","number of child","count of child","how many narrower"))
+    return {sparql:`SELECT (COUNT(?c) AS ?children) WHERE {\n  ?c skos:broader ${E} .\n}`, note:`number of children of “${EN}”`};
+  if(has("count children","children per","per parent","count per"))
+    return {sparql:`SELECT ?parent (COUNT(?c) AS ?children) WHERE {\n  ?c skos:broader ?parent .\n}\nGROUP BY ?parent\nORDER BY DESC(?children)`, note:"children per parent"};
+  if(E && has("descendant","everything under","all under","all below","whole subtree"))
+    return {sparql:`SELECT ?d ?label WHERE {\n  ${E} skos:narrower+ ?d .\n  ?d skos:prefLabel ?label .\n}\nORDER BY ?label`, note:`descendants of “${EN}”`};
+  if(E && has("child","narrower","subconcept","sub-concept","beneath","directly under"))
+    return {sparql:`SELECT ?child ?label WHERE {\n  ?child skos:broader ${E} ;\n         skos:prefLabel ?label .\n}\nORDER BY ?label`, note:`children of “${EN}”`};
+  if(E && has("parent","broader","above","what is it under","sits under"))
+    return {sparql:`SELECT ?parent ?label WHERE {\n  ${E} skos:broader ?parent .\n  ?parent skos:prefLabel ?label .\n}`, note:`parents of “${EN}”`};
+  if(has("without a definition","no definition","missing definition","undefined","not defined","lacking a definition"))
+    return {sparql:`SELECT ?concept ?label WHERE {\n  ?concept a skos:Concept .\n  OPTIONAL { ?concept skos:definition ?d }\n  FILTER(!BOUND(?d))\n  ?concept skos:prefLabel ?label .\n}`, note:"concepts without a definition"};
+  if(E && has("synonym","alt label","alternative label","other name","also called","aka"))
+    return {sparql:`SELECT ?alt WHERE {\n  ${E} skos:altLabel ?alt .\n}`, note:`synonyms of “${EN}”`};
+  if(has("synonym","alt label","alternative label","all synonyms"))
+    return {sparql:`SELECT ?concept ?alt WHERE {\n  ?concept skos:altLabel ?alt .\n}\nORDER BY ?concept`, note:"all synonyms"};
+  if(E && has("related","association","goes with"))
+    return {sparql:`SELECT ?rel ?label WHERE {\n  ${E} skos:related ?rel .\n  ?rel skos:prefLabel ?label .\n}`, note:`related to “${EN}”`};
+  if(has("top concept","top-level","top level","roots","root concept"))
+    return {sparql:`SELECT ?concept ?label WHERE {\n  ?concept a skos:Concept .\n  OPTIONAL { ?concept skos:broader ?p }\n  FILTER(!BOUND(?p))\n  ?concept skos:prefLabel ?label .\n}`, note:"top concepts (no broader parent)"};
+  if(has("mapping","exactmatch","exact match","closematch","external link","links to another","maps to"))
+    return {sparql:`SELECT ?concept ?target WHERE {\n  ?concept skos:exactMatch ?target .\n}`, note:"external mappings (exactMatch)"};
+  if(E && has("define ","definition of","what is ","meaning of","what does"))
+    return {sparql:`SELECT ?def WHERE {\n  ${E} skos:definition ?def .\n}`, note:`definition of “${EN}”`};
+  if(has("search","find","containing","contains","with the word","labelled","labeled","matching")){
+    const m=/(?:search|find|containing|contains|with the word|for|matching)\s+["']?([a-z0-9][a-z0-9 -]*?)["']?\s*$/i.exec(question);
+    const w=(m?m[1]:question.trim().split(/\s+/).pop()||"").trim();
+    if(w) return {sparql:`SELECT ?concept ?label WHERE {\n  ?concept skos:prefLabel ?label .\n  FILTER(REGEX(?label, "${w.replace(/["\\]/g,"")}", "i"))\n}`, note:`labels containing “${w}”`};
+  }
+  if(has("all concept","every concept","list concept","all terms","show everything","list all","everything"))
+    return {sparql:`SELECT ?concept ?label WHERE {\n  ?concept a skos:Concept ;\n           skos:prefLabel ?label .\n}\nORDER BY ?label`, note:"all concepts"};
+  return null;
+}
+async function generateSparql(){
+  const q=$('#nlQuery').value.trim(); const status=$('#sqStatus'); if(!q){ $('#nlQuery').focus(); return; }
+  // Optional LLM hook — OFF by default. Only active if a user sets this endpoint.
+  const ep=(()=>{ try{ return (localStorage.getItem('iaskos.nl.endpoint')||"").trim(); }catch(e){ return ""; } })();
+  if(ep){
+    status.innerHTML='<span class="subtle">Asking your NL endpoint…</span>';
+    try{
+      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q, base:model.base, concepts:(model.order||[]).map(id=>({id,label:plabel(id)}))})});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j=await r.json(); if(!j.sparql) throw new Error("no query returned");
+      $('#sparql').value=j.sparql; status.innerHTML='<span class="subtle">Generated via your NL endpoint. Edit or Run.</span>'; runSparql(); return;
+    }catch(e){ status.innerHTML='<span class="err">NL endpoint failed: '+escapeHtml(e.message)+'</span>'; return; }
+  }
+  const res=nlToSparql(q);
+  if(!res){ status.innerHTML='<span class="subtle">Couldn’t map that to a query. Try: '+NL_EXAMPLES.slice(0,6).map(e=>'“'+escapeHtml(e)+'”').join(", ")+' …</span>'; return; }
+  $('#sparql').value=res.sparql;
+  status.innerHTML='<span class="subtle">Interpreted as <b>'+escapeHtml(res.note)+'</b>. Edit the query below, or Run.</span>';
+  runSparql();
+}
+if($('#sqRun')) $('#sqRun').onclick=runSparql;
+if($('#nlGen')) $('#nlGen').onclick=generateSparql;
+if($('#nlQuery')) $('#nlQuery').addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); generateSparql(); } });
+if($('#sparql')) $('#sparql').addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); runSparql(); } });
 function ontoInitFor(m){ m.onto={ iri:"", title:"", version:"", imports:{rdfs:true,owl:true,dcat:false,prov:false,foaf:false,dcterms:false},
   classes:{}, props:{}, order:{classes:[],props:[]}, idStyle:"text", sel:null }; }
 function ownUriIn(m, id){ return (m.base||"http://example.org/")+id; }
