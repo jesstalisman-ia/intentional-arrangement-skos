@@ -5345,10 +5345,17 @@ function initProjects(){
   // Collapse exact-duplicate projects (e.g. the example ending up seeded more than
   // once), keeping the most-recently-updated copy. Only byte-identical models are
   // merged, so edited projects are never touched.
-  { const bySig={}; let removed=0;
-    const keys=Object.keys(projs).sort((a,b)=>(projs[b].updated||0)-(projs[a].updated||0));
+  { let removed=0;
+    // 1) collapse byte-identical projects (keep the newest)
+    const bySig={}, keys=Object.keys(projs).sort((a,b)=>(projs[b].updated||0)-(projs[a].updated||0));
     for(const k of keys){ let sig; try{ sig=(projs[k].name||"")+"::"+JSON.stringify(projs[k].model); }catch(e){ sig="__"+k; }
       if(bySig[sig]) { delete projs[k]; removed++; } else bySig[sig]=k; }
+    // 2) keep exactly ONE example — collapse every "Software company (example)" variant/copy
+    const isEx=k=>projs[k] && (projs[k].example || /^Software company \(example\)/.test(projs[k].name||""));
+    const exKeys=Object.keys(projs).filter(isEx).sort((a,b)=>(projs[b].updated||0)-(projs[a].updated||0));
+    if(exKeys.length>1){ const keep=exKeys.find(k=>projs[k].example) || exKeys[0];
+      for(const k of exKeys){ if(k!==keep){ delete projs[k]; removed++; } }
+      if(projs[keep]) projs[keep].example=true; }
     if(removed){ saveProjects(projs); if(currentPid && !projs[currentPid]) currentPid=null; }
   }
   if(Object.keys(projs).length===0){
