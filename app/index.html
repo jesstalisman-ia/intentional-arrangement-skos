@@ -5153,7 +5153,7 @@ function initProjects(){
 const NOPASS = "iaskos.nopass.v1";
 const $g = (id)=>document.getElementById(id);
 function gateShow(view){ document.querySelectorAll('#gate .gview').forEach(v=>v.classList.remove('on')); const el=$g(view); if(el) el.classList.add('on'); $g('gate').classList.add('show'); }
-function gateHide(){ $g('gate').classList.remove('show'); }
+function gateHide(){ $g('gate').classList.remove('show'); if(typeof maybeStartTour==='function') maybeStartTour(); }
 async function _sha256(str){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function _salt(){ const a=new Uint8Array(16); crypto.getRandomValues(a); return [...a].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function authGet(){ try{ return JSON.parse(localStorage.getItem(AKEY)); }catch(e){ return null; } }
@@ -5238,5 +5238,85 @@ function initGate(){
   else if(a || localStorage.getItem(NOPASS)){ gateWelcome(); }
   else { gateShow('gv-setpass'); }
 }
-initProjects(); boot(); initGate();
+// Defensive: always reflect the current project when the metadata section opens.
+if($('#schemeBox')) $('#schemeBox').addEventListener('toggle', function(){ if(this.open) renderScheme(); });
+
+// ================= Guided first-build walkthrough (coachmarks) =================
+const TOURKEY = "iaskos.tour.v1";
+let tourStep = 0;
+function grpByLabel(txt){ const gs=document.querySelectorAll('#editor .grp'); for(const g of gs){ const l=g.querySelector('.lbl'); if(l && l.textContent.trim().toLowerCase().startsWith(txt.toLowerCase())) return g; } return null; }
+function tourEnsureEditor(){ if(selected && model.concepts[selected]) return; if(model.order && model.order.length) selectConcept(model.order[0]); else addConcept(null); }
+const TOUR_STEPS = [
+  { title:"Build your first taxonomy", center:true, body:"A quick tour of the essentials — adding concepts, the fields on each one, and how the hierarchy works. You can skip anytime." },
+  { title:"Start with a top concept", tab:"build", target:()=>$('#addTop'), body:"Add your first concept here. A <b>top concept</b> sits at the root of the tree — it has no parent." },
+  { title:"Your concept tree", tab:"build", pre:tourEnsureEditor, target:()=>$('#tree')||document.querySelector('.panel[data-panel=build] .tree'), body:"Concepts form a tree. Select one to edit it on the right, and add children under it to build depth." },
+  { title:"Identity vs. label", tab:"build", pre:tourEnsureEditor, target:()=>document.querySelector('#editor .idrow'), body:"Every concept has an <b>identifier</b> (its URI) — that's its identity, and it stays fixed even when you rename the label. Use <b>↦ from label</b> to set it from the label, or <b>⟳ UUID</b> for a stable, opaque id." },
+  { title:"Top concept vs. child", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Broader'), body:"A concept with no <b>Broader</b> parent is a <b>top concept</b> (see the “Top concept” toggle in the id row). Give it a Broader parent to nest it as a <b>child</b>." },
+  { title:"Preferred label", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Preferred labels'), body:"The <b>preferred label</b> is the term people read — one per language." },
+  { title:"Alternative labels", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Alternative labels'), body:"Synonyms and accepted variants go here as <b>alternative labels</b>." },
+  { title:"Definition", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Definition'), body:"Define what the concept means. A good definition is where the vocabulary earns trust." },
+  { title:"Linked data", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Linked artifacts'), body:"Attach documents, images, or links as <b>linked artifacts</b>, and map to external vocabularies with <b>exactMatch</b> and friends — connecting your concept to the wider web of data." },
+  { title:"Validate and export", target:()=>document.querySelector('.tab[data-tab=validate]'), body:"Check quality against qSKOS in <b>Validate</b>, then take your taxonomy out — Turtle, RDF/XML, JSON-LD, CSV, Excel — in <b>Export</b>." },
+  { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime with the <b>?</b> button in the header." },
+];
+function initTour(){
+  if(document.getElementById('tourStyle')) return;
+  const st=document.createElement('style'); st.id='tourStyle';
+  st.textContent='#tour{position:fixed;inset:0;z-index:10001;display:none}#tour.on{display:block}'+
+    '#tourSpot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,20,26,.55);transition:all .2s ease;pointer-events:none}'+
+    '#tourTip{position:fixed;width:min(330px,92vw);background:var(--card,#fff);color:var(--fg,#1a1f24);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.32);padding:16px 18px 14px}'+
+    '#tourTip h4{margin:0 0 6px;font-size:16px;letter-spacing:-.2px}#tourTip p{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:var(--muted,#4b5563)}'+
+    '#tourTip .tf{display:flex;align-items:center;gap:8px}#tourTip .tf .sp{flex:1;font-size:12px;color:var(--faint,#9099a3)}'+
+    '#tourTip .tb{padding:7px 13px;border-radius:8px;border:1px solid var(--line,#d0d5dd);background:var(--card,#fff);color:inherit;font:inherit;font-weight:600;font-size:13px;cursor:pointer}'+
+    '#tourTip .tb.primary{background:#1e7a46;border-color:#1e7a46;color:#fff}#tourTip .tb.ghost{border:none;background:transparent;color:var(--faint,#9099a3);padding:7px 6px}';
+  document.head.appendChild(st);
+  const t=document.createElement('div'); t.id='tour';
+  t.innerHTML='<div id="tourSpot"></div><div id="tourTip" role="dialog" aria-modal="true"><h4 id="tourTitle"></h4><p id="tourBody"></p><div class="tf"><button class="tb ghost" id="tourSkip">Skip</button><span class="sp" id="tourCount"></span><button class="tb" id="tourBack">Back</button><button class="tb primary" id="tourNext">Next</button></div></div>';
+  document.body.appendChild(t);
+  document.getElementById('tourSkip').onclick=()=>endTour(false);
+  document.getElementById('tourBack').onclick=()=>{ if(tourStep>0){ tourStep--; showTourStep(); } };
+  document.getElementById('tourNext').onclick=()=>{ if(tourStep<TOUR_STEPS.length-1){ tourStep++; showTourStep(); } else endTour(true); };
+  const acts=document.querySelector('header .top-actions');
+  if(acts && !document.getElementById('tourQ')){ const q=document.createElement('button'); q.id='tourQ'; q.className='btn'; q.title='Take a quick tour'; q.textContent='?'; q.onclick=()=>startTour(true); acts.appendChild(q); }
+  window.addEventListener('resize',()=>{ if(document.getElementById('tour').classList.contains('on')) positionTour(); });
+}
+function startTour(force){ if(!force && localStorage.getItem(TOURKEY)) return; tourStep=0; document.getElementById('tour').classList.add('on'); showTourStep(); }
+function maybeStartTour(){ if(localStorage.getItem(TOURKEY)) return; if(document.getElementById('gate') && document.getElementById('gate').classList.contains('show')) return; setTimeout(()=>{ if(!localStorage.getItem(TOURKEY) && !document.getElementById('gate').classList.contains('show')) startTour(false); }, 550); }
+function endTour(done){ try{ localStorage.setItem(TOURKEY,'1'); }catch(e){} const t=document.getElementById('tour'); if(t) t.classList.remove('on'); if(done) toast("Tour complete — happy building"); }
+function showTourStep(){
+  const step=TOUR_STEPS[tourStep];
+  if(step.tab) switchTab(step.tab);
+  if(step.pre){ try{ step.pre(); }catch(e){} }
+  document.getElementById('tourTitle').textContent=step.title;
+  document.getElementById('tourBody').innerHTML=step.body;
+  document.getElementById('tourCount').textContent=(tourStep+1)+" / "+TOUR_STEPS.length;
+  document.getElementById('tourBack').style.visibility = tourStep===0 ? 'hidden':'visible';
+  document.getElementById('tourNext').textContent = tourStep===TOUR_STEPS.length-1 ? 'Done':'Next';
+  setTimeout(positionTour, 70);
+}
+function positionTour(){
+  const step=TOUR_STEPS[tourStep];
+  const spot=document.getElementById('tourSpot'), tip=document.getElementById('tourTip');
+  let el=null; if(step.target && !step.center){ try{ el=step.target(); }catch(e){} }
+  if(!el){
+    spot.style.opacity='0'; spot.style.width='0'; spot.style.height='0';
+    tip.style.left=Math.max(8,(window.innerWidth-tip.offsetWidth)/2)+'px';
+    tip.style.top=Math.max(8,(window.innerHeight-tip.offsetHeight)/2)+'px';
+    return;
+  }
+  try{ el.scrollIntoView({block:'center', inline:'nearest'}); }catch(e){}
+  setTimeout(()=>{
+    const r=el.getBoundingClientRect(), pad=6;
+    spot.style.opacity='1';
+    spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px';
+    spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    let top=r.bottom+12, left=r.left;
+    if(top+th>window.innerHeight-8) top=Math.max(8, r.top-th-12);
+    left=Math.min(Math.max(8,left), window.innerWidth-tw-8);
+    tip.style.left=left+'px'; tip.style.top=Math.max(8,top)+'px';
+  }, 230);
+}
+
+initProjects(); boot(); initGate(); initTour();
 </script>
