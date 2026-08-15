@@ -5320,7 +5320,9 @@ const REPO_URL = "https://github.com/jesstalisman-ia/intentional-arrangement-sko
 function initNav(){
   const acts=document.querySelector('header .top-actions'); if(!acts || document.getElementById('navBtn')) return;
   const st=document.createElement('style'); st.id='navStyle';
-  st.textContent='#navBtn{font-size:16px;line-height:1;padding-left:11px;padding-right:11px}'+
+  st.textContent='#navBtn{font-size:14.5px;font-weight:700;padding:9px 16px;display:inline-flex;align-items:center;gap:8px}'+
+    '#navBtn .ham{font-size:20px;line-height:1;margin-top:-1px}'+
+    '#navBtn:hover{filter:brightness(1.08)}'+
     '#navMenu{position:fixed;width:246px;background:var(--card,#fff);color:var(--fg,#1a1f24);border:1px solid var(--line,#e3e6ea);border-radius:12px;box-shadow:0 16px 44px rgba(0,0,0,.18);padding:6px;z-index:10005;display:none}'+
     '#navMenu.on{display:block}'+
     '#navMenu .nav-sec{padding:4px 2px}#navMenu .nav-sec+.nav-sec{border-top:1px solid var(--line,#eef0f3);margin-top:4px;padding-top:6px}'+
@@ -5330,8 +5332,8 @@ function initNav(){
     '#navMenu .nav-item.cur{background:var(--accent-soft,#eef2ff);font-weight:700}'+
     '#navMenu .nav-item .rt{margin-left:auto;color:var(--faint,#9099a3);font-size:12px}';
   document.head.appendChild(st);
-  const b=document.createElement('button'); b.id='navBtn'; b.className='btn'; b.title='Menu'; b.setAttribute('aria-label','Menu'); b.setAttribute('aria-haspopup','menu'); b.textContent='☰';
-  acts.appendChild(b);
+  const b=document.createElement('button'); b.id='navBtn'; b.className='btn primary'; b.title='Menu — navigate, docs, feedback'; b.setAttribute('aria-label','Menu'); b.setAttribute('aria-haspopup','menu'); b.innerHTML='<span class="ham">☰</span> Menu';
+  acts.insertBefore(b, acts.firstChild);
   const m=document.createElement('div'); m.id='navMenu'; m.setAttribute('role','menu'); document.body.appendChild(m);
   b.onclick=(e)=>{ e.stopPropagation(); toggleNav(); };
   document.addEventListener('click',(e)=>{ const mm=document.getElementById('navMenu'); if(mm && mm.classList.contains('on') && !mm.contains(e.target) && e.target!==b) closeNav(); });
@@ -5357,7 +5359,7 @@ function buildNavContents(){
   const tourItem=m.querySelector('[data-act=tour]'); if(tourItem) tourItem.onclick=()=>{ closeNav(); startTour(true); };
   m.querySelectorAll('a.nav-item').forEach(a=>a.addEventListener('click',closeNav));
 }
-function positionNav(){ const b=document.getElementById('navBtn'), m=document.getElementById('navMenu'); if(!b||!m) return; const r=b.getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; let left=r.right-246; left=Math.min(Math.max(8,left), window.innerWidth-254); m.style.left=left+'px'; }
+function positionNav(){ const b=document.getElementById('navBtn'), m=document.getElementById('navMenu'); if(!b||!m) return; const r=b.getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; let left=Math.min(Math.max(8,r.left), window.innerWidth-254); m.style.left=left+'px'; }
 function toggleNav(){ const m=document.getElementById('navMenu'); if(!m) return; if(m.classList.contains('on')){ closeNav(); return; } buildNavContents(); m.classList.add('on'); positionNav(); }
 function closeNav(){ const m=document.getElementById('navMenu'); if(m) m.classList.remove('on'); }
 
