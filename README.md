@@ -17,7 +17,7 @@ Built for readers and clients who want to stand up a *legitimate*, downloadable 
 | **`app/`** | The **browser app** — one self-contained `index.html`. Download it and open it in any browser. |
 | **`api/`** | A tiny **REST API** (Flask + rdflib + pySHACL): validate a vocabulary, convert between RDF serializations. |
 | **`mcp-server/`** | An **MCP server** exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
-| **`docs/`** | readme.md, documentation and how‑to guides — [install](docs/install.md), [workspace (passcode, projects, autosave)](docs/workspace.md), [spreadsheet import](docs/spreadsheet-import.md), and the [SKOS reference](docs/skos-reference.md). |
+| **`docs/`** | **[Documentation hub](docs/)** — [install](docs/install.md), [using the editor](docs/using-the-editor.md), [workspace](docs/workspace.md), [spreadsheet import](docs/spreadsheet-import.md), [SKOS reference](docs/skos-reference.md), and API/MCP. |
 
 ## The app — six components
 
