@@ -303,7 +303,7 @@
   <header class="top">
     <div class="brand">
       <h1><svg class="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="5" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M8 7l8 9M8 6.5h6.5"/></svg>Intentional Arrangement <b>SKOS</b></h1>
-      <p>Build, validate, visualize and publish SKOS taxonomies on open standards — editor, business view, qSKOS validation, concept-model visualizer, DCMI metadata, and import/export as Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV &amp; XLSX.</p>
+      <p>Build SKOS taxonomies and thesauri on open standards. Glossary, editor, business view, qSKOS validation, visualizer, DCMI metadata, SPARQL and import/export, with provenance and governance.</p>
     </div>
     <div class="top-actions">
       <span class="editor-chip" title="Your name is recorded with every change you save">
@@ -5752,7 +5752,15 @@ function renderGlossary(){
     if(t.conceptId){ const tag=document.createElement("span"); tag.className="gtag"; tag.textContent="✓ promoted"; row.appendChild(tag); }
     else {
       let psel=null;
-      if(parentOpts){ psel=document.createElement("select"); psel.className="gloss-parent"; psel.title="Place this term under a parent concept (or keep it a top concept)"; psel.innerHTML='<option value="">⌂ Top concept</option>'+parentOpts; row.appendChild(psel); }
+      if(parentOpts){
+        psel=document.createElement("select"); psel.className="gloss-parent"; psel.title="Place this term under a parent concept (or keep it a top concept)";
+        psel.innerHTML='<option value="">⌂ Top concept</option>';
+        // Populate the (potentially large) option list lazily on first interaction so
+        // a big taxonomy × many rows doesn't create 100k+ DOM nodes up front.
+        const fill=()=>{ if(psel.dataset.filled) return; psel.dataset.filled="1"; const v=psel.value; psel.insertAdjacentHTML("beforeend", parentOpts); psel.value=v; };
+        psel.addEventListener("pointerdown",fill); psel.addEventListener("focus",fill); psel.addEventListener("keydown",fill);
+        row.appendChild(psel);
+      }
       const pr=document.createElement("button"); pr.className="btn sm primary"; pr.textContent="Promote →"; pr.onclick=()=>promoteTerm(currentGid,t.id,psel?(psel.value||null):null); row.appendChild(pr);
     }
     const rm=document.createElement("button"); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from list"; rm.onclick=()=>{ const gg=loadGloss(); const b=gg[currentGid]; if(!b)return; b.terms=b.terms.filter(x=>x.id!==t.id); b.updated=nowTs(); saveGloss(gg); renderGlossary(); };
@@ -5769,30 +5777,42 @@ function glossAddTerms(text){
   let added=0; for(const p of parsed){ if(have.has(p.term.toLowerCase())) continue; have.add(p.term.toLowerCase()); b.terms.push({id:glossNewId(),term:p.term,note:p.note,conceptId:null}); added++; }
   b.updated=nowTs(); saveGloss(g); renderGlossary(); toast(`Added ${added} term${added===1?"":"s"}${added<parsed.length?" ("+(parsed.length-added)+" already present)":""}`);
 }
-function promoteTerm(gid,tid,parentId){
-  const g=loadGloss(), b=g[gid]; if(!b) return; const t=b.terms.find(x=>x.id===tid); if(!t||t.conceptId) return;
-  const projs=loadProjects(); const pid=b.projectId;
-  if(!pid || !projs[pid]){ toast("Link this list to a taxonomy first (the Taxonomy dropdown, top-right)"); return; }
-  const isCur=(pid===currentPid); const m=isCur?model:projs[pid].model;
+// Core promotion: mutate model `m` and term `t` in place. No save, no render — the
+// caller persists and re-renders ONCE (so batch promotes don't rebuild the DOM N times).
+function promoteInto(m, t, parentId){
   m.concepts=m.concepts||{}; m.order=m.order||Object.keys(m.concepts);
   const base=(m.idStyle==="uuid")?genUuid32():(slugId(t.term)||"Term");
   const cid=uniqueLocalIn(m.concepts, base);
   const parent=(parentId && m.concepts[parentId])?parentId:null;
   const c=Core.emptyConcept(cid); c.pref=[{lang:m.defaultLang||"en",val:t.term}]; if(t.note) c.definition=[{lang:m.defaultLang||"en",val:t.note}];
   if(parent){ c.broader=[parent]; c.top=false; } else { c.top=true; }
-  m.concepts[cid]=c; m.order.push(cid);
+  m.concepts[cid]=c; m.order.push(cid); t.conceptId=cid;
+  return {cid, parent};
+}
+function promoteTerm(gid,tid,parentId){
+  const g=loadGloss(), b=g[gid]; if(!b) return; const t=b.terms.find(x=>x.id===tid); if(!t||t.conceptId) return;
+  const projs=loadProjects(); const pid=b.projectId;
+  if(!pid || !projs[pid]){ toast("Link this list to a taxonomy first (the Taxonomy dropdown, top-right)"); return; }
+  const isCur=(pid===currentPid); const m=isCur?model:projs[pid].model;
+  const {parent}=promoteInto(m, t, parentId);
   if(isCur){ save(); renderTree(); afterChange(); }
   else { projs[pid].model=m; projs[pid].updated=nowTs(); saveProjects(projs); }
-  t.conceptId=cid; b.updated=nowTs(); saveGloss(g); renderGlossary();
+  b.updated=nowTs(); saveGloss(g); renderGlossary();
   const under=parent?` under “${(function(){const p=(m.concepts[parent].pref||[]).find(l=>l.val);return p?p.val:parent;})()}”`:" as a top concept";
   toast(`Promoted “${t.term}”${under}`);
 }
 function promoteAll(){
   const g=loadGloss(), b=g[currentGid]; if(!b) return;
   const pend=b.terms.filter(t=>!t.conceptId); if(!pend.length){ toast("Nothing left to promote"); return; }
-  if(!b.projectId || !loadProjects()[b.projectId]){ toast("Link this list to a taxonomy first"); return; }
-  const parent=$('#glossPromoteParent')?($('#glossPromoteParent').value||null):null;
-  for(const t of pend.slice()) promoteTerm(currentGid, t.id, parent);
+  const projs=loadProjects(); const pid=b.projectId;
+  if(!pid || !projs[pid]){ toast("Link this list to a taxonomy first"); return; }
+  const isCur=(pid===currentPid); const m=isCur?model:projs[pid].model;
+  const parentId=$('#glossPromoteParent')?($('#glossPromoteParent').value||null):null;
+  for(const t of pend) promoteInto(m, t, parentId);          // mutate all first
+  if(isCur){ save(); renderTree(); afterChange(); }          // then persist + render ONCE
+  else { projs[pid].model=m; projs[pid].updated=nowTs(); saveProjects(projs); }
+  b.updated=nowTs(); saveGloss(g); renderGlossary();
+  toast(`Promoted ${pend.length} term${pend.length===1?"":"s"}`);
 }
 if($('#glossSelect')) $('#glossSelect').onchange=()=>{ currentGid=$('#glossSelect').value||null; renderGlossary(); };
 if($('#glossLink')) $('#glossLink').onchange=()=>{ const g=loadGloss(), b=g[currentGid]; if(!b) return; b.projectId=$('#glossLink').value||null; b.updated=nowTs(); saveGloss(g); renderGlossary(); };
