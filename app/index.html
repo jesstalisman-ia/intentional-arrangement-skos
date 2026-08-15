@@ -5529,7 +5529,13 @@ function initTour(){
 function startTour(force){ if(!force && localStorage.getItem(TOURKEY)) return; tourStep=0; document.getElementById('tour').classList.add('on'); showTourStep(); }
 function maybeStartTour(){ if(localStorage.getItem(TOURKEY)) return; if(document.getElementById('gate') && document.getElementById('gate').classList.contains('show')) return; setTimeout(()=>{ if(!localStorage.getItem(TOURKEY) && !document.getElementById('gate').classList.contains('show')) startTour(false); }, 550); }
 function endTour(done){ try{ localStorage.setItem(TOURKEY,'1'); }catch(e){} const t=document.getElementById('tour'); if(t) t.classList.remove('on'); if(done) toast("Tour complete — happy building"); }
+let tourGen=0, tourPosTimer=0;
+function tourCenterTip(){ const spot=document.getElementById('tourSpot'), tip=document.getElementById('tourTip');
+  spot.style.opacity='0'; spot.style.width='0'; spot.style.height='0';
+  tip.style.left=Math.max(8,(window.innerWidth-tip.offsetWidth)/2)+'px';
+  tip.style.top=Math.max(8,(window.innerHeight-tip.offsetHeight)/2)+'px'; }
 function showTourStep(){
+  tourGen++;                                  // invalidate any pending positioning from a prior step
   const step=TOUR_STEPS[tourStep];
   if(step.tab) switchTab(step.tab);
   if(step.pre){ try{ step.pre(); }catch(e){} }
@@ -5538,21 +5544,21 @@ function showTourStep(){
   document.getElementById('tourCount').textContent=(tourStep+1)+" / "+TOUR_STEPS.length;
   document.getElementById('tourBack').style.visibility = tourStep===0 ? 'hidden':'visible';
   document.getElementById('tourNext').textContent = tourStep===TOUR_STEPS.length-1 ? 'Done':'Next';
-  setTimeout(positionTour, 70);
+  clearTimeout(tourPosTimer); tourPosTimer=setTimeout(positionTour, 60);
 }
 function positionTour(){
-  const step=TOUR_STEPS[tourStep];
+  const gen=tourGen, step=TOUR_STEPS[tourStep];
   const spot=document.getElementById('tourSpot'), tip=document.getElementById('tourTip');
   let el=null; if(step.target && !step.center){ try{ el=step.target(); }catch(e){} }
-  if(!el){
-    spot.style.opacity='0'; spot.style.width='0'; spot.style.height='0';
-    tip.style.left=Math.max(8,(window.innerWidth-tip.offsetWidth)/2)+'px';
-    tip.style.top=Math.max(8,(window.innerHeight-tip.offsetHeight)/2)+'px';
-    return;
-  }
-  try{ el.scrollIntoView({block:'center', inline:'nearest'}); }catch(e){}
-  setTimeout(()=>{
-    const r=el.getBoundingClientRect(), pad=6;
+  if(!el){ tourCenterTip(); return; }
+  try{ el.scrollIntoView({block:'center', inline:'nearest', behavior:'instant'}); }catch(e){ try{ el.scrollIntoView({block:'center'}); }catch(_){} }
+  clearTimeout(tourPosTimer);
+  tourPosTimer=setTimeout(()=>{
+    if(gen!==tourGen) return;                 // a newer step superseded this — don't move the spotlight
+    let el2=null; try{ el2=step.target(); }catch(e){}
+    if(!el2){ tourCenterTip(); return; }
+    const r=el2.getBoundingClientRect(), pad=6;
+    if(!r.width && !r.height){ tourCenterTip(); return; }
     spot.style.opacity='1';
     spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px';
     spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
@@ -5561,7 +5567,7 @@ function positionTour(){
     if(top+th>window.innerHeight-8) top=Math.max(8, r.top-th-12);
     left=Math.min(Math.max(8,left), window.innerWidth-tw-8);
     tip.style.left=left+'px'; tip.style.top=Math.max(8,top)+'px';
-  }, 230);
+  }, 140);
 }
 
 // ================= Hamburger menu: navigation + docs + feedback + tour =================
