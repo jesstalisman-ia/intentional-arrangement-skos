@@ -13,11 +13,11 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 - **Spreadsheet import & export** — CSV and Excel `.xlsx`, both round-tripping, unzipped/zipped in the browser (no library, no upload). [Template](docs/templates/skos-import-template.xlsx) + [tutorial](docs/spreadsheet-import.md).
 - **Safe imports** — an import asks where it should go: **Create a new project** (default; your other projects are untouched) or **Merge into the current project** (adds concepts, never overwrites). A post-import health check reports top concepts and warns on orphans or a flat/disconnected hierarchy (a `broader` column that didn't match).
 - **Editor quality-of-life** — trim empty labels automatically; **set the identifier from the label** in one click; a warning when two concepts have near-identical identifiers; a **"last checked · Manual/Automatic"** indicator on the validator.
+- **Proposals** — readers can *propose* a new term (with definition, suggested parent, synonyms, scope note, rationale, and links); a taxonomist reviews each in the Proposals tab and approves it into the vocabulary or rejects it.
+- **Documentation hub** — a single [docs home](docs/) covering install, using the editor, the workspace, spreadsheet import, the SKOS reference, and the REST API + MCP server — linked from inside the app.
 
-## 🚧 / 🔜 In progress & next
+## 🔜 Next
 
-- 🔜 **Proposals** — let people *propose* new terms/changes for review before they enter the vocabulary (ported from the TXMST tool).
-- 🔜 **Documentation hub** — a single place covering how to build and how to use the tooling (editor, REST API, MCP server), linked from inside the app.
 - 🔜 **Navigation redesign** — a menu that mirrors the tabs and also surfaces documentation and feedback links, for a cleaner mobile and desktop experience.
 
 ## 💡 Planned
