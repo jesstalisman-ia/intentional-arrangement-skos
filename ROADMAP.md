@@ -8,6 +8,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+- **SKOS-XL build mode** — a per-taxonomy **Label style** choice (Plain SKOS vs **SKOS-XL**) in the concept-scheme panel, with an *XL* badge when it's on. In SKOS-XL mode every label becomes a `skosxl:Label` resource with its own URI and an optional **source / provenance** (`dcterms:source`) you can record per label; exports default to SKOS-XL + plain, and imports of SKOS-XL round-trip the URI and source back in.
 - **Glossary (on-ramp)** — a staging bucket for **candidate terms**, the first tab because it comes before building. Import a flat list from paste, a text/markdown file (bullets, numbering, headings), CSV, or `.xlsx`; keep a list **unlinked** or associate it with a taxonomy; then **promote** terms into that taxonomy as SKOS top concepts you can arrange. Matches how people actually start — collect first, structure later.
 - **Workspace & onboarding** — optional local passcode (per-browser lock, salted hash, not encryption), a welcome screen to open or start a taxonomy, and guided new-project setup with Dublin Core metadata (title required; created/published/modified auto-filled).
 - **Autosave** — every change persists to the browser, with a visible "✓ Saved" indicator.

@@ -131,6 +131,10 @@
   .grp{margin-bottom:15px}
   .grp>.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:6px;display:flex;align-items:center;gap:7px}
   .grp>.lbl .add{margin-left:auto}
+  .xl-badge{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--c-export,#0f766e);border-radius:5px;padding:1px 5px;vertical-align:middle;text-transform:none}
+  .lbl-xl{display:flex;gap:6px;margin:-2px 0 8px 58px;padding-left:2px}
+  .lbl-xl input{flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);border-radius:6px;padding:3px 7px}
+  .lbl-xl input.xluri{font-family:var(--mono);flex:1.3}
   .rowline{display:flex;gap:6px;margin-bottom:5px;align-items:flex-start}
   .rowline input.lang{width:52px;flex:0 0 auto;text-align:center;font-family:var(--mono);font-size:12px}
   .rowline input.val,.rowline textarea.val,.rowline select.val{flex:1 1 auto;min-width:0}
@@ -322,7 +326,7 @@
   </header>
 
   <details class="scheme" id="schemeBox">
-    <summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg> Concept scheme, identifiers &amp; Dublin Core metadata</summary>
+    <summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg> Concept scheme, identifiers &amp; Dublin Core metadata <span class="xl-badge" id="xlBadgeSummary" hidden>SKOS-XL</span></summary>
     <div class="scheme-idstyle" id="idStyleBox">
       <div class="isb-left">
         <div class="isb-h">Concept identifiers</div>
@@ -333,6 +337,16 @@
         <div class="subtle" id="idStyleHint"></div>
       </div>
       <button class="btn sm" id="btnAssignUuids">Assign UUIDs to all terms</button>
+    </div>
+    <div class="scheme-idstyle" id="labelStyleBox">
+      <div class="isb-left">
+        <div class="isb-h">Label style</div>
+        <div class="radios" id="labelStyle">
+          <label><input type="radio" name="lblstyle" value="plain"><span>Plain SKOS labels</span></label>
+          <label><input type="radio" name="lblstyle" value="xl"><span>SKOS-XL labels <span class="xl-badge">XL</span></span></label>
+        </div>
+        <div class="subtle" id="labelStyleHint"></div>
+      </div>
     </div>
     <div class="scheme-grid" id="schemeGrid"></div>
   </details>
@@ -1318,10 +1332,11 @@ function buildTriples(model, opts){
         if (!L.val) return;
         const plain = () => add(s, iri(NS.skos + SKOS_LABEL_PRED[kind]), lit(L.val, L.lang));
         if (opts.xl){
-          const lu = iri(xlLabelUri(model, id, kind, i + 1, L.lang));
+          const lu = iri(L.uri || xlLabelUri(model, id, kind, i + 1, L.lang));
           add(s, iri(NS.skosxl + XL_PRED[kind]), lu);
           add(lu, A, iri(NS.skosxl + "Label"));
           add(lu, iri(NS.skosxl + "literalForm"), lit(L.val, L.lang));
+          if (L.source) add(lu, iri(NS.dcterms + "source"), lit(L.source, L.lang));
           if (opts.dumbDown) plain();
         } else plain();
       });
@@ -2254,10 +2269,12 @@ function triplesToModel(triples, prefixes){
   const isConcept = u => _typedConcept.has(u) || (!_strict && !_typedOnto.has(u));
   const ensure = u => { if(!isConcept(u)) return null; const id = localOf(u); if (!model.concepts[id]){ model.concepts[id] = emptyConcept(id); model.order.push(id); } return model.concepts[id]; };
 
-  // collect skosxl label literalForms
-  const xlForm = {}; // labelUri -> {v,lang}
+  // collect skosxl label literalForms (+ per-label provenance)
+  const xlForm = {}; // labelUri -> {v,lang,source}
   for (const t of triples) if (t.p.t === "iri" && t.p.v === NS.skosxl + "literalForm" && t.o.t === "lit")
-    xlForm[t.s.v] = { v: t.o.v, lang: t.o.lang };
+    (xlForm[t.s.v] = xlForm[t.s.v] || {}), (xlForm[t.s.v].v = t.o.v), (xlForm[t.s.v].lang = t.o.lang);
+  for (const t of triples) if (t.p.t === "iri" && t.p.v === NS.dcterms + "source" && t.o.t === "lit" && xlForm[t.s.v])
+    xlForm[t.s.v].source = t.o.v;
 
   const P = NS.skos, X = NS.skosxl, D = NS.dcterms;
 
@@ -2274,6 +2291,7 @@ function triplesToModel(triples, prefixes){
   if (!model.scheme.uri){ // no explicit ConceptScheme: pick a dc-bearing non-concept subject
     for (const s of dcSubjects) if (!conceptUris.has(s)){ model.scheme.uri = s; break; }
   }
+  let sawXl = false;
   for (const t of triples){
     if (t.p.t !== "iri") continue;
     const pv = t.p.v, s = t.s.v, o = t.o;
@@ -2310,10 +2328,11 @@ function triplesToModel(triples, prefixes){
     else if (MAP_FIELDS.some(m => pv === P + m) && o.t === "iri"){ const c = ensure(s); if (c){ const m = pv.slice(P.length); c[m].push(o.v); } }
     else if (pv === NS.rdfs + "seeAlso" && o.t === "iri"){ const c = ensure(s); if (c){ c.artifacts = c.artifacts || []; c.artifacts.push({ type: "link", title: "", url: o.v }); } }
     // skos-xl
-    else if (pv === X + "prefLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f) c.pref.push({ lang: f.lang || "", val: f.v }); }
-    else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f) c.alt.push({ lang: f.lang || "", val: f.v }); }
-    else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f) c.hidden.push({ lang: f.lang || "", val: f.v }); }
+    else if (pv === X + "prefLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.pref.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
+    else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.alt.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
+    else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
   }
+  if (sawXl) model.xlLabels = true;
   // fall back to rdfs:label for concepts that carry no skos:prefLabel
   for (const t of triples){ if (t.p.t==="iri" && t.p.v===NS.rdfs+"label" && t.o.t==="lit"){ const c = model.concepts[localOf(t.s.v)]; if (c && !c.pref.length) c.pref.push({ lang: t.o.lang||"", val: t.o.v }); } }
   // dedupe plain+XL duplicate labels
@@ -2715,7 +2734,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
@@ -3119,6 +3138,16 @@ function labelGroup(title, c, field, isPref){
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
     rm.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); afterChange(); };
     row.append(lang,val,rm); g.appendChild(row);
+    // SKOS-XL: each label carries its own URI + optional source/provenance
+    if(model.xlLabels){
+      const meta=document.createElement("div"); meta.className="lbl-xl";
+      const uri=document.createElement("input"); uri.className="xluri"; uri.value=L.uri||""; uri.title="skosxl:Label URI (leave blank to auto-generate on export)";
+      uri.placeholder=Core.xlLabelUri(model, selected, field, i+1, L.lang);
+      uri.onchange=()=>{ const v=uri.value.trim(); L.uri=v||undefined; save(); };
+      const src=document.createElement("input"); src.className="xlsrc"; src.value=L.source||""; src.title="dcterms:source for this label (provenance)"; src.placeholder="source / provenance (optional)";
+      src.oninput=()=>{ L.source=src.value||undefined; save(); };
+      meta.append(uri,src); g.appendChild(meta);
+    }
   });
   return g;
 }
@@ -3202,6 +3231,24 @@ function renderScheme(){
   $$('#idStyle input').forEach(r=>{ r.checked=r.value===style; r.onchange=()=>{ if(r.checked){ model.idStyle=r.value; save(); updateIdStyleHint(); } }; });
   updateIdStyleHint();
   $('#btnAssignUuids').onclick=assignAllUuids;
+  // label style (plain SKOS vs SKOS-XL)
+  const ls=model.xlLabels?"xl":"plain";
+  $$('#labelStyle input').forEach(r=>{ r.checked=r.value===ls; r.onchange=()=>{ if(r.checked){ setLabelStyle(r.value); } }; });
+  updateXlUi();
+}
+function setLabelStyle(v){
+  model.xlLabels=(v==="xl"); save(); updateXlUi();
+  // make export match the build choice: XL mode → SKOS-XL + plain (safe for all consumers)
+  const want=model.xlLabels?"xlplain":"plain"; const er=$(`input[name=lbl][value="${want}"]`); if(er){ er.checked=true; if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
+  const sq=$('#sqXl'); if(sq) sq.checked=model.xlLabels;
+  if(selected) renderEditor();
+}
+function updateXlUi(){
+  const on=!!model.xlLabels;
+  const b=$('#xlBadgeSummary'); if(b) b.hidden=!on;
+  const h=$('#labelStyleHint'); if(h) h.innerHTML = on
+    ? "Each label becomes a <b>skosxl:Label</b> resource with its own URI — so you can record a <b>source / provenance</b> per label. Exports default to SKOS-XL + plain."
+    : "Labels are plain literals (<b>skos:prefLabel</b> etc.). Switch to SKOS-XL to give labels their own identity and metadata.";
 }
 function updateIdStyleHint(){ const h=$('#idStyleHint'); if(!h) return;
   h.textContent=(model.idStyle==="uuid")
