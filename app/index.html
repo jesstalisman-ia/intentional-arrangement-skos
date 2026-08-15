@@ -5777,14 +5777,18 @@ function updateGlossPill(){ const b=$('#pillGloss'); if(!b) return; const a=glos
 function glossParentOptions(m){
   if(!m || !m.concepts) return "";
   const order=m.order||Object.keys(m.concepts);
-  const plab=id=>{ const c=m.concepts[id]; if(!c) return id; const p=(c.pref||[]).find(l=>l.lang===(m.defaultLang||"en")&&l.val)||(c.pref||[]).find(l=>l.val); return p?p.val:id; };
-  const kids=id=>order.filter(x=>((m.concepts[x].broader||[]).includes(id)));
+  // precompute labels + children map in one pass (O(n) — no per-node re-scans)
+  const L={};
+  for(const id of order){ const c=m.concepts[id]; if(!c){ L[id]=id; continue; } const p=(c.pref||[]).find(l=>l.lang===(m.defaultLang||"en")&&l.val)||(c.pref||[]).find(l=>l.val); L[id]=p?p.val:id; }
+  const kmap=new Map();
+  for(const id of order){ const c=m.concepts[id]; if(!c) continue; for(const p of (c.broader||[])){ if(!kmap.has(p)) kmap.set(p,[]); kmap.get(p).push(id); } }
+  const byLabel=(a,b)=>(L[a]||"").localeCompare(L[b]||"");
   const tops=order.filter(id=>{ const c=m.concepts[id]; return c && (c.top || !(c.broader&&c.broader.length)); });
   const out=[], seen=new Set();
-  const walk=(id,d)=>{ if(seen.has(id))return; seen.add(id); out.push({id,d,label:plab(id)}); kids(id).sort((a,b)=>plab(a).localeCompare(plab(b))).forEach(k=>walk(k,d+1)); };
-  tops.sort((a,b)=>plab(a).localeCompare(plab(b))).forEach(t=>walk(t,0));
-  order.forEach(id=>{ if(!seen.has(id)){ seen.add(id); out.push({id,d:0,label:plab(id)}); } });
-  return out.map(o=>`<option value="${escapeHtml(o.id)}">${"  ".repeat(o.d)}${o.d?"› ":""}${escapeHtml(o.label)}</option>`).join("");
+  const walk=(id,d)=>{ if(seen.has(id))return; seen.add(id); out.push({id,d}); (kmap.get(id)||[]).sort(byLabel).forEach(k=>walk(k,d+1)); };
+  tops.sort(byLabel).forEach(t=>walk(t,0));
+  order.forEach(id=>{ if(!seen.has(id)){ seen.add(id); out.push({id,d:0}); } });
+  return out.map(o=>`<option value="${escapeHtml(o.id)}">${"  ".repeat(o.d)}${o.d?"› ":""}${escapeHtml(L[o.id]||o.id)}</option>`).join("");
 }
 function renderGlossary(){
   const g=loadGloss(), sel=$('#glossSelect'), link=$('#glossLink'), list=$('#glossList'); if(!sel) return;
@@ -5799,9 +5803,20 @@ function renderGlossary(){
   if(!cur){ list.innerHTML='<div class="gloss-empty">No candidate lists yet. Click <b>+ New list</b>, then paste or import a flat list of terms.</div>'; $('#glossMeta').textContent=""; updateGlossPill(); return; }
   // linked taxonomy model (for placing promoted terms under a chosen parent)
   const linkedM = cur.projectId ? (cur.projectId===currentPid?model:(projs[cur.projectId]&&projs[cur.projectId].model)) : null;
-  const parentOpts = linkedM ? glossParentOptions(linkedM) : "";
+  const hasParents = !!(linkedM && linkedM.concepts && (linkedM.order||Object.keys(linkedM.concepts)).length);
+  // Build the (possibly large) parent-option list ONLY when a picker is actually opened,
+  // and compute it at most once per render. A plain tab switch does zero option work.
+  let _pOpts=null; const getParentOpts=()=> _pOpts!==null ? _pOpts : (_pOpts = hasParents ? glossParentOptions(linkedM) : "");
   const promoteParentSel=$('#glossPromoteParent');
-  if(promoteParentSel){ const keep=promoteParentSel.value; promoteParentSel.innerHTML='<option value="">⌂ Top concepts</option>'+parentOpts; promoteParentSel.value=keep; promoteParentSel.disabled=!parentOpts; }
+  if(promoteParentSel){
+    const keep=promoteParentSel.value;
+    promoteParentSel.innerHTML='<option value="">⌂ Top concepts</option>';
+    promoteParentSel.disabled=!hasParents;
+    if(hasParents && keep){ promoteParentSel.insertAdjacentHTML("beforeend", getParentOpts()); promoteParentSel.value=keep; promoteParentSel.dataset.filled="1"; }
+    else promoteParentSel.dataset.filled="";
+    const fillShared=()=>{ if(promoteParentSel.dataset.filled) return; promoteParentSel.dataset.filled="1"; const v=promoteParentSel.value; promoteParentSel.insertAdjacentHTML("beforeend", getParentOpts()); promoteParentSel.value=v; };
+    promoteParentSel.onpointerdown=hasParents?fillShared:null; promoteParentSel.onfocus=hasParents?fillShared:null;
+  }
   if(!cur.terms.length){ list.innerHTML='<div class="gloss-empty">Empty. Paste terms above (one per line, a markdown list, or CSV) or choose a file, then <b>Add terms</b>.</div>'; }
   else for(const t of cur.terms){
     const row=document.createElement("div"); row.className="gloss-row"+(t.conceptId?" done":"");
@@ -5810,12 +5825,13 @@ function renderGlossary(){
     if(t.conceptId){ const tag=document.createElement("span"); tag.className="gtag"; tag.textContent="✓ promoted"; row.appendChild(tag); }
     else {
       let psel=null;
-      if(parentOpts){
+      if(hasParents){
         psel=document.createElement("select"); psel.className="gloss-parent"; psel.title="Place this term under a parent concept (or keep it a top concept)";
         psel.innerHTML='<option value="">⌂ Top concept</option>';
         // Populate the (potentially large) option list lazily on first interaction so
-        // a big taxonomy × many rows doesn't create 100k+ DOM nodes up front.
-        const fill=()=>{ if(psel.dataset.filled) return; psel.dataset.filled="1"; const v=psel.value; psel.insertAdjacentHTML("beforeend", parentOpts); psel.value=v; };
+        // a big taxonomy × many rows doesn't create 100k+ DOM nodes up front, and a
+        // plain switch to the Glossary tab never builds any options at all.
+        const fill=()=>{ if(psel.dataset.filled) return; psel.dataset.filled="1"; const v=psel.value; psel.insertAdjacentHTML("beforeend", getParentOpts()); psel.value=v; };
         psel.addEventListener("pointerdown",fill); psel.addEventListener("focus",fill); psel.addEventListener("keydown",fill);
         row.appendChild(psel);
       }
