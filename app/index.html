@@ -293,7 +293,6 @@
       <button class="btn" id="btnNew" title="Create a new project">New</button>
       <button class="btn" id="btnImport" title="Import a Turtle / RDF file">Import…</button>
       <button class="btn primary" id="btnExport" title="Export as Turtle, RDF/XML, JSON-LD or spreadsheet">Export…</button>
-      <a class="btn" id="btnDocs" href="https://github.com/jesstalisman-ia/intentional-arrangement-skos/tree/main/docs" target="_blank" rel="noopener" title="Open the documentation" style="text-decoration:none;display:inline-flex;align-items:center">Docs ↗</a>
       <span class="saved-chip" id="savedChip">✓ Saved</span>
       <button class="btn" id="btnLock" title="Lock the editor with your passcode" style="display:none">Lock</button>
       <span class="vbadge" id="vBadge"></span>
@@ -5257,7 +5256,7 @@ const TOUR_STEPS = [
   { title:"Definition", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Definition'), body:"Define what the concept means. A good definition is where the vocabulary earns trust." },
   { title:"Linked data", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Linked artifacts'), body:"Attach documents, images, or links as <b>linked artifacts</b>, and map to external vocabularies with <b>exactMatch</b> and friends — connecting your concept to the wider web of data." },
   { title:"Validate and export", target:()=>document.querySelector('.tab[data-tab=validate]'), body:"Check quality against qSKOS in <b>Validate</b>, then take your taxonomy out — Turtle, RDF/XML, JSON-LD, CSV, Excel — in <b>Export</b>." },
-  { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime with the <b>?</b> button in the header." },
+  { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime from the <b>☰</b> menu (Help → Take a quick tour)." },
 ];
 function initTour(){
   if(document.getElementById('tourStyle')) return;
@@ -5276,8 +5275,6 @@ function initTour(){
   document.getElementById('tourSkip').onclick=()=>endTour(false);
   document.getElementById('tourBack').onclick=()=>{ if(tourStep>0){ tourStep--; showTourStep(); } };
   document.getElementById('tourNext').onclick=()=>{ if(tourStep<TOUR_STEPS.length-1){ tourStep++; showTourStep(); } else endTour(true); };
-  const acts=document.querySelector('header .top-actions');
-  if(acts && !document.getElementById('tourQ')){ const q=document.createElement('button'); q.id='tourQ'; q.className='btn'; q.title='Take a quick tour'; q.textContent='?'; q.onclick=()=>startTour(true); acts.appendChild(q); }
   window.addEventListener('resize',()=>{ if(document.getElementById('tour').classList.contains('on')) positionTour(); });
 }
 function startTour(force){ if(!force && localStorage.getItem(TOURKEY)) return; tourStep=0; document.getElementById('tour').classList.add('on'); showTourStep(); }
@@ -5318,5 +5315,51 @@ function positionTour(){
   }, 230);
 }
 
-initProjects(); boot(); initGate(); initTour();
+// ================= Hamburger menu: navigation + docs + feedback + tour =================
+const REPO_URL = "https://github.com/jesstalisman-ia/intentional-arrangement-skos";
+function initNav(){
+  const acts=document.querySelector('header .top-actions'); if(!acts || document.getElementById('navBtn')) return;
+  const st=document.createElement('style'); st.id='navStyle';
+  st.textContent='#navBtn{font-size:16px;line-height:1;padding-left:11px;padding-right:11px}'+
+    '#navMenu{position:fixed;width:246px;background:var(--card,#fff);color:var(--fg,#1a1f24);border:1px solid var(--line,#e3e6ea);border-radius:12px;box-shadow:0 16px 44px rgba(0,0,0,.18);padding:6px;z-index:10005;display:none}'+
+    '#navMenu.on{display:block}'+
+    '#navMenu .nav-sec{padding:4px 2px}#navMenu .nav-sec+.nav-sec{border-top:1px solid var(--line,#eef0f3);margin-top:4px;padding-top:6px}'+
+    '#navMenu .nav-h{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint,#9099a3);padding:2px 10px 4px}'+
+    '#navMenu .nav-item{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;padding:8px 10px;border:none;background:transparent;color:inherit;font:inherit;font-size:13.5px;border-radius:8px;cursor:pointer;text-decoration:none}'+
+    '#navMenu .nav-item:hover{background:var(--accent-soft,#eef2ff)}'+
+    '#navMenu .nav-item.cur{background:var(--accent-soft,#eef2ff);font-weight:700}'+
+    '#navMenu .nav-item .rt{margin-left:auto;color:var(--faint,#9099a3);font-size:12px}';
+  document.head.appendChild(st);
+  const b=document.createElement('button'); b.id='navBtn'; b.className='btn'; b.title='Menu'; b.setAttribute('aria-label','Menu'); b.setAttribute('aria-haspopup','menu'); b.textContent='☰';
+  acts.appendChild(b);
+  const m=document.createElement('div'); m.id='navMenu'; m.setAttribute('role','menu'); document.body.appendChild(m);
+  b.onclick=(e)=>{ e.stopPropagation(); toggleNav(); };
+  document.addEventListener('click',(e)=>{ const mm=document.getElementById('navMenu'); if(mm && mm.classList.contains('on') && !mm.contains(e.target) && e.target!==b) closeNav(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeNav(); });
+  window.addEventListener('resize',()=>{ if(document.getElementById('navMenu').classList.contains('on')) positionNav(); });
+}
+function buildNavContents(){
+  const m=document.getElementById('navMenu'); if(!m) return;
+  const curEl=document.querySelector('#tabs .tab.active'); const cur=curEl?curEl.getAttribute('data-tab'):'';
+  const tabs=[...document.querySelectorAll('#tabs .tab')].map(t=>{ const c=t.cloneNode(true); c.querySelectorAll('.pill').forEach(p=>p.remove()); return {name:t.getAttribute('data-tab'), label:c.textContent.trim()}; });
+  let h='<div class="nav-sec"><div class="nav-h">Go to</div>';
+  tabs.forEach(t=>{ h+=`<button class="nav-item${t.name===cur?' cur':''}" data-go="${t.name}">${escHtml(t.label)}</button>`; });
+  h+='</div><div class="nav-sec"><div class="nav-h">Help</div>'+
+     '<button class="nav-item" data-act="tour">Take a quick tour</button>'+
+     `<a class="nav-item" href="${REPO_URL}/tree/main/docs" target="_blank" rel="noopener">Documentation <span class="rt">↗</span></a>`+
+     '</div><div class="nav-sec"><div class="nav-h">Feedback</div>'+
+     `<a class="nav-item" href="${REPO_URL}/issues/new?template=feature_request.yml" target="_blank" rel="noopener">Request a feature <span class="rt">↗</span></a>`+
+     `<a class="nav-item" href="${REPO_URL}/issues/new?template=bug_report.yml" target="_blank" rel="noopener">Report a bug <span class="rt">↗</span></a>`+
+     '<a class="nav-item" href="mailto:Hello@ontologypipeline.com">Email us <span class="rt">✉</span></a>'+
+     '</div>';
+  m.innerHTML=h;
+  m.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ switchTab(el.getAttribute('data-go')); closeNav(); });
+  const tourItem=m.querySelector('[data-act=tour]'); if(tourItem) tourItem.onclick=()=>{ closeNav(); startTour(true); };
+  m.querySelectorAll('a.nav-item').forEach(a=>a.addEventListener('click',closeNav));
+}
+function positionNav(){ const b=document.getElementById('navBtn'), m=document.getElementById('navMenu'); if(!b||!m) return; const r=b.getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; let left=r.right-246; left=Math.min(Math.max(8,left), window.innerWidth-254); m.style.left=left+'px'; }
+function toggleNav(){ const m=document.getElementById('navMenu'); if(!m) return; if(m.classList.contains('on')){ closeNav(); return; } buildNavContents(); m.classList.add('on'); positionNav(); }
+function closeNav(){ const m=document.getElementById('navMenu'); if(m) m.classList.remove('on'); }
+
+initProjects(); boot(); initGate(); initTour(); initNav();
 </script>
