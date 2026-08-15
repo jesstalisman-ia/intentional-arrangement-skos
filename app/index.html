@@ -17,7 +17,12 @@
     --border:#c8d1e1; --border-soft:#e3e8f2; --text:#0b1020; --muted:#1f2d54; --faint:#4b5a7c;
     --accent:#14275f; --accent-soft:#e6e9f4; --teal:#1c3f8f; --teal-soft:#e5e9f6;
     --err:#c0362c; --err-soft:#fbeae8; --warn:#8a5a12; --warn-soft:#f6ecd8; --info:#14275f; --info-soft:#e6e9f4;
-    --ok:#146c46;
+    --ok:#146c46; --ok-soft:#e2f2ea;
+    /* per-section accent colors (dark enough for white text) */
+    --c-glossary:#a85d00; --c-build:#14275f; --c-browse:#1466a6; --c-proposals:#6b3fa0;
+    --c-graph:#a23b6c; --c-validate:#146c46; --c-sparql:#3b4b8f; --c-export:#0f766e;
+    --c-glossary-soft:#f6ecdd; --c-browse-soft:#e2eefa; --c-proposals-soft:#efe8f8;
+    --c-graph-soft:#f7e6ee; --c-sparql-soft:#e8ebf6; --c-export-soft:#e0f0ee;
     --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     --shadow:0 1px 2px rgba(18,36,94,.06),0 6px 18px rgba(18,36,94,.08);
@@ -81,6 +86,17 @@
   .tab.active{color:#fff;background:var(--accent);border-color:var(--accent)}
   .tab .pill{font-family:var(--mono);font-size:10px;background:var(--surface-3);color:var(--muted);border-radius:9px;padding:0 6px}
   .tab.active .pill{background:rgba(255,255,255,.22);color:#fff}
+  /* per-section accent colors: a colored underline + tinted pill, full-color fill when active */
+  #tabs .tab{border-bottom:2px solid transparent;border-radius:8px 8px 3px 3px}
+  #tabs .tab[data-tab=glossary]{--c:var(--c-glossary)} #tabs .tab[data-tab=build]{--c:var(--c-build)}
+  #tabs .tab[data-tab=browse]{--c:var(--c-browse)} #tabs .tab[data-tab=proposals]{--c:var(--c-proposals)}
+  #tabs .tab[data-tab=graph]{--c:var(--c-graph)} #tabs .tab[data-tab=validate]{--c:var(--c-validate)}
+  #tabs .tab[data-tab=sparql]{--c:var(--c-sparql)} #tabs .tab[data-tab=export]{--c:var(--c-export)}
+  #tabs .tab{border-bottom-color:color-mix(in srgb,var(--c) 35%,transparent)}
+  #tabs .tab:hover{border-bottom-color:var(--c)}
+  #tabs .tab .pill{color:var(--c)}
+  #tabs .tab.active{background:var(--c);border-color:var(--c);border-bottom-color:var(--c)}
+  #tabs .tab.active .pill{color:#fff}
   .panel{display:none} .panel.active{display:block}
 
   /* build */
