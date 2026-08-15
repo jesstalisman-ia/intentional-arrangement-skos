@@ -15,11 +15,12 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 - **Editor quality-of-life** — trim empty labels automatically; **set the identifier from the label** in one click; a warning when two concepts have near-identical identifiers; a **"last checked · Manual/Automatic"** indicator on the validator.
 - **Proposals** — readers can *propose* a new term (with definition, suggested parent, synonyms, scope note, rationale, and links); a taxonomist reviews each in the Proposals tab and approves it into the vocabulary or rejects it.
 - **Documentation hub** — a single [docs home](docs/) covering install, using the editor, the workspace, spreadsheet import, the SKOS reference, and the REST API + MCP server — linked from inside the app.
-- **Guided first-build walkthrough** — a skippable, 11-step tour with tooltips that spotlights the build flow (top concepts, the tree, identifier vs. label and UUIDs, top vs. child, labels, definitions, linked data, validate/export). Auto-starts once; reopen anytime with the header **?**.
+- **Guided first-build walkthrough** — a skippable, 11-step tour with tooltips that spotlights the build flow (top concepts, the tree, identifier vs. label and UUIDs, top vs. child, labels, definitions, linked data, validate/export). Auto-starts once; reopen anytime from the ☰ menu.
+- **Hamburger menu** — one **☰** menu that mirrors the tabs and gathers the documentation, feedback (feature request / bug report / email), and the tour in a single place.
 
 ## 🔜 Next
 
-- 🔜 **Navigation redesign** — a menu that mirrors the tabs and also surfaces documentation and feedback links, for a cleaner mobile and desktop experience.
+Nothing in active development right now — the **Planned** items below are candidates, and your requests shape the order. See [how to request a feature](#feedback--requests).
 
 ## 💡 Planned
 
