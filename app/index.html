@@ -337,6 +337,7 @@
       <div class="card">
         <div class="card-h"><h2>Concepts</h2><span class="sp"></span>
           <button class="btn sm" id="bulkToggle" title="Select multiple concepts to bulk move or delete">Select</button>
+          <button class="btn sm" id="btnUndo" title="Undo the last delete (⌘/Ctrl+Z)">↶ Undo</button>
           <button class="btn sm primary" id="addTop">+ Top concept</button></div>
         <div class="tsearch"><input id="treeSearch" type="search" placeholder="Filter concepts…" autocomplete="off"></div>
         <div class="bulkbar" id="bulkBar" style="display:none">
@@ -2662,6 +2663,13 @@ const $$ = s => [...document.querySelectorAll(s)];
 const PKEY = "skosStudio.projects.v2", CKEY = "skosStudio.currentPid.v2", OLDKEY = "skosStudio.model.v1";
 const AKEY = "iaskos.auth.v1", SKEY = "iaskos.session.v1";
 let model, selected = null, valAuto = false, lastIssues = [], currentPid = null, lastValidatedTs = 0;
+// Undo for destructive actions (delete). Snapshots the model before the change.
+let undoStack=[];
+function pushUndo(label){ try{ undoStack.push({label, snap:JSON.stringify(model), sel:selected}); if(undoStack.length>30) undoStack.shift(); }catch(e){} }
+function doUndo(){ if(!undoStack.length){ toast("Nothing to undo"); return; } const u=undoStack.pop();
+  try{ model=JSON.parse(u.snap); selected=(u.sel && model.concepts[u.sel])?u.sel:null; save(); boot(); toast("Undone: "+u.label); }
+  catch(e){ toast("Undo failed"); } }
+document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==="z"||e.key==="Z")&&!e.shiftKey){ const t=e.target; if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return; e.preventDefault(); doUndo(); } });
 
 // ---------- model ----------
 const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under Creative Commons Attribution-NoDerivatives 4.0 International. To view a copy of this license, visit https://creativecommons.org/licenses/by-nd/4.0/";
@@ -2719,11 +2727,12 @@ async function deleteConcept(id){
   const nm = label(id)||id;
   const msg = kids.length? `Delete “${nm}” and detach ${kids.length} child concept(s)? The children are kept but lose this parent.` : `Delete “${nm}”?`;
   if(!await askConfirm(msg,"Delete")) return;
+  pushUndo("delete of “"+nm+"”");
   delete model.concepts[id]; model.order = model.order.filter(x=>x!==id);
   for(const x of model.order){ const o=model.concepts[x];
     o.broader=(o.broader||[]).filter(b=>b!==id); o.related=(o.related||[]).filter(r=>r!==id); }
   if(selected===id) selected=null;
-  save(); renderTree(); renderEditor(); afterChange(); toast("Concept deleted");
+  save(); renderTree(); renderEditor(); afterChange(); toast("Deleted “"+nm+"” · ⌘/Ctrl+Z to undo");
 }
 // sandbox-safe confirmation (native confirm() is blocked inside the artifact iframe)
 function askConfirm(msg, okLabel){
@@ -2854,11 +2863,13 @@ function isDescendantOf(cand, of){ const seen=new Set(); const stack=childrenOf(
   while(stack.length){ const u=stack.pop(); if(u===cand) return true; if(seen.has(u)) continue; seen.add(u); for(const k of childrenOf(u)) stack.push(k); } return false; }
 async function bulkDelete(){ if(!bulkSel.size) return; const ids=[...bulkSel];
   if(!await askConfirm(`Delete ${ids.length} concept${ids.length===1?"":"s"}? Child concepts are kept but detached from any deleted parent.`,"Delete "+ids.length)) return;
+  pushUndo("delete of "+ids.length+" concept"+(ids.length===1?"":"s"));
   const del=new Set(ids); for(const id of ids) delete model.concepts[id];
   model.order=model.order.filter(x=>!del.has(x));
   for(const x of model.order){ const o=model.concepts[x]; o.broader=(o.broader||[]).filter(b=>!del.has(b)); o.related=(o.related||[]).filter(r=>!del.has(r)); }
   if(del.has(selected)) selected=null;
-  bulkSel.clear(); save(); renderTree(); renderEditor(); afterChange(); bulkPopulateParent(); bulkCount(); toast(ids.length+" concept"+(ids.length===1?"":"s")+" deleted"); }
+  bulkSel.clear(); save(); renderTree(); renderEditor(); afterChange(); bulkPopulateParent(); bulkCount(); toast(ids.length+" concept"+(ids.length===1?"":"s")+" deleted · ⌘/Ctrl+Z to undo"); }
+if($('#btnUndo')) $('#btnUndo').onclick=doUndo;
 function bulkMoveUnder(parent){ if(!bulkSel.size) return; let moved=0, skipped=0;
   for(const id of [...bulkSel]){ const c=model.concepts[id]; if(!c) continue;
     if(parent && (parent===id || isDescendantOf(parent,id))){ skipped++; continue; }
