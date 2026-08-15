@@ -5212,6 +5212,15 @@ function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyl
 }
 function initProjects(){
   let projs=loadProjects();
+  // Collapse exact-duplicate projects (e.g. the example ending up seeded more than
+  // once), keeping the most-recently-updated copy. Only byte-identical models are
+  // merged, so edited projects are never touched.
+  { const bySig={}; let removed=0;
+    const keys=Object.keys(projs).sort((a,b)=>(projs[b].updated||0)-(projs[a].updated||0));
+    for(const k of keys){ let sig; try{ sig=(projs[k].name||"")+"::"+JSON.stringify(projs[k].model); }catch(e){ sig="__"+k; }
+      if(bySig[sig]) { delete projs[k]; removed++; } else bySig[sig]=k; }
+    if(removed){ saveProjects(projs); if(currentPid && !projs[currentPid]) currentPid=null; }
+  }
   if(Object.keys(projs).length===0){
     // migrate an older single-slot model if present, else seed the example
     let migrated=null; try{ const old=localStorage.getItem(OLDKEY); if(old) migrated=JSON.parse(old); }catch(e){}
