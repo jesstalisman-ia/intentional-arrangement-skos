@@ -5659,7 +5659,7 @@ function tourCenterTip(){ const spot=document.getElementById('tourSpot'), tip=do
   tip.style.left=Math.max(8,(window.innerWidth-tip.offsetWidth)/2)+'px';
   tip.style.top=Math.max(8,(window.innerHeight-tip.offsetHeight)/2)+'px'; }
 function showTourStep(){
-  tourGen++;                                  // invalidate any pending positioning from a prior step
+  tourGen++;
   const step=TOUR_STEPS[tourStep];
   if(step.tab) switchTab(step.tab);
   if(step.pre){ try{ step.pre(); }catch(e){} }
@@ -5668,30 +5668,31 @@ function showTourStep(){
   document.getElementById('tourCount').textContent=(tourStep+1)+" / "+TOUR_STEPS.length;
   document.getElementById('tourBack').style.visibility = tourStep===0 ? 'hidden':'visible';
   document.getElementById('tourNext').textContent = tourStep===TOUR_STEPS.length-1 ? 'Done':'Next';
-  clearTimeout(tourPosTimer); tourPosTimer=setTimeout(positionTour, 60);
+  // Position synchronously so the spotlight tracks every click, even rapid ones
+  // (tab switches and panel-opens are synchronous DOM changes — layout is ready now).
+  // One rAF re-position catches any late settle (e.g. a <details> expanding).
+  const gen=tourGen;
+  positionTour();
+  requestAnimationFrame(()=>{ if(gen===tourGen) positionTour(); });
+  // guarded fallback for any late layout settle; skipped if the user already advanced
+  clearTimeout(tourPosTimer); tourPosTimer=setTimeout(()=>{ if(gen===tourGen) positionTour(); }, 90);
 }
 function positionTour(){
-  const gen=tourGen, step=TOUR_STEPS[tourStep];
+  const step=TOUR_STEPS[tourStep];
   const spot=document.getElementById('tourSpot'), tip=document.getElementById('tourTip');
   let el=null; if(step.target && !step.center){ try{ el=step.target(); }catch(e){} }
   if(!el){ tourCenterTip(); return; }
   try{ el.scrollIntoView({block:'center', inline:'nearest', behavior:'instant'}); }catch(e){ try{ el.scrollIntoView({block:'center'}); }catch(_){} }
-  clearTimeout(tourPosTimer);
-  tourPosTimer=setTimeout(()=>{
-    if(gen!==tourGen) return;                 // a newer step superseded this — don't move the spotlight
-    let el2=null; try{ el2=step.target(); }catch(e){}
-    if(!el2){ tourCenterTip(); return; }
-    const r=el2.getBoundingClientRect(), pad=6;
-    if(!r.width && !r.height){ tourCenterTip(); return; }
-    spot.style.opacity='1';
-    spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px';
-    spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
-    const tw=tip.offsetWidth, th=tip.offsetHeight;
-    let top=r.bottom+12, left=r.left;
-    if(top+th>window.innerHeight-8) top=Math.max(8, r.top-th-12);
-    left=Math.min(Math.max(8,left), window.innerWidth-tw-8);
-    tip.style.left=left+'px'; tip.style.top=Math.max(8,top)+'px';
-  }, 140);
+  const r=el.getBoundingClientRect(), pad=6;
+  if(!r.width && !r.height){ tourCenterTip(); return; }
+  spot.style.opacity='1';
+  spot.style.left=(r.left-pad)+'px'; spot.style.top=(r.top-pad)+'px';
+  spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
+  const tw=tip.offsetWidth, th=tip.offsetHeight;
+  let top=r.bottom+12, left=r.left;
+  if(top+th>window.innerHeight-8) top=Math.max(8, r.top-th-12);
+  left=Math.min(Math.max(8,left), window.innerWidth-tw-8);
+  tip.style.left=left+'px'; tip.style.top=Math.max(8,top)+'px';
 }
 
 // ================= Hamburger menu: navigation + docs + feedback + tour =================
