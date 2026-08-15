@@ -25,7 +25,7 @@ Nothing in active development right now — the **Planned** items below are cand
 ## 💡 Planned
 
 - **Glossary mode (on-ramp)** — capture terms and definitions as a plain glossary, then promote them into SKOS. Matches how people actually start.
-- **Schema Binding / projection export** — export the model (and a "projection map") toward implementation targets: Pydantic, SwiftData, Cypher/neosemantics, MongoDB, Obsidian properties.
+- **Schema Binding / projection export and import** — export or import the model (and a "projection map") toward implementation targets: Pydantic, SwiftData, Cypher/neosemantics, MongoDB, Obsidian properties.
 - **Import diagnostics, deepened** — an inline report (not just a toast) after import/merge.
 - **Validation** — a persistent "edited since last check" state and clearer manual/automatic explanation.
 
