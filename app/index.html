@@ -319,6 +319,7 @@
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="build">Build <span class="pill" id="pillCount">0</span></button>
     <button class="tab" data-tab="browse">Business view</button>
+    <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
     <button class="tab" data-tab="graph">Graph</button>
     <button class="tab" data-tab="export">Export RDF</button>
     <button class="tab" data-tab="validate">Validate <span class="pill" id="pillVal">qSKOS</span></button>
@@ -737,6 +738,18 @@
   .graph-menu button:hover{background:var(--accent-soft);color:var(--accent)}
   .graph-empty2{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px;text-align:center;pointer-events:none;padding:0 40px}
   </style>
+
+  <!-- PROPOSALS -->
+  <section class="panel" data-panel="proposals">
+    <div class="card">
+      <div class="card-h"><h2>Proposed terms</h2>
+        <div class="seg" id="propFilter" style="margin-left:auto"><button data-f="pending" class="on">Pending</button><button data-f="approved">Approved</button><button data-f="rejected">Rejected</button><button data-f="all">All</button></div>
+        <button class="btn sm primary" id="btnProposeFromList">＋ New proposal</button>
+      </div>
+      <div class="prop-list" id="proposalList"></div>
+    </div>
+  </section>
+
   <section class="panel" data-panel="graph">
     <div class="graph-wrap">
       <div class="graph-toolbar">
