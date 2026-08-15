@@ -8,6 +8,7 @@ Use the tool now at **https://jesstalisman-ia.github.io/intentional-arrangement-
 
 - **[Install & run](install.md)** — use it hosted, run the single file locally, or deploy your own copy.
 - **[Using the editor](using-the-editor.md)** — the full workflow, tab by tab: collect candidate terms in the Glossary, author concepts (plain SKOS or SKOS-XL), review Proposals, validate, browse, visualize, query with SPARQL, and export.
+- **[The guided walkthrough](guided-walkthrough.md)** — the written companion to the in-app tour, step by step, each one expanded.
 - **[SKOS reference](skos-reference.md)** — the constructs and integrity conditions you actually use, with links to the W3C spec, qSKOS, Z39.19, and ISO 25964.
 
 ## Working in the tool
