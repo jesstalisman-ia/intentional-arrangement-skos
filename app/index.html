@@ -132,6 +132,13 @@
   .grp>.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:6px;display:flex;align-items:center;gap:7px}
   .grp>.lbl .add{margin-left:auto}
   .xl-badge{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--c-export,#0f766e);border-radius:5px;padding:1px 5px;vertical-align:middle;text-transform:none}
+  .xl-chip{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.03em;color:#fff;background:var(--c-export,#0f766e);border:none;border-radius:7px;padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+  .xl-chip::before{content:"◆";font-size:9px}
+  .xl-chip:hover{filter:brightness(1.08)}
+  /* make the SKOS-XL label-style control stand out inside the scheme panel */
+  #labelStyleBox{background:linear-gradient(0deg,var(--c-export-soft,#e0f0ee),transparent);border-left:3px solid var(--c-export,#0f766e)}
+  #labelStyle label{transition:background .12s}
+  #labelStyle input:checked + span{color:var(--c-export,#0f766e);font-weight:600}
   .lbl-xl{display:flex;gap:6px;margin:-2px 0 8px 58px;padding-left:2px}
   .lbl-xl input{flex:1 1 auto;min-width:0;font-size:11.5px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border);border-radius:6px;padding:3px 7px}
   .lbl-xl input.xluri{font-family:var(--mono);flex:1.3}
@@ -315,6 +322,7 @@
         <input id="editorName" placeholder="Your name" autocomplete="name" spellcheck="false">
       </span>
       <span class="proj-chip" id="curProject" title="Open the projects library"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="curProjectName">Untitled</span></span>
+      <button class="xl-chip" id="xlChip" hidden title="This taxonomy uses SKOS-XL labels — click to open Label style">SKOS-XL</button>
       <button class="btn" id="btnProjects" title="See, open and save your projects">Projects</button>
       <button class="btn" id="btnNew" title="Create a new project">New</button>
       <button class="btn" id="btnImport" title="Import a Turtle / RDF file">Import…</button>
@@ -3246,10 +3254,12 @@ function setLabelStyle(v){
 function updateXlUi(){
   const on=!!model.xlLabels;
   const b=$('#xlBadgeSummary'); if(b) b.hidden=!on;
+  const chip=$('#xlChip'); if(chip) chip.hidden=!on;
   const h=$('#labelStyleHint'); if(h) h.innerHTML = on
     ? "Each label becomes a <b>skosxl:Label</b> resource with its own URI — so you can record a <b>source / provenance</b> per label. Exports default to SKOS-XL + plain."
     : "Labels are plain literals (<b>skos:prefLabel</b> etc.). Switch to SKOS-XL to give labels their own identity and metadata.";
 }
+if($('#xlChip')) $('#xlChip').onclick=()=>{ switchTab('build'); const sb=$('#schemeBox'); if(sb){ sb.open=true; renderScheme(); const lb=$('#labelStyleBox'); if(lb) lb.scrollIntoView({behavior:'smooth',block:'center'}); } };
 function updateIdStyleHint(){ const h=$('#idStyleHint'); if(!h) return;
   h.textContent=(model.idStyle==="uuid")
     ? "New terms get an auto-generated 32-character identifier. Use “Assign UUIDs to all terms” to convert existing ones."
@@ -5616,6 +5626,7 @@ const TOUR_STEPS = [
   { title:"Linked data", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Linked artifacts'), body:"Attach documents, images, or links as <b>linked artifacts</b>, and map to external vocabularies with <b>exactMatch</b> and friends — connecting your concept to the wider web of data." },
   { title:"Concept scheme & Dublin Core", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#schemeGrid')||$('#schemeBox'), body:"Give the vocabulary itself a record. Open <b>Concept scheme, identifiers &amp; Dublin Core metadata</b> to set the <b>title, creator, publisher, dates, rights and language</b>. This Dublin Core metadata travels with every export." },
   { title:"UUIDs for every concept — in one click", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#btnAssignUuids'), body:"A hidden gem in that same section: click <b>Assign UUIDs to all terms</b> to switch <i>every</i> concept to a stable, opaque UUID at once. UUIDs never collide and never need renaming — ideal before you publish or hand the vocabulary off." },
+  { title:"Plain SKOS or SKOS-XL labels", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#labelStyleBox'), body:"Also here: <b>Label style</b>. Keep <b>plain SKOS</b> labels, or switch to <b>SKOS-XL</b> — which turns each label into its own resource with a URI, so you can record a <b>source / provenance</b> for individual labels. Turn it on and a small <b>SKOS-XL</b> badge appears in the header; exports then include the reified labels." },
   { title:"Proposals — suggest & review terms", target:()=>document.querySelector('.tab[data-tab=proposals]'), body:"Not everyone edits directly. In <b>Proposals</b>, people suggest new terms; a reviewer sets each one's parent (or makes it a <b>top concept</b>) and <b>approves</b> it into the taxonomy, or <b>rejects</b> it with a reason. Every decision is recorded, and the whole log downloads as CSV or a report." },
   { title:"Validate and export", target:()=>document.querySelector('.tab[data-tab=validate]'), body:"Check quality against qSKOS in <b>Validate</b>, then take your taxonomy out — Turtle, RDF/XML, JSON-LD, CSV, Excel — in <b>Export</b>." },
   { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime from the <b>☰</b> menu (Help → Take a quick tour)." },

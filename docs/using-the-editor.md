@@ -2,11 +2,21 @@
 
 A walk through the editor, tab by tab, from a blank project to a taxonomy you can hand off. If you haven't opened the tool yet, start with the [install guide](install.md); for the login, projects, and autosave, see [your workspace](workspace.md).
 
-The app has five tabs: **Build**, **Business view**, **Graph**, **Export**, and **Validate**. You author in Build, check your work in Validate, read it in Business view, see its shape in Graph, and take it out in Export.
+The app has eight tabs, each with its own accent color: **Glossary**, **Build**, **Business view**, **Proposals**, **Graph**, **Validate**, **SPARQL**, and **Export**. You collect raw terms in Glossary, author in Build, gather suggestions in Proposals, check your work in Validate, read it in Business view, see its shape in Graph, query it in SPARQL, and take it out in Export.
 
 ## Start a project
 
 From the welcome screen, open a taxonomy you're working on or start a new one. A new project asks for its [Dublin Core metadata](workspace.md#starting-a-project-with-dublin-core-metadata) — a title is the only required field. Every change saves to your browser on its own; there's no save button to remember.
+
+## Glossary — start with candidate terms
+
+Structure rarely comes first. The **Glossary** tab (the first one, because it comes before building) is a staging bucket for raw **candidate terms** — a garage for words you've collected but haven't organized yet.
+
+- **Bring terms in, low-friction.** Paste them one per line, or as a markdown list (`- term`, numbered, or headings), or as CSV (`term, note`); or import a text, markdown, CSV, or Excel `.xlsx` file. Duplicates are skipped.
+- **Keep lists loose or linked.** A candidate list can sit **unlinked**, or you can associate it with a taxonomy. Give each collection its own list — one per source, one per project, however you work.
+- **Promote when ready.** Promote a term into the linked taxonomy as a SKOS concept — either as a **top concept** or **placed under a parent you choose** from that taxonomy (there's a per-term parent picker, and a shared "promote all under…" selector). Promoted terms are checked off so you can see what's left.
+
+The point is to lower the barrier to starting: collect first, structure later.
 
 ## Build — author your concepts
 
@@ -35,6 +45,13 @@ Because they can drift apart, the editor gives you help: **↦ from label** sets
 
 Each label carries a language tag (`en`, `fr`, …). A whitespace-only label is trimmed when you leave the field, so an empty label doesn't quietly linger.
 
+**Plain SKOS or SKOS-XL labels.** By default, labels are plain literals (`skos:prefLabel`, `skos:altLabel`, `skos:hiddenLabel`). Under **Concept scheme → Label style** you can switch a taxonomy to **SKOS-XL**, which turns every label into a first-class resource (`skosxl:Label`) with its own URI. In SKOS-XL mode each label in the editor gains two extra fields:
+
+- a **label URI** (leave it blank to auto-generate one on export), and
+- a **source / provenance** note (`dcterms:source`) — where that specific label came from.
+
+When SKOS-XL is on, a teal **SKOS-XL** badge appears in the header (click it to jump to the setting), exports default to *SKOS-XL + plain* (so consumers that only understand plain SKOS still work), and importing SKOS-XL round-trips the label URIs and their sources back in. Use it when the provenance of individual terms matters — regulated vocabularies, multi-source glossaries, terms you need to attribute. If you don't need that, plain SKOS keeps things simpler.
+
 **Notes.**
 
 - **Definition** — what the concept means. This is where a vocabulary earns trust.
@@ -52,6 +69,14 @@ Each label carries a language tag (`en`, `fr`, …). A whitespace-only label is 
 **Mappings.** Link a concept to the same or a related concept in another vocabulary with the mapping properties: `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`. Reserve `exactMatch` for concepts that are genuinely interchangeable.
 
 **Linked artifacts.** Attach documents, images, or links that give a concept context for the people using it.
+
+## Proposals — suggest and review terms
+
+Not everyone who has an idea for a term should edit the vocabulary directly. In the **Proposals** tab, contributors *propose* a new term — with a definition, a suggested parent, synonyms, a scope note, a rationale, and links — and a taxonomist reviews each one. The reviewer sets the proposed concept's parent (or makes it a top concept) and **approves** it into the taxonomy, or **rejects** it with a reason. Every decision is recorded, and the whole log downloads as CSV or a readable report.
+
+## SPARQL — query the vocabulary
+
+The **SPARQL** tab runs queries against your taxonomy entirely in the browser. It ships with a preseeded library of example queries, and a **natural-language** box that turns plain questions ("children of X", "concepts without a definition", "descendants of X") into SPARQL using an offline, rule-based generator — no server, no LLM, nothing leaves your machine. You can toggle whether SKOS-XL triples are included in what's queried.
 
 ## Validate — keep it sound
 
@@ -71,12 +96,14 @@ Past a certain size, the value of a taxonomy lives in the network between terms,
 
 ## Export — take it out without loss
 
-Export from the Export tab. The RDF forms are lossless; the flat forms are for people and other tools.
+Export from the **Export** tab (it's the last tab — it does more than RDF, so it's labelled just "Export"). The RDF forms are lossless; the flat forms are for people and other tools.
 
 - **Turtle** — the readable default, lossless.
 - **RDF/XML, JSON-LD, RDF/JSON** — the same content in other RDF serializations.
 - **CSV, Excel (`.xlsx`)** — a flat, spreadsheet-friendly view. Good for editing and review; treat an RDF export as the version of record.
 - **Markdown** — the vocabulary and its links as one readable document.
+
+For the RDF forms you also choose the **label style** — *Plain SKOS*, *SKOS-XL*, or *SKOS-XL + plain*. If the taxonomy is in SKOS-XL mode (see [Labels](#a-concepts-fields)) this defaults to *SKOS-XL + plain*.
 
 Everything is generated in your browser. Nothing is uploaded.
 
@@ -91,7 +118,7 @@ After an import, a short summary reports the concept count and top concepts, and
 
 ## Scheme metadata
 
-Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, and language, plus the base namespace and whether identifiers are readable or UUIDs. This metadata travels with every export.
+Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, and language, plus the base namespace and whether identifiers are readable or UUIDs. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.
 
 ## Where your work lives
 

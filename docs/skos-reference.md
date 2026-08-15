@@ -12,6 +12,8 @@ SKOS — the Simple Knowledge Organization System — is a W3C standard for writ
 
 **Labels.** Every concept should have exactly one preferred label per language, set with `skos:prefLabel`. Synonyms go in `skos:altLabel`. Terms you want findable but not shown — misspellings, deprecated forms — go in `skos:hiddenLabel`. The three label types must not collide: a string cannot be both a preferred and an alternate label on the same concept.
 
+**Labels with identity (SKOS-XL).** Plain SKOS labels are literals — you can't say anything *about* a label itself. [SKOS-XL](https://www.w3.org/TR/skos-reference/skos-xl.html) fixes that by reifying each label as a `skosxl:Label` resource with its own URI and a `skosxl:literalForm`; `skosxl:prefLabel` / `skosxl:altLabel` / `skosxl:hiddenLabel` link a concept to those resources. Because a label is now a thing with a URI, you can attach metadata to it — provenance (`dcterms:source`), dates, or relationships between labels. The editor supports this as a per-taxonomy **Label style**; it exports SKOS-XL alongside plain labels so nothing breaks for consumers that only read plain SKOS. Reach for it when the origin of individual terms matters; otherwise plain labels are simpler.
+
 **Hierarchy.** `skos:broader` points from a narrower concept to a wider one; `skos:narrower` is its inverse. Keep them consistent, and never let the chain loop back on itself — a concept cannot be its own ancestor.
 
 **Association.** `skos:related` links two concepts that belong together without one being broader than the other. A pair cannot be both `broader` and `related`; pick the relationship that is true.
