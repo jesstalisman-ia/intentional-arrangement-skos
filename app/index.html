@@ -5260,7 +5260,15 @@ $('#curProject').onclick=openProjectsModal;
 $('#projectsClose').onclick=()=>$('#projectsModal').classList.remove('show');
 $('#projNew').onclick=async ()=>{ const nm=await askPrompt("Name your new project:","New taxonomy","Create"); if(nm===null) return; createProject(nm.trim()||"Untitled", newModel()); $('#projectsModal').classList.remove('show'); };
 $('#projSaveAs').onclick=saveAsProject;
-$('#projExample').onclick=()=>{ createProject("Software company (example)", Core.parseTurtle(EXAMPLE_TTL)); $('#projectsModal').classList.remove('show'); toast("Loaded example"); };
+$('#projExample').onclick=()=>{
+  const projs=loadProjects();
+  const existing=Object.keys(projs).find(k=>projs[k].example || projs[k].name==="Software company (example)");
+  if(existing){ switchTo(existing); $('#projectsModal').classList.remove('show'); toast("Opened the example"); return; }
+  const m=Core.parseTurtle(EXAMPLE_TTL); if(m.scheme&&!m.scheme.rights) m.scheme.rights=LICENSE_NOTICE;
+  createProject("Software company (example)", m);
+  const ps=loadProjects(); if(ps[currentPid]){ ps[currentPid].example=true; saveProjects(ps); }
+  $('#projectsModal').classList.remove('show'); toast("Loaded example");
+};
 // Seed several small, distinct SKOS taxonomies (with deliberate label overlaps) so the Crosswalk has multiple to align.
 function buildSampleTax(title, base, rows){
   const m=newModel(); m.base=base; m.prefix=""; m.defaultLang="en";
@@ -5342,7 +5350,7 @@ function initProjects(){
     let migrated=null; try{ const old=localStorage.getItem(OLDKEY); if(old) migrated=JSON.parse(old); }catch(e){}
     const pid=newPid();
     if(migrated&&migrated.concepts){ projs[pid]={id:pid,name:(migrated.scheme&&migrated.scheme.title)||"My taxonomy",created:nowTs(),updated:nowTs(),model:migrated}; }
-    else { const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em}; }
+    else { const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em,example:true}; }
     saveProjects(projs); currentPid=pid;
   } else {
     currentPid=localStorage.getItem(CKEY); if(!currentPid||!projs[currentPid]) currentPid=Object.keys(projs)[0];
