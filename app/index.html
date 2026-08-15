@@ -327,9 +327,9 @@
     <button class="tab" data-tab="browse">Business view</button>
     <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
     <button class="tab" data-tab="graph">Graph</button>
-    <button class="tab" data-tab="export">Export RDF</button>
     <button class="tab" data-tab="validate">Validate <span class="pill" id="pillVal">qSKOS</span></button>
     <button class="tab" data-tab="sparql">SPARQL <span class="pill" id="pillSparql">ask</span></button>
+    <button class="tab" data-tab="export">Export</button>
   </div>
 
   <!-- BUILD -->
@@ -909,6 +909,7 @@
     .gloss-row .gt .gnote{display:block;font-size:12px;color:var(--faint)}
     .gloss-row.done .gt{color:var(--faint);text-decoration:line-through}
     .gloss-row .gtag{font-size:11px;color:var(--ok);white-space:nowrap}
+    .gloss-row .gloss-parent{font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);max-width:200px}
     .gloss-empty{padding:36px;text-align:center;color:var(--faint)}
     .gloss-bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border-soft);flex-wrap:wrap}
   </style>
@@ -935,10 +936,13 @@
       <div class="gloss-list" id="glossList"></div>
       <div class="gloss-bar">
         <button class="btn sm primary" id="glossPromoteAll">Promote all → taxonomy</button>
+        <label style="font-size:12px;color:var(--faint);display:inline-flex;align-items:center;gap:5px">under
+          <select id="glossPromoteParent" title="Place all promoted terms under this parent concept"><option value="">⌂ Top concepts</option></select>
+        </label>
         <span class="subtle" id="glossMeta" style="font-size:12px;color:var(--faint);margin-left:auto"></span>
       </div>
     </div>
-    <p class="subtle" style="padding:8px 4px;font-size:12px;color:var(--faint)">A staging bucket for unstructured <b>candidate terms</b> — a garage before the taxonomy. Import a flat list, link it to a taxonomy, then <b>promote</b> terms into it as SKOS concepts (as top concepts you can then arrange). Lists can also sit unlinked until you're ready.</p>
+    <p class="subtle" style="padding:8px 4px;font-size:12px;color:var(--faint)">A staging bucket for unstructured <b>candidate terms</b> — a garage before the taxonomy. Import a flat list, link it to a taxonomy, then <b>promote</b> terms into it as SKOS concepts — each one as a top concept or placed <b>under a parent</b> you choose. Lists can also sit unlinked until you're ready.</p>
   </section>
 
   <!-- SPARQL -->
@@ -1020,7 +1024,7 @@
         <button class="btn" data-exp="audit" style="grid-column:1/-1"><b>Audit log</b> &nbsp;.csv — full change history with author &amp; timestamp</button>
       </div>
       <label class="toggle" style="margin-top:12px"><input type="checkbox" id="expCopyMode"> Downloads blocked by your browser? Show the text to copy instead</label>
-      <p class="subtle" style="margin-bottom:0">Need SKOS-XL or plain-label variants? Use the <b>Export RDF</b> tab for full formatting options and a live preview.</p>
+      <p class="subtle" style="margin-bottom:0">Need SKOS-XL or plain-label variants? Use the <b>Export</b> tab for full formatting options and a live preview.</p>
     </div>
   </div>
 </div>
@@ -5537,8 +5541,9 @@ let tourStep = 0;
 function grpByLabel(txt){ const gs=document.querySelectorAll('#editor .grp'); for(const g of gs){ const l=g.querySelector('.lbl'); if(l && l.textContent.trim().toLowerCase().startsWith(txt.toLowerCase())) return g; } return null; }
 function tourEnsureEditor(){ if(selected && model.concepts[selected]) return; if(model.order && model.order.length) selectConcept(model.order[0]); else addConcept(null); }
 const TOUR_STEPS = [
-  { title:"Build your first taxonomy", center:true, body:"A quick tour of the essentials — adding concepts, the fields on each one, and how the hierarchy works. You can skip anytime." },
-  { title:"Start with a top concept", tab:"build", target:()=>$('#addTop'), body:"Add your first concept here. A <b>top concept</b> sits at the root of the tree — it has no parent." },
+  { title:"Build your first taxonomy", center:true, body:"A quick tour of the essentials — starting from a glossary, adding concepts, the fields on each one, and how the hierarchy works. You can skip anytime." },
+  { title:"Glossary — start with candidate terms", tab:"glossary", target:()=>$('#glossPaste')||document.querySelector('.tab[data-tab=glossary]'), body:"Not sure of the structure yet? Start here. <b>Glossary</b> is a staging bucket for raw <b>candidate terms</b> — paste a list, or import a text, markdown, CSV, or Excel file. Keep it <b>unlinked</b>, or link it to a taxonomy and <b>promote</b> terms into it as concepts. Collect first, structure later." },
+  { title:"Start with a top concept", tab:"build", target:()=>$('#addTop'), body:"When you're ready to structure, switch to <b>Build</b>. Add your first concept here — a <b>top concept</b> sits at the root of the tree, with no parent." },
   { title:"Your concept tree", tab:"build", pre:tourEnsureEditor, target:()=>$('#tree')||document.querySelector('.panel[data-panel=build] .tree'), body:"Concepts form a tree. Select one to edit it on the right, and add children under it to build depth." },
   { title:"Identity vs. label", tab:"build", pre:tourEnsureEditor, target:()=>document.querySelector('#editor .idrow'), body:"Every concept has an <b>identifier</b> (its URI) — that's its identity, and it stays fixed even when you rename the label. Use <b>↦ from label</b> to set it from the label, or <b>⟳ UUID</b> for a stable, opaque id." },
   { title:"Top concept vs. child", tab:"build", pre:tourEnsureEditor, target:()=>grpByLabel('Broader'), body:"A concept with no <b>Broader</b> parent is a <b>top concept</b> (see the “Top concept” toggle in the id row). Give it a Broader parent to nest it as a <b>child</b>." },
@@ -5695,6 +5700,18 @@ function parseFlatTerms(text){
 }
 function glossActive(){ const g=loadGloss(); if(currentGid && g[currentGid]) return g[currentGid]; const ks=Object.keys(g); currentGid=ks[0]||null; return currentGid?g[currentGid]:null; }
 function updateGlossPill(){ const b=$('#pillGloss'); if(!b) return; const a=glossActive(); const n=a?a.terms.filter(t=>!t.conceptId).length:0; b.textContent=n; }
+function glossParentOptions(m){
+  if(!m || !m.concepts) return "";
+  const order=m.order||Object.keys(m.concepts);
+  const plab=id=>{ const c=m.concepts[id]; if(!c) return id; const p=(c.pref||[]).find(l=>l.lang===(m.defaultLang||"en")&&l.val)||(c.pref||[]).find(l=>l.val); return p?p.val:id; };
+  const kids=id=>order.filter(x=>((m.concepts[x].broader||[]).includes(id)));
+  const tops=order.filter(id=>{ const c=m.concepts[id]; return c && (c.top || !(c.broader&&c.broader.length)); });
+  const out=[], seen=new Set();
+  const walk=(id,d)=>{ if(seen.has(id))return; seen.add(id); out.push({id,d,label:plab(id)}); kids(id).sort((a,b)=>plab(a).localeCompare(plab(b))).forEach(k=>walk(k,d+1)); };
+  tops.sort((a,b)=>plab(a).localeCompare(plab(b))).forEach(t=>walk(t,0));
+  order.forEach(id=>{ if(!seen.has(id)){ seen.add(id); out.push({id,d:0,label:plab(id)}); } });
+  return out.map(o=>`<option value="${escapeHtml(o.id)}">${"  ".repeat(o.d)}${o.d?"› ":""}${escapeHtml(o.label)}</option>`).join("");
+}
 function renderGlossary(){
   const g=loadGloss(), sel=$('#glossSelect'), link=$('#glossLink'), list=$('#glossList'); if(!sel) return;
   const keys=Object.keys(g).sort((a,b)=>(g[b].updated||0)-(g[a].updated||0));
@@ -5706,13 +5723,22 @@ function renderGlossary(){
   // terms
   list.innerHTML="";
   if(!cur){ list.innerHTML='<div class="gloss-empty">No candidate lists yet. Click <b>+ New list</b>, then paste or import a flat list of terms.</div>'; $('#glossMeta').textContent=""; updateGlossPill(); return; }
+  // linked taxonomy model (for placing promoted terms under a chosen parent)
+  const linkedM = cur.projectId ? (cur.projectId===currentPid?model:(projs[cur.projectId]&&projs[cur.projectId].model)) : null;
+  const parentOpts = linkedM ? glossParentOptions(linkedM) : "";
+  const promoteParentSel=$('#glossPromoteParent');
+  if(promoteParentSel){ const keep=promoteParentSel.value; promoteParentSel.innerHTML='<option value="">⌂ Top concepts</option>'+parentOpts; promoteParentSel.value=keep; promoteParentSel.disabled=!parentOpts; }
   if(!cur.terms.length){ list.innerHTML='<div class="gloss-empty">Empty. Paste terms above (one per line, a markdown list, or CSV) or choose a file, then <b>Add terms</b>.</div>'; }
   else for(const t of cur.terms){
     const row=document.createElement("div"); row.className="gloss-row"+(t.conceptId?" done":"");
     const cell=document.createElement("div"); cell.className="gt"; cell.innerHTML=escapeHtml(t.term)+(t.note?`<span class="gnote">${escapeHtml(t.note)}</span>`:"");
     row.appendChild(cell);
     if(t.conceptId){ const tag=document.createElement("span"); tag.className="gtag"; tag.textContent="✓ promoted"; row.appendChild(tag); }
-    else { const pr=document.createElement("button"); pr.className="btn sm primary"; pr.textContent="Promote →"; pr.onclick=()=>promoteTerm(currentGid,t.id); row.appendChild(pr); }
+    else {
+      let psel=null;
+      if(parentOpts){ psel=document.createElement("select"); psel.className="gloss-parent"; psel.title="Place this term under a parent concept (or keep it a top concept)"; psel.innerHTML='<option value="">⌂ Top concept</option>'+parentOpts; row.appendChild(psel); }
+      const pr=document.createElement("button"); pr.className="btn sm primary"; pr.textContent="Promote →"; pr.onclick=()=>promoteTerm(currentGid,t.id,psel?(psel.value||null):null); row.appendChild(pr);
+    }
     const rm=document.createElement("button"); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from list"; rm.onclick=()=>{ const gg=loadGloss(); const b=gg[currentGid]; if(!b)return; b.terms=b.terms.filter(x=>x.id!==t.id); b.updated=nowTs(); saveGloss(gg); renderGlossary(); };
     row.appendChild(rm); list.appendChild(row);
   }
@@ -5727,7 +5753,7 @@ function glossAddTerms(text){
   let added=0; for(const p of parsed){ if(have.has(p.term.toLowerCase())) continue; have.add(p.term.toLowerCase()); b.terms.push({id:glossNewId(),term:p.term,note:p.note,conceptId:null}); added++; }
   b.updated=nowTs(); saveGloss(g); renderGlossary(); toast(`Added ${added} term${added===1?"":"s"}${added<parsed.length?" ("+(parsed.length-added)+" already present)":""}`);
 }
-function promoteTerm(gid,tid){
+function promoteTerm(gid,tid,parentId){
   const g=loadGloss(), b=g[gid]; if(!b) return; const t=b.terms.find(x=>x.id===tid); if(!t||t.conceptId) return;
   const projs=loadProjects(); const pid=b.projectId;
   if(!pid || !projs[pid]){ toast("Link this list to a taxonomy first (the Taxonomy dropdown, top-right)"); return; }
@@ -5735,18 +5761,22 @@ function promoteTerm(gid,tid){
   m.concepts=m.concepts||{}; m.order=m.order||Object.keys(m.concepts);
   const base=(m.idStyle==="uuid")?genUuid32():(slugId(t.term)||"Term");
   const cid=uniqueLocalIn(m.concepts, base);
-  const c=Core.emptyConcept(cid); c.pref=[{lang:m.defaultLang||"en",val:t.term}]; if(t.note) c.definition=[{lang:m.defaultLang||"en",val:t.note}]; c.top=true;
+  const parent=(parentId && m.concepts[parentId])?parentId:null;
+  const c=Core.emptyConcept(cid); c.pref=[{lang:m.defaultLang||"en",val:t.term}]; if(t.note) c.definition=[{lang:m.defaultLang||"en",val:t.note}];
+  if(parent){ c.broader=[parent]; c.top=false; } else { c.top=true; }
   m.concepts[cid]=c; m.order.push(cid);
   if(isCur){ save(); renderTree(); afterChange(); }
   else { projs[pid].model=m; projs[pid].updated=nowTs(); saveProjects(projs); }
   t.conceptId=cid; b.updated=nowTs(); saveGloss(g); renderGlossary();
-  toast(`Promoted “${t.term}” to “${projs[pid].name}”`);
+  const under=parent?` under “${(function(){const p=(m.concepts[parent].pref||[]).find(l=>l.val);return p?p.val:parent;})()}”`:" as a top concept";
+  toast(`Promoted “${t.term}”${under}`);
 }
 function promoteAll(){
   const g=loadGloss(), b=g[currentGid]; if(!b) return;
   const pend=b.terms.filter(t=>!t.conceptId); if(!pend.length){ toast("Nothing left to promote"); return; }
   if(!b.projectId || !loadProjects()[b.projectId]){ toast("Link this list to a taxonomy first"); return; }
-  for(const t of pend.slice()) promoteTerm(currentGid, t.id);
+  const parent=$('#glossPromoteParent')?($('#glossPromoteParent').value||null):null;
+  for(const t of pend.slice()) promoteTerm(currentGid, t.id, parent);
 }
 if($('#glossSelect')) $('#glossSelect').onchange=()=>{ currentGid=$('#glossSelect').value||null; renderGlossary(); };
 if($('#glossLink')) $('#glossLink').onchange=()=>{ const g=loadGloss(), b=g[currentGid]; if(!b) return; b.projectId=$('#glossLink').value||null; b.updated=nowTs(); saveGloss(g); renderGlossary(); };
