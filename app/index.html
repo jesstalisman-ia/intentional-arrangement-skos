@@ -2698,6 +2698,7 @@ function genConceptId(text){
 function todayISO(){ try{ return new Date().toISOString().slice(0,10); }catch(e){ return ""; } }
 function nowTs(){ try{ return Date.now(); }catch(e){ return 0; } }
 function newPid(){ return "p"+nowTs().toString(36)+Math.random().toString(36).slice(2,6); }
+function isExampleProject(p){ return !!(p && (p.example===true || (p.name||"")==="Software company (example)")); }
 function loadProjects(){ try{ return JSON.parse(localStorage.getItem(PKEY))||{}; }catch(e){ return {}; } }
 function saveProjects(p){ try{ localStorage.setItem(PKEY, JSON.stringify(p)); }catch(e){ toast("Storage full — export to a file"); } }
 // autosave the working model into the current project
@@ -5247,6 +5248,7 @@ function duplicateProject(pid){ const projs=loadProjects(); if(!projs[pid])retur
   projs[npid]={ id:npid, name:projs[pid].name+" copy", created:nowTs(), updated:nowTs(), model:JSON.parse(JSON.stringify(projs[pid].model)) };
   saveProjects(projs); renderProjects(); toast("Duplicated"); }
 async function deleteProject(pid){ const projs=loadProjects(); if(!projs[pid])return;
+  if(isExampleProject(projs[pid])){ toast("The example can’t be deleted — it’s the built-in demo. Duplicate or rename it to make it your own."); return; }
   if(!await askConfirm("Delete project “"+projs[pid].name+"”? This cannot be undone.","Delete project")) return;
   delete projs[pid]; saveProjects(projs);
   if(pid===currentPid){ const rest=Object.keys(projs); if(rest.length){ switchTo(rest[0]); } else { createProject("Untitled", newModel()); } }
@@ -5267,8 +5269,10 @@ function renderProjects(){
     open.onclick=()=>{ switchTo(p.id); renderProjects(); $('#projectsModal').classList.remove('show'); toast("Opened “"+p.name+"”"); };
     const ren=document.createElement("button"); ren.className="btn sm"; ren.textContent="Rename"; ren.onclick=()=>renameProject(p.id);
     const dup=document.createElement("button"); dup.className="btn sm"; dup.textContent="Duplicate"; dup.onclick=()=>duplicateProject(p.id);
-    const del=document.createElement("button"); del.className="btn sm"; del.textContent="Delete"; del.onclick=()=>deleteProject(p.id);
-    acts.append(open,ren,dup,del); card.appendChild(acts); host.appendChild(card);
+    acts.append(open,ren,dup);
+    if(isExampleProject(p)){ const lock=document.createElement("span"); lock.className="subtle"; lock.style.cssText="font-size:11px;align-self:center;margin-left:2px"; lock.textContent="🔒 built-in example"; acts.append(lock); }
+    else { const del=document.createElement("button"); del.className="btn sm"; del.textContent="Delete"; del.onclick=()=>deleteProject(p.id); acts.append(del); }
+    card.appendChild(acts); host.appendChild(card);
   }
 }
 function openProjectsModal(){ renderProjects(); $('#projectsModal').classList.add('show'); }
@@ -5369,6 +5373,11 @@ function initProjects(){
       if(projs[keep]) projs[keep].example=true; }
     if(removed){ saveProjects(projs); if(currentPid && !projs[currentPid]) currentPid=null; }
   }
+  // Guarantee the built-in example always exists (it can never be deleted).
+  if(Object.keys(projs).length && !Object.values(projs).some(isExampleProject)){
+    const pid=newPid(); const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE;
+    projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em,example:true}; saveProjects(projs);
+  }
   if(Object.keys(projs).length===0){
     // migrate an older single-slot model if present, else seed the example
     let migrated=null; try{ const old=localStorage.getItem(OLDKEY); if(old) migrated=JSON.parse(old); }catch(e){}
@@ -5413,9 +5422,12 @@ function gateWelcome(){
     const mt=document.createElement('div'); mt.className='pi-meta'; mt.textContent=`${n} concept${n===1?'':'s'} · ${dt}`;
     main.append(nm,mt);
     main.onclick=()=>{ switchTo(p.id); gateHide(); toast('Opened “'+p.name+'”'); };
-    const del=document.createElement('button'); del.className='pi-del'; del.title='Delete project'; del.textContent='✕';
-    del.onclick=async(e)=>{ e.stopPropagation(); if(await askConfirm('Delete project “'+p.name+'”? This cannot be undone.','Delete project')){ const ps=loadProjects(); delete ps[p.id]; saveProjects(ps); if(p.id===currentPid){ const rest=Object.keys(ps); if(rest.length) switchTo(rest[0]); } setProjectChip(); gateWelcome(); } };
-    row.append(main,del); host.appendChild(row);
+    row.append(main);
+    if(isExampleProject(p)){ const lk=document.createElement('span'); lk.title='The built-in example can’t be deleted'; lk.style.cssText='font-size:13px;color:#9099a3;padding:4px 9px'; lk.textContent='🔒'; row.append(lk); }
+    else { const del=document.createElement('button'); del.className='pi-del'; del.title='Delete project'; del.textContent='✕';
+      del.onclick=async(e)=>{ e.stopPropagation(); if(await askConfirm('Delete project “'+p.name+'”? This cannot be undone.','Delete project')){ const ps=loadProjects(); delete ps[p.id]; saveProjects(ps); if(p.id===currentPid){ const rest=Object.keys(ps); if(rest.length) switchTo(rest[0]); } setProjectChip(); gateWelcome(); } };
+      row.append(del); }
+    host.appendChild(row);
   }
   gateShow('gv-welcome');
 }
