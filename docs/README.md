@@ -15,6 +15,7 @@ Use the tool now at **https://jesstalisman-ia.github.io/intentional-arrangement-
 
 - **[Your workspace](workspace.md)** — the passcode, projects, guided Dublin Core setup, and autosave.
 - **[Building a taxonomy in a spreadsheet](spreadsheet-import.md)** — the CSV/Excel format, with a fill-in [template](templates/skos-import-template.xlsx) and a walkthrough.
+- **[Markdown export](markdown-export.md)** — the Markdown export format and its syntax, with a worked example, for human review and LLM grounding.
 
 ## Automate & integrate
 
