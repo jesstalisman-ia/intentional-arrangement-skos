@@ -16,14 +16,14 @@
   :root[data-theme="dark"]{
     --bg:#ffffff; --surface:#ffffff; --surface-2:#f3f5fa; --surface-3:#e7ecf5; --raised:#ffffff;
     --border:#c8d1e1; --border-soft:#e3e8f2; --text:#0b1020; --muted:#1f2d54; --faint:#4b5a7c;
-    --accent:#14275f; --accent-soft:#e6e9f4; --teal:#1c3f8f; --teal-soft:#e5e9f6;
-    --err:#c0362c; --err-soft:#fbeae8; --warn:#8a5a12; --warn-soft:#f6ecd8; --info:#14275f; --info-soft:#e6e9f4;
-    --ok:#146c46; --ok-soft:#e2f2ea;
-    /* per-section accent colors (dark enough for white text) */
-    --c-glossary:#a85d00; --c-build:#14275f; --c-browse:#1466a6; --c-proposals:#6b3fa0;
-    --c-graph:#a23b6c; --c-validate:#146c46; --c-sparql:#3b4b8f; --c-export:#0f766e;
-    --c-glossary-soft:#f6ecdd; --c-browse-soft:#e2eefa; --c-proposals-soft:#efe8f8;
-    --c-graph-soft:#f7e6ee; --c-sparql-soft:#e8ebf6; --c-export-soft:#e0f0ee;
+    --accent:#0e0d6a; --accent-soft:#e6e6f2; --teal:#0192ef; --teal-soft:#e2f0fd;
+    --err:#d63b3d; --err-soft:#ffe6e6; --warn:#8a6a00; --warn-soft:#fff4d3; --info:#0e0d6a; --info-soft:#e6e6f2;
+    --ok:#0a8f74; --ok-soft:#daf8f1;
+    /* per-section accents — Intentional Arrangement palette (white-text-safe; glossary is the one light fill, handled below) */
+    --c-glossary:#fec701; --c-build:#0e0d6a; --c-browse:#0192ef; --c-proposals:#52452a;
+    --c-graph:#fe4f51; --c-validate:#0a8f74; --c-sparql:#67708f; --c-export:#af8501;
+    --c-glossary-soft:#fff4d3; --c-browse-soft:#e2f0fd; --c-proposals-soft:#eceae4;
+    --c-graph-soft:#ffe6e6; --c-sparql-soft:#e9ebf1; --c-export-soft:#f6efda;
     --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     --shadow:0 1px 2px rgba(18,36,94,.06),0 6px 18px rgba(18,36,94,.08);
@@ -98,6 +98,10 @@
   #tabs .tab .pill{color:var(--c)}
   #tabs .tab.active{background:var(--c);border-color:var(--c);border-bottom-color:var(--c)}
   #tabs .tab.active .pill{color:#fff}
+  /* Glossary uses Supernova (light) — needs dark text for contrast */
+  #tabs .tab[data-tab=glossary] .pill{color:#8a6a00}
+  #tabs .tab[data-tab=glossary].active{color:#2a2200}
+  #tabs .tab[data-tab=glossary].active .pill{color:#2a2200;background:rgba(0,0,0,.14)}
   .panel{display:none} .panel.active{display:block}
 
   /* build */
