@@ -35,4 +35,4 @@ Run the same engine outside the browser — in a script, a pipeline, or an AI as
 
 ---
 
-*The editor and its example taxonomy are © 2026 by Jessica Talisman, licensed [CC BY-ND 4.0](../LICENSE). Taxonomies you create with the tool are your own.*
+*The editor and its example taxonomy are © 2026 Jessica Talisman, under a [size-based source-available license](../LICENSE) (Apache 2.0 for organizations under 75 employees; enterprise license required at 75+ — Hello@ontologypipeline.com). Not OSI open-source. Taxonomies you create with the tool are your own.*

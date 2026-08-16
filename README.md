@@ -105,10 +105,17 @@ Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangem
 
 ## License
 
-Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman is licensed under
-[Creative Commons Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)](https://creativecommons.org/licenses/by-nd/4.0/).
-See [LICENSE](LICENSE).
+Intentional Arrangement SKOS Editor © 2026 Jessica Talisman is offered under a
+**size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
+
+- **Organizations with fewer than 75 total employees** may use, modify, and
+  redistribute it for free under the **Apache License 2.0**, as modified by the
+  Size-Based Licensing Notice.
+- **Organizations with 75 or more total employees** must obtain a **written
+  enterprise license** from the Licensor (Hello@ontologypipeline.com) before any use.
+
+This is a source-available license, **not** an OSI-approved open-source license.
 
 This covers the editor and the example taxonomy shipped with it. Taxonomies and
-ontologies **you** create with the tool are your own — the tool does not apply
-this license to your work.
+ontologies **you** create with the tool are your own — the license does not apply
+to your work product.

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Intentional Arrangement SKOS Editor © 2026 by Jessica Talisman
-# Licensed under Creative Commons Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)
-# https://creativecommons.org/licenses/by-nd/4.0/
+# Intentional Arrangement SKOS Editor © 2026 Jessica Talisman
+# Size-based source-available license: Apache License 2.0 for organizations under 75
+# employees; a written enterprise license is required at 75+ (Hello@ontologypipeline.com).
+# Not an OSI-approved open-source license. See LICENSE / NOTICE.
 """
 Intentional Arrangement SKOS — MCP server
 
