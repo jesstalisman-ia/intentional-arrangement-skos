@@ -64,6 +64,6 @@ Everything happens in your browser. No file is uploaded anywhere.
 
 The import columns are the same ones the app **exports**. On the Export tab you can save your taxonomy as **CSV** or **Excel (.xlsx)** — the Excel file is built in your browser, no upload — so you can export what you've built, edit it in a spreadsheet, and import it back. The spreadsheet is a way in and a way out, not a trap.
 
-One limit worth naming: CSV and `.xlsx` are flat views for people. RDF forms (Turtle, RDF/XML, JSON-LD, RDF/JSON) carry the full detail without loss. Treat the spreadsheet as a comfortable place to draft and edit, and one of the RDF exports as the version of record.
+One limit worth naming: CSV and `.xlsx` are flat views for people. RDF forms (Turtle, RDF/XML, JSON-LD, RDF/JSON) carry the full detail without loss — including **Collections** (`skos:Collection` / `skos:OrderedCollection`), which don't fit a flat one-row-per-concept grid and so live only in the RDF exports. Treat the spreadsheet as a comfortable place to draft and edit, and one of the RDF exports as the version of record.
 
 See also the [SKOS reference](skos-reference.md) for what each of these fields means in the standard.
