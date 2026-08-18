@@ -897,6 +897,19 @@
 
   <!-- EXPORT -->
   <section class="panel" data-panel="export">
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-weight:700">Share a read-only link</div>
+          <div class="subtle" style="font-size:12px;margin-top:2px">Copy a link that opens this taxonomy in a read-only <b>Business view</b> — the taxonomy travels inside the link, so there's no server or account. Anyone with the link can browse it.</div>
+        </div>
+        <button class="btn primary" id="btnShareLink">🔗 Copy share link</button>
+      </div>
+      <div id="shareLinkWrap" style="display:none;margin-top:10px">
+        <input id="shareLinkBox" readonly onclick="this.select()" style="width:100%;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box">
+        <div class="subtle" id="shareLinkNote" style="font-size:11px;margin-top:5px"></div>
+      </div>
+    </div>
     <div class="card">
       <div class="exp-opts">
         <div class="optset"><span class="h">Format</span><div class="radios" id="expFormat">
@@ -2800,6 +2813,7 @@ function loadProjects(){ try{ return JSON.parse(localStorage.getItem(PKEY))||{};
 function saveProjects(p){ try{ localStorage.setItem(PKEY, JSON.stringify(p)); }catch(e){ toast("Storage full — export to a file"); } }
 // autosave the working model into the current project
 function save(){
+  if(SHARED) return;   // read-only shared view — never persist to the viewer's workspace
   const projs = loadProjects();
   if(!currentPid || !projs[currentPid]){ currentPid = currentPid || newPid(); projs[currentPid] = { id:currentPid, name:(model.scheme.title||"Untitled"), created:nowTs() }; }
   projs[currentPid].model = model; projs[currentPid].updated = nowTs();
@@ -5906,5 +5920,30 @@ if($('#glossFile')) $('#glossFile').onchange=async e=>{ const f=e.target.files[0
   catch(err){ toast("Couldn't read file: "+err.message); } e.target.value=""; };
 if($('#glossPromoteAll')) $('#glossPromoteAll').onclick=promoteAll;
 
-initProjects(); boot(); initGate(); initTour(); initNav();
+// ================= Share link — encode the taxonomy into a URL, open it read-only =================
+// A shareable link carries the whole taxonomy compressed in its #fragment, so a
+// recipient opens a read-only Business view with no server and no account. Their
+// own workspace is never touched unless they choose "Save a copy to edit".
+let SHARED = false;
+function _b64urlFromBytes(bytes){ let s=""; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function _bytesFromB64url(b64){ b64=b64.replace(/-/g,'+').replace(/_/g,'/'); while(b64.length%4) b64+='='; const s=atob(b64); const a=new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+async function _deflate(str){ const cs=new CompressionStream("deflate-raw"); const ab=await new Response(new Blob([new TextEncoder().encode(str)]).stream().pipeThrough(cs)).arrayBuffer(); return new Uint8Array(ab); }
+async function _inflate(bytes){ const ds=new DecompressionStream("deflate-raw"); const ab=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer(); return new TextDecoder().decode(ab); }
+async function makeShareUrl(){ const ttl=Core.toTurtle(model); let payload,tag; if(typeof CompressionStream!=="undefined"){ payload=_b64urlFromBytes(await _deflate(ttl)); tag="t"; } else { payload=_b64urlFromBytes(new TextEncoder().encode(ttl)); tag="tu"; } return location.origin+location.pathname+"#"+tag+"="+payload; }
+async function decodeShareHash(h){ let tag,data; if(h.indexOf("#t=")===0){ tag="t"; data=h.slice(3); } else if(h.indexOf("#tu=")===0){ tag="tu"; data=h.slice(4); } else return null; const bytes=_bytesFromB64url(data); const ttl=(tag==="t")?await _inflate(bytes):new TextDecoder().decode(bytes); return Core.parseTurtle(ttl); }
+async function shareLink(){ try{ const url=await makeShareUrl(); const wrap=document.getElementById('shareLinkWrap'), box=document.getElementById('shareLinkBox'), note=document.getElementById('shareLinkNote'); if(box) box.value=url; if(wrap) wrap.style.display=''; let copied=false; try{ await navigator.clipboard.writeText(url); copied=true; }catch(e){} const big=url.length>28000; if(note) note.innerHTML=(copied?"✓ Copied to clipboard. ":"Select the link above to copy. ")+(big?"<b style='color:#8a6a00'>This taxonomy is large, so the link is very long and may not open in every browser — for big taxonomies, share an exported file instead.</b>":"Anyone with this link can view (not edit) the taxonomy."); if(box) box.select&&box.select(); toast(copied?"Share link copied":"Share link ready"); }catch(e){ toast("Couldn't build share link: "+e.message); } }
+function shareBanner(){ if(document.getElementById('sharedBar')) return; const bar=document.createElement('div'); bar.id='sharedBar'; bar.style.cssText="position:sticky;top:0;z-index:400;background:#0e0d6a;color:#fff;padding:9px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13px;box-shadow:0 2px 10px rgba(0,0,0,.2)"; const lbl=document.createElement('span'); lbl.innerHTML="📎 <b>Shared taxonomy</b> — read-only view. Nothing is saved to this browser."; const spacer=document.createElement('span'); spacer.style.flex='1'; const copy=document.createElement('button'); copy.textContent='Copy link'; copy.className='btn sm'; copy.onclick=async()=>{ try{ await navigator.clipboard.writeText(location.href); toast('Link copied'); }catch(e){} }; const savec=document.createElement('button'); savec.textContent='Save a copy to edit'; savec.className='btn sm primary'; savec.onclick=shareSaveCopy; bar.append(lbl,spacer,copy,savec); document.body.insertBefore(bar,document.body.firstChild); }
+function shareSaveCopy(){ SHARED=false; const projs=loadProjects(); const pid=newPid(); const nm=(model.scheme&&model.scheme.title)||"Shared taxonomy"; projs[pid]={id:pid,name:nm,created:nowTs(),updated:nowTs(),model:JSON.parse(JSON.stringify(model))}; saveProjects(projs); try{ localStorage.setItem(CKEY,pid); }catch(e){} history.replaceState(null,"",location.pathname); location.reload(); }
+function startSharedView(){ SHARED=true; model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.graph=model.graph||{pos:{}}; if(!model.order||!model.order.length) model.order=Object.keys(model.concepts);
+  ['glossary','build','proposals'].forEach(t=>{ const b=document.querySelector('#tabs .tab[data-tab='+t+']'); if(b) b.style.display='none'; });
+  try{ ontoInit(); }catch(e){} try{ shaclInit(); }catch(e){}
+  try{ renderScheme(); }catch(e){} try{ renderTree(); }catch(e){} try{ renderEditor(); }catch(e){} try{ updateProposalPill(); }catch(e){}
+  const gate=document.getElementById('gate'); if(gate) gate.classList.remove('show');
+  try{ switchTab('browse'); }catch(e){}
+  shareBanner();
+}
+async function initShareOrApp(){ const h=location.hash||""; if(h.indexOf('#t=')===0||h.indexOf('#tu=')===0){ try{ const m=await decodeShareHash(h); if(m&&m.concepts&&Object.keys(m.concepts).length){ model=m; startSharedView(); return; } }catch(e){ console.error('share load failed',e); } }
+  initProjects(); boot(); initGate(); initTour(); initNav(); }
+if(document.getElementById('btnShareLink')) document.getElementById('btnShareLink').onclick=shareLink;
+initShareOrApp();
 </script>
