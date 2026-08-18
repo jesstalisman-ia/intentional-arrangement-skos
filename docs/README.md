@@ -26,6 +26,7 @@ Run the same engine outside the browser — in a script, a pipeline, or an AI as
 
 ## Build & understand the tool
 
+- **[Why it works this way](why-it-works-this-way.md)** — the design decisions (browser-first, standards, SKOS-XL, collections, sharing, the license) and the reasoning behind them.
 - **[How to build a SKOS taxonomy editor](how-to-build-a-skos-taxonomy-editor.md)** — the essay on how this was made.
 - **[Code walkthrough](skos-editor-code-walkthrough.md)** — a tour of the single-file source.
 

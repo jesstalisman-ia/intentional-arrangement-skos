@@ -1,56 +1,54 @@
 # Intentional Arrangement SKOS
 
-**A small, standards-first studio for building, validating, visualizing and publishing SKOS taxonomies — the browser app, plus a REST API and an MCP server over the same engine.**
+Build a real SKOS taxonomy in your browser. It validates as you type, exports to seven formats, and sticks to the standards a cataloguer would check it against. No account, no server — one HTML file you open and use.
 
-Built for readers and clients who want to stand up a *legitimate*, downloadable SKOS vocabulary and learn how it's done. Open standards throughout (W3C SKOS, ANSI/NISO Z39.19, ISO 25964, DCMI). The app is a single self-contained HTML file — no build step, no dependencies. **Use it hosted** at **https://jesstalisman-ia.github.io/intentional-arrangement-skos/**, or download the file and open it in any browser.
+**Try it:** https://jesstalisman-ia.github.io/intentional-arrangement-skos/
+Or download `app/index.html` and open it from your desktop. That file is the app.
 
 > Informed building, not blind building. Augmentation, not automation.
 
-📍 **[Roadmap](ROADMAP.md)** — what's shipped and what's next · 💡 **[Request a feature](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)** or [report a bug](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml).
+**Curious why it's built this way?** → [Why it works this way](docs/why-it-works-this-way.md) — the thinking behind running in the browser, the license, SKOS-XL, collections, and sharing.
+
+📍 [Roadmap](ROADMAP.md) · 💡 [Request a feature](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml) or [report a bug](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
 
 ---
 
-## What's in here
+## What's in the repo
 
-| Piece | What it is |
+| Folder | What it is |
 |---|---|
-| **`app/`** | The **browser app** — one self-contained `index.html`. Download it and open it in any browser. |
-| **`api/`** | A tiny **REST API** (Flask + rdflib + pySHACL): validate a vocabulary, convert between RDF serializations. |
-| **`mcp-server/`** | An **MCP server** exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
-| **`docs/`** | **[Documentation hub](docs/)** — [install](docs/install.md), [using the editor](docs/using-the-editor.md), [workspace](docs/workspace.md), [spreadsheet import](docs/spreadsheet-import.md), [SKOS reference](docs/skos-reference.md), and API/MCP. |
+| **`app/`** | The browser app — one self-contained `index.html`. |
+| **`api/`** | A small REST API (Flask + rdflib + pySHACL) to validate a vocabulary and convert between RDF serializations. |
+| **`mcp-server/`** | An MCP server exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
+| **`docs/`** | [Documentation hub](docs/): install, using the editor, workspace, spreadsheet import, SKOS reference, and the API/MCP guides. |
 
-## The app — six components
+## What the app does
 
-1. **SKOS editor** — concepts as URIs, one `prefLabel` per language, `altLabel`/`hiddenLabel`, the full set of SKOS documentation notes (`definition`, `scopeNote`, `changeNote`, `historyNote`, `editorialNote`, `example`), `notation`, true poly‑hierarchy (`broader`/`narrower`), `related`, and the SKOS mapping properties. Readable **or opaque UUID** identifiers. Language tags follow **BCP 47 / ISO 639**. A **Collections** tab groups concepts as `skos:Collection` or ordered `skos:OrderedCollection` (exported with `skos:member` / `skos:memberList`) for alternative groupings alongside the hierarchy; collections **nest** (a collection can be a member of another), shown as a tree with concept leaves.
-2. **Business view** — a read‑friendly browse of the vocabulary (breadcrumb, definition, synonyms, broader/narrower) for the people who aren't taxonomists. **Share a read‑only link** (Export tab) that opens the whole taxonomy in this view — the data rides in the link, no server needed.
-3. **Import / Export** — export to **Turtle, RDF/XML, JSON‑LD, RDF/JSON, CSV, Excel `.xlsx`** and **Markdown**; import SKOS from RDF (Turtle, RDF/XML, JSON‑LD, RDF/JSON) or a **spreadsheet** (CSV or Excel `.xlsx`), with a **per‑import language** (defaults to your scheme's, overridable per row/cell). Excel is zipped/unzipped in the browser — no library, no upload — and spreadsheet import/export round‑trip. Building in a spreadsheet? See the [spreadsheet tutorial](docs/spreadsheet-import.md) and the [CSV template](docs/templates/skos-import-template.csv). The Markdown export format is documented in [Markdown export](docs/markdown-export.md).
-4. **qSKOS validator** — the SKOS quality checks in the edit loop: missing/duplicate preferred labels (S14), label disjointness (S13), `related`/`broader` clashes (S27), cyclic hierarchy, orphans, undocumented concepts, and more — with one‑click fixes.
-5. **Concept‑model visualizer** — a force‑directed bubble‑and‑line view of the scheme, synced to the editor.
-6. **DCMI scheme metadata** — Dublin Core metadata for the concept scheme (title, description, creator, publisher, created, issued, modified, rights, language) and identifiers.
+- **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Identifiers are readable or opaque UUIDs, your call. Language tags use BCP 47 / ISO 639.
+- **Collections.** Group concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` that keeps member order. Collections live beside the broader/narrower tree instead of inside it, and they nest — so you get a second tree with concepts at the leaves.
+- **Business view.** A reading layout for the people who aren't taxonomists: breadcrumb, definition, synonyms, narrower terms. Copy a **read-only share link** and the taxonomy rides inside the link itself. Nothing gets uploaded.
+- **Validate (qSKOS).** Quality checks run right in the edit loop — missing or duplicate preferred labels, label disjointness, related/broader conflicts, cyclic hierarchy, orphans, undocumented concepts — most with a one-click fix.
+- **Import / export.** Out to Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV, Excel `.xlsx`, and Markdown. In from any RDF format or a spreadsheet, with a language you pick per import and can override per row or per cell. Excel is zipped and unzipped in the browser, no library and no upload.
+- **Visualize.** A force-directed picture of the scheme, synced to the editor.
+- **Scheme metadata.** Dublin Core for the concept scheme, with created/issued/modified dates that fill themselves in.
+- **Publish to a server** *(optional)*. Connect an Apache Jena Fuseki dataset to store a taxonomy and share a short link that loads it back. See [hosting Fuseki](docs/hosting-fuseki.md).
 
 ## Your workspace
 
-The editor holds several taxonomies at once, saves every change automatically, and can sit behind a passcode:
-
-- **Local passcode** — an optional per‑browser lock (salted SHA‑256 in local storage) with "keep me signed in," a Lock button, and reset. It's a convenience lock, **not** encryption, and nothing is uploaded.
-- **Welcome screen** — open an existing taxonomy or start a new one; delete inline.
-- **Guided setup** — a new project starts with its Dublin Core metadata; only the **title** is required, and the created/published/modified dates auto‑fill.
-- **Autosave** — every change persists to the browser, with a **✓ Saved** indicator. Manage projects (open, rename, duplicate, delete) from the **Projects** button.
-
-Full walkthrough: [docs/workspace.md](docs/workspace.md).
+Several taxonomies at once, each autosaved to your browser with a **✓ Saved** tick. An optional per-browser passcode locks the workspace (salted SHA-256 in local storage — a convenience lock, not encryption; nothing leaves the machine). A welcome screen opens an existing taxonomy or starts a fresh one. New projects begin with guided Dublin Core setup where only the **title** is required. Open, rename, duplicate, and delete from the **Projects** button. Full walkthrough: [docs/workspace.md](docs/workspace.md).
 
 ## Three ways to use it
 
-> New here? The [install & setup guide](docs/install.md) walks through standing up the editor — hosted, local, or your own deployed copy.
+New here? [Install & setup](docs/install.md) covers the hosted app, running it locally, and deploying your own copy.
 
-### 1. The app (in your browser)
-Open `app/index.html` directly, or serve it:
+### 1. In your browser
+Open `app/index.html`, or serve it:
 ```bash
 cd app && python3 -m http.server 8080     # http://localhost:8080
 ```
-That's it — the tool is that single file. It's also [hosted on GitHub Pages](https://jesstalisman-ia.github.io/intentional-arrangement-skos/), so you can just use it there.
+It's also [live on GitHub Pages](https://jesstalisman-ia.github.io/intentional-arrangement-skos/).
 
-### 2. The REST API
+### 2. As a REST API
 ```bash
 cd api && pip install -r requirements.txt && python server.py     # http://127.0.0.1:8000
 # validate a vocabulary
@@ -60,7 +58,7 @@ curl -X POST --data-binary @vocab.ttl -H 'Content-Type: text/turtle' 'http://127
 ```
 See [`api/README.md`](api/README.md).
 
-### 3. The MCP server
+### 3. As an MCP server
 ```bash
 cd mcp-server && pip install -r requirements.txt && python skos_mcp.py
 ```
@@ -72,50 +70,40 @@ Tools: `validate_skos`, `convert_skos`, `skos_profile`. See [`mcp-server/README.
 
 ## Build it yourself
 
-The point of this repo is that you can build it too — with an AI partner, but grounded in your own patterns and the field's standards. The essays in [`docs/`](docs/) walk through the *how*: assembling the SKOS "skill" (your example files + Z39.19 + ISO 25964 + the SKOS spec), modeling from what you already have, the editor's capture/render options, the business view, qSKOS, and import/export.
+This repo is meant to be read and rebuilt, not just run. The essays in [`docs/`](docs/) show the how: assembling a SKOS "skill" from your own example files plus Z39.19, ISO 25964, and the W3C spec; modeling from what you have; the editor's capture-and-render choices; the business view; qSKOS; and the spreadsheet round-trip. [Why it works this way](docs/why-it-works-this-way.md) covers the why.
 
 ## Standards
 
 - **W3C SKOS** — the RDF vocabulary for concept schemes.
-- **ANSI/NISO Z39.19‑2005** — controlled‑vocabulary construction (term form, USE/UF, BT/NT/RT, scope notes).
-- **ISO 25964‑1/‑2** — thesauri and interoperability.
-- **DCMI / Dublin Core** — concept‑scheme metadata.
+- **ANSI/NISO Z39.19-2005** — controlled-vocabulary construction (term form, USE/UF, BT/NT/RT, scope notes).
+- **ISO 25964-1/-2** — thesauri and interoperability.
+- **DCMI / Dublin Core** — concept-scheme metadata.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 
 ## Hosting
 
-The app is **live on GitHub Pages** at https://jesstalisman-ia.github.io/intentional-arrangement-skos/ (repo **Settings → Pages → Source: GitHub Actions**). Because it's a single static file, you can host your own copy anywhere:
+The app is live on GitHub Pages (repo **Settings → Pages → Source: GitHub Actions**). Because it's one static file, you can host a copy anywhere:
 
 - **GitHub Pages** — free: fork, then **Settings → Pages → Source: GitHub Actions**. Lands at `https://<you>.github.io/intentional-arrangement-skos/`.
-- **Netlify / Cloudflare Pages** — free, with a custom domain. `netlify.toml` points the publish directory at `app/`, so it's a one-click import; then add a domain in the host's dashboard and one CNAME record at your registrar.
+- **Netlify / Cloudflare Pages** — free, with a custom domain. `netlify.toml` points the publish directory at `app/`, so it imports in one click; then add a domain and a CNAME record at your registrar.
 
-The app keeps all data in the visitor's own browser, so hosting it shares the *tool*, never anyone's vocabularies.
+All data stays in the visitor's browser, so hosting shares the tool and never anyone's vocabularies.
 
 ## Roadmap & feedback
 
-**[ROADMAP.md](ROADMAP.md)** tracks what's shipped, in progress, and planned. Recent highlights: a **Glossary** on-ramp (stage candidate terms from a paste, text/markdown/CSV/Excel file, then promote them into a taxonomy — as top concepts or under a parent you choose); a **SKOS-XL** label mode (per-label URIs and provenance); a local passcode, a welcome screen, and guided Dublin Core setup; autosave; CSV/Excel import and export; safe imports (choose a destination — a new project or merge into the current one — with a post-import health check); a **Proposals** workflow (readers propose new terms; a taxonomist reviews and approves); and this documentation hub.
-
-Ideas and bugs genuinely shape this list:
+[ROADMAP.md](ROADMAP.md) tracks what's shipped, in progress, and planned. Ideas and bug reports shape that list — several recent releases came straight from GitHub issues.
 
 - **Request a feature** → [feature request](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)
 - **Report a bug** → [bug report](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
 - **Prefer email?** → Hello@ontologypipeline.com
 
-Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that matches helps it rise.
+Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that fits helps it rise.
 
 ## License
 
-Intentional Arrangement SKOS Editor © 2026 Jessica Talisman is offered under a
-**size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
+Intentional Arrangement SKOS Editor © 2026 Jessica Talisman, under a **size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
 
-- **Organizations with fewer than 75 total employees** may use, modify, and
-  redistribute it for free under the **Apache License 2.0**, as modified by the
-  Size-Based Licensing Notice.
-- **Organizations with 75 or more total employees** must obtain a **written
-  enterprise license** from the Licensor (Hello@ontologypipeline.com) before any use.
+- **Organizations with fewer than 75 total employees** may use, modify, and redistribute it for free under the **Apache License 2.0**, as modified by the Size-Based Licensing Notice.
+- **Organizations with 75 or more total employees** must obtain a **written enterprise license** from the Licensor (Hello@ontologypipeline.com) before any use.
 
-This is a source-available license, **not** an OSI-approved open-source license.
-
-This covers the editor and the example taxonomy shipped with it. Taxonomies and
-ontologies **you** create with the tool are your own — the license does not apply
-to your work product.
+This is a source-available license, **not** an OSI-approved open-source license. It covers the editor and its example taxonomy. Taxonomies you create with the tool are your own — the license doesn't touch your work product.
