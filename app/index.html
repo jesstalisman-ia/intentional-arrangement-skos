@@ -1468,7 +1468,7 @@ function buildTriples(model, opts){
     add(cs, A, iri(NS.skos + (col.ordered ? "OrderedCollection" : "Collection")));
     (col.label || []).forEach(L => { if (L.val) add(cs, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (col.note || []).forEach(L => { if (L.val) add(cs, iri(NS.skos + "note"), lit(L.val, L.lang)); });
-    const mems = (col.members || []).filter(mid => model.concepts[mid]);
+    const mems = (col.members || []).filter(mid => model.concepts[mid] || (model.collections && model.collections[mid]));
     mems.forEach(mid => add(cs, iri(NS.skos + "member"), iri(conceptUri(model, mid))));
     if (col.ordered && mems.length){        // ordered members as an rdf:List via skos:memberList
       let head = null, prev = null;
@@ -2493,6 +2493,8 @@ function triplesToModel(triples, prefixes){
       else if (t.p.v===NS.rdf+"rest") rest[termId(t.s)] = t.o;
     }
     const walkList = head => { const out=[]; let cur=head, guard=0; while(cur && !(cur.t==="iri"&&cur.v===NS.rdf+"nil") && guard++<100000){ const k=termId(cur); const f=first[k]; if(f&&f.t==="iri") out.push(localOf(f.v)); cur=rest[k]; } return out; };
+    const collLocals = new Set(Object.keys(collTypes).map(localOf));   // members may be sub-collections
+    const isMember = m => model.concepts[m] || collLocals.has(m);
     for (const uri in collTypes){
       const cid = localOf(uri);
       const col = { id:cid, label:[], note:[], ordered:!!collTypes[uri], members:[] };
@@ -2502,9 +2504,9 @@ function triplesToModel(triples, prefixes){
         if (t.p.v===NS.rdfs+"label" && t.o.t==="lit") col.label.push({lang:t.o.lang||"", val:t.o.v});
         else if (t.p.v===P+"prefLabel" && t.o.t==="lit" && !col.label.length) col.label.push({lang:t.o.lang||"", val:t.o.v});
         else if (t.p.v===P+"note" && t.o.t==="lit") col.note.push({lang:t.o.lang||"", val:t.o.v});
-        else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=localOf(t.o.v); if(model.concepts[m] && col.members.indexOf(m)<0) col.members.push(m); }
+        else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=localOf(t.o.v); if(isMember(m) && col.members.indexOf(m)<0) col.members.push(m); }
       }
-      if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(m=>model.concepts[m]); }
+      if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
       model.collections[cid] = col;
     }
   }
@@ -4339,16 +4341,26 @@ function colls(){ return model.collections=model.collections||{}; }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
 function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) el.textContent=Object.keys(colls()).length; }
+function collMemberOf(id){ const cs=colls(); return Object.keys(cs).filter(k=>(cs[k].members||[]).indexOf(id)>=0); }
+function topCollections(){ const cs=colls(); return Object.keys(cs).filter(id=>collMemberOf(id).length===0); }
+function collContains(a, target, seen){ seen=seen||new Set(); if(seen.has(a)) return false; seen.add(a); const col=colls()[a]; if(!col) return false; for(const m of (col.members||[])){ if(m===target) return true; if(colls()[m] && collContains(m,target,seen)) return true; } return false; }
 function createCollection(ordered){ const cs=colls(); const id=newCollId(); cs[id]={id,label:[{lang:model.defaultLang,val:ordered?"New ordered collection":"New collection"}],note:[],ordered:!!ordered,members:[]}; collSel=id; save(); renderCollections(); }
 function deleteCollection(id){ if(!confirm('Delete this collection? The concepts themselves are not affected.')) return; delete colls()[id]; if(collSel===id) collSel=null; save(); renderCollections(); }
 function renderCollections(){ updateCollPill(); const cs=colls(); const list=document.getElementById('collList'); const ed=document.getElementById('collEditor'); if(!list||!ed) return;
   const ids=Object.keys(cs); list.innerHTML="";
   if(!ids.length) list.innerHTML='<div class="subtle" style="padding:14px 4px">No collections yet. Use <b>＋ Collection</b> (unordered) or <b>＋ Ordered</b> above to group concepts.</div>';
-  ids.forEach(id=>{ const col=cs[id]; const row=document.createElement('div'); row.style.cssText="padding:9px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:3px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
+  const rendered=new Set();
+  const renderNode=(id,depth)=>{ if(rendered.has(id)) return; rendered.add(id); const col=cs[id]; if(!col) return;
+    const row=document.createElement('div'); row.style.cssText="padding:8px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:7px;margin-bottom:2px;padding-left:"+(11+depth*15)+"px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
+    if(depth){ const tw=document.createElement('span'); tw.textContent="›"; tw.style.color="var(--faint)"; row.appendChild(tw); }
     const nm=document.createElement('span'); nm.textContent=collLabel(col); nm.style.cssText="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
     const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
-    row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row); });
+    row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
+    (col.members||[]).filter(m=>cs[m]).forEach(m=>renderNode(m,depth+1));  // nest sub-collections
+  };
+  topCollections().forEach(id=>renderNode(id,0));
+  ids.forEach(id=>{ if(!rendered.has(id)) renderNode(id,0); });   // any left (e.g. in a cycle)
   if(!collSel||!cs[collSel]){ ed.innerHTML='<div class="subtle" style="padding:16px">Select a collection on the left, or create one above.</div>'; return; }
   const col=cs[collSel]; ed.innerHTML="";
   const wrap=el2=>{ const d=document.createElement('div'); d.style.cssText="margin-bottom:14px"; return d; };
@@ -4365,17 +4377,25 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const mh=document.createElement('div'); mh.style.cssText="font-size:12px;font-weight:600;margin-bottom:6px"; mh.textContent="Members ("+(col.members||[]).length+")"; ed.appendChild(mh);
   const mlist=document.createElement('div'); mlist.style.cssText="margin-bottom:10px";
   (col.members||[]).forEach((mid,i)=>{ const r=document.createElement('div'); r.style.cssText="display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px";
-    const missing=!model.concepts[mid]; const nm=document.createElement('span'); nm.textContent=missing?(mid+" (missing)"):plabel(mid); nm.style.cssText="flex:1"+(missing?";color:var(--err)":""); r.appendChild(nm);
+    const isColl=!!cs[mid]; const missing=!model.concepts[mid] && !isColl;
+    const nm=document.createElement('span'); nm.style.cssText="flex:1;display:flex;align-items:center;gap:6px"+(missing?";color:var(--err)":"");
+    if(isColl){ const b=document.createElement('span'); b.textContent="▦ sub-collection"; b.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px"; const a=document.createElement('a'); a.href="#"; a.textContent=collLabel(cs[mid]); a.style.cssText="color:var(--c-validate,#0a8f74);font-weight:600;text-decoration:none"; a.onclick=(e)=>{ e.preventDefault(); collSel=mid; renderCollections(); }; nm.append(b,a); }
+    else nm.textContent=missing?(mid+" (missing)"):plabel(mid);
+    r.appendChild(nm);
     if(col.ordered){ const up=document.createElement('button'); up.className="btn sm"; up.textContent="▲"; up.disabled=i===0; up.onclick=()=>{ const m=col.members; [m[i-1],m[i]]=[m[i],m[i-1]]; save(); renderCollections(); };
       const dn=document.createElement('button'); dn.className="btn sm"; dn.textContent="▼"; dn.disabled=i===col.members.length-1; dn.onclick=()=>{ const m=col.members; [m[i+1],m[i]]=[m[i],m[i+1]]; save(); renderCollections(); }; r.append(up,dn); }
     const rm=document.createElement('button'); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from collection"; rm.onclick=()=>{ col.members.splice(i,1); save(); renderCollections(); }; r.appendChild(rm); mlist.appendChild(r); });
-  if(!(col.members||[]).length){ const e=document.createElement('div'); e.className="subtle"; e.style.cssText="font-size:12px;padding:4px 0 10px"; e.textContent="No members yet — add concepts below."; mlist.appendChild(e); }
+  if(!(col.members||[]).length){ const e=document.createElement('div'); e.className="subtle"; e.style.cssText="font-size:12px;padding:4px 0 10px"; e.textContent="No members yet — add concepts or sub-collections below."; mlist.appendChild(e); }
   ed.appendChild(mlist);
-  // add member
+  // add member — concepts and other collections (nesting), excluding cycles
   const addW=document.createElement('div'); addW.style.cssText="display:flex;gap:6px;align-items:center";
   const sel=document.createElement('select'); sel.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px";
-  const avail=(model.order&&model.order.length?model.order:Object.keys(model.concepts)).filter(id=>(col.members||[]).indexOf(id)<0);
-  sel.innerHTML='<option value="">Add a concept…</option>'+avail.map(id=>'<option value="'+id+'">'+escapeHtml(plabel(id))+'</option>').join("");
+  const availC=(model.order&&model.order.length?model.order:Object.keys(model.concepts)).filter(id=>(col.members||[]).indexOf(id)<0);
+  const availColl=Object.keys(cs).filter(k=>k!==col.id && (col.members||[]).indexOf(k)<0 && !collContains(k, col.id));
+  let html='<option value="">Add a member…</option>';
+  if(availColl.length) html+='<optgroup label="Collections (nest)">'+availColl.map(k=>'<option value="'+k+'">▦ '+escapeHtml(collLabel(cs[k]))+'</option>').join("")+'</optgroup>';
+  html+='<optgroup label="Concepts">'+availC.map(id=>'<option value="'+id+'">'+escapeHtml(plabel(id))+'</option>').join("")+'</optgroup>';
+  sel.innerHTML=html;
   sel.onchange=()=>{ if(sel.value){ (col.members=col.members||[]).push(sel.value); save(); renderCollections(); } };
   addW.appendChild(sel); ed.appendChild(addW);
 }
