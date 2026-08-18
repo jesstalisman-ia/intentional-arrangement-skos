@@ -4357,7 +4357,17 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
     const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
     row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
-    (col.members||[]).filter(m=>cs[m]).forEach(m=>renderNode(m,depth+1));  // nest sub-collections
+    // children in member order: sub-collections nest, concepts are leaves
+    (col.members||[]).forEach(m=>{
+      if(cs[m]){ renderNode(m,depth+1); return; }
+      const miss=!model.concepts[m];
+      const leaf=document.createElement('div'); leaf.style.cssText="padding:4px 11px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:"+(miss?"default":"pointer")+";padding-left:"+(13+(depth+1)*15)+"px;color:"+(miss?"var(--err)":"var(--muted)");
+      const dot=document.createElement('span'); dot.textContent="•"; dot.style.color="var(--faint)";
+      const nm2=document.createElement('span'); nm2.textContent=miss?(m+" (missing)"):plabel(m); nm2.style.cssText="overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      leaf.append(dot,nm2);
+      if(!miss) leaf.onclick=()=>{ selected=m; switchTab('build'); if(typeof renderTree==='function')renderTree(); if(typeof renderEditor==='function')renderEditor(); };
+      list.appendChild(leaf);
+    });
   };
   topCollections().forEach(id=>renderNode(id,0));
   ids.forEach(id=>{ if(!rendered.has(id)) renderNode(id,0); });   // any left (e.g. in a cycle)
