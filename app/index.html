@@ -1040,6 +1040,12 @@
       <p class="subtle" style="margin-top:0">Choose a file or paste below, then <b>Import</b>. Loads a <b>SKOS taxonomy</b> from RDF (Turtle, RDF/XML, JSON-LD, RDF/JSON) or a <b>spreadsheet</b> (CSV or Excel .xlsx). SKOS-XL labels resolve to plain labels.</p>
       <input type="file" id="importFile" accept=".ttl,.rdf,.xml,.jsonld,.json,.nt,.n3,.csv,.xlsx,.txt" style="margin-bottom:8px">
       <p class="subtle" style="margin:0 0 10px">Building in a spreadsheet? <a href="#" id="importTemplate">Download the CSV template</a> — one row per concept; the <code>broader</code> column names the parent.</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+        <label style="font-size:13px">Spreadsheet label language:</label>
+        <input id="importLang" list="langList" style="width:120px" placeholder="en" spellcheck="false">
+        <datalist id="langList"><option value="en">English</option><option value="nl">Nederlands</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option><option value="pt">Português</option><option value="sv">Svenska</option><option value="nb">Norsk bokmål</option><option value="da">Dansk</option><option value="fi">Suomi</option><option value="pl">Polski</option><option value="cs">Čeština</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ar">العربية</option></datalist>
+        <span class="subtle" style="font-size:11px">Applies to CSV/Excel labels with no tag. <b>BCP&nbsp;47 / ISO&nbsp;639</b> (e.g. <code>nl</code>, <code>nl-BE</code>). Tag any single cell as <code>term@nl</code>, or add a <code>lang</code> column per row.</span>
+      </div>
       <textarea id="importText" placeholder="Paste Turtle / RDF-XML / JSON-LD / RDF-JSON, or CSV (prefLabel,broader,altLabel,definition …)"></textarea>
       <fieldset style="border:1px solid var(--line,#e3e6ea);border-radius:10px;padding:10px 12px;margin:12px 0 0">
         <legend style="font-size:12.5px;font-weight:600;color:var(--muted,#4b5563);padding:0 6px">Where should it go?</legend>
@@ -1594,7 +1600,7 @@ function looksLikeCsv(text){
   const first = (String(text).split(/\r?\n/)[0] || "").toLowerCase();
   return /(^|[,;\t])\s*"?\s*(id|uri|preflabel|pref_label|pref label|label|term|name|broader|parent)\s*"?\s*([,;\t]|$)/.test(first);
 }
-function gridToModel(grid){
+function gridToModel(grid, opts){
   if (!grid || !grid.length) throw new Error("empty spreadsheet");
   const norm = h => String(h).trim().toLowerCase().replace(/[\s_]+/g, "");
   const headers = grid[0].map(norm);
@@ -1611,7 +1617,8 @@ function gridToModel(grid){
     related:"related", rt:"related",
     exactmatch:"exactMatch", closematch:"closeMatch", broadmatch:"broadMatch",
     narrowmatch:"narrowMatch", relatedmatch:"relatedMatch",
-    topconcept:"top", top:"top", istop:"top"
+    topconcept:"top", top:"top", istop:"top",
+    lang:"lang", language:"lang", languagetag:"lang", "@lang":"lang", locale:"lang"
   };
   const colOf = {};
   headers.forEach((h, i) => { const k = alias[h]; if (k !== undefined && colOf[k] === undefined) colOf[k] = i; });
@@ -1620,11 +1627,17 @@ function gridToModel(grid){
   const model = newModel();
   model.concepts = {}; model.order = [];
   model.scheme.title = "";   // don't inherit the "My Taxonomy" default — let the importer name it
-  const dl = model.defaultLang || "en";
+  // Default language for untagged labels: caller's choice (usually the current
+  // scheme's language) → the scheme's own lang → "en". SKOS labels are language-
+  // tagged per BCP 47 (ISO 639 language + optional ISO 3166 region / ISO 15924 script).
+  const dl = (opts && opts.defaultLang && String(opts.defaultLang).trim()) || model.defaultLang || "en";
+  model.defaultLang = dl; if (model.scheme) model.scheme.lang = dl;
   const cell = (r, k) => colOf[k] === undefined ? "" : (r[colOf[k]] !== undefined ? String(r[colOf[k]]) : "");
   const splitText = v => String(v || "").split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean);
   const splitRef  = v => String(v || "").split(/\s*[|;]\s*|\r?\n/).map(s => s.trim()).filter(Boolean);
-  const toLit = v => { const m = /^(.*?)@([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)$/.exec(v); return m ? { val: m[1].trim(), lang: m[2] } : { val: v, lang: dl }; };
+  // A cell may carry its own BCP-47 tag ("term@nl", "woord@nl-BE", "名@zh-Hans"); otherwise
+  // it takes the row's lang column, else the import default.
+  const toLit = (v, lg) => { const m = /^(.*?)@([A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*)$/.exec(v); return m ? { val: m[1].trim(), lang: m[2] } : { val: v, lang: (lg || dl) }; };
   const slug = s => (String(s||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)) || "concept";
   const labelToId = {};
   const pending = [];
@@ -1637,11 +1650,12 @@ function gridToModel(grid){
     if (!rawId) rawId = slug(prefVals[0] || "concept");
     const id = uniqueLocalIn(model.concepts, rawId);
     const cpt = emptyConcept(id);
-    prefVals.forEach(v => cpt.pref.push(toLit(v)));
-    splitText(cell(r, "alt")).forEach(v => cpt.alt.push(toLit(v)));
-    splitText(cell(r, "hidden")).forEach(v => cpt.hidden.push(toLit(v)));
-    splitText(cell(r, "definition")).forEach(v => cpt.definition.push(toLit(v)));
-    splitText(cell(r, "scopeNote")).forEach(v => cpt.scopeNote.push(toLit(v)));
+    const rowLang = cell(r, "lang").trim() || dl;   // per-row language override (else the import default)
+    prefVals.forEach(v => cpt.pref.push(toLit(v, rowLang)));
+    splitText(cell(r, "alt")).forEach(v => cpt.alt.push(toLit(v, rowLang)));
+    splitText(cell(r, "hidden")).forEach(v => cpt.hidden.push(toLit(v, rowLang)));
+    splitText(cell(r, "definition")).forEach(v => cpt.definition.push(toLit(v, rowLang)));
+    splitText(cell(r, "scopeNote")).forEach(v => cpt.scopeNote.push(toLit(v, rowLang)));
     const nota = cell(r, "notation").trim(); if (nota) cpt.notation = nota;
     ["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].forEach(k => splitRef(cell(r, k)).forEach(v => cpt[k].push(v)));
     const topv = cell(r, "top").trim().toLowerCase(); if (["yes","y","true","1","x","top"].includes(topv)) cpt.top = true;
@@ -1669,7 +1683,7 @@ function gridToModel(grid){
   model._importStubs = stubs;
   return model;
 }
-function csvToModel(text){ return gridToModel(parseCsvText(text)); }
+function csvToModel(text, opts){ return gridToModel(parseCsvText(text), opts); }
 // ---- Excel .xlsx: unzip with native DecompressionStream, read the first sheet ----
 async function _inflateRaw(bytes){
   if (typeof DecompressionStream === "undefined")
@@ -1742,12 +1756,12 @@ async function parseXlsx(arrayBuffer){
 // A ready-to-fill CSV template (header + example rows showing hierarchy, a
 // synonym, and an external mapping).
 function csvTemplate(){
-  const cols = ["id","prefLabel","altLabel","hiddenLabel","definition","scopeNote","notation","broader","related","exactMatch","topConcept"];
+  const cols = ["id","prefLabel","altLabel","hiddenLabel","definition","scopeNote","notation","broader","related","exactMatch","topConcept","lang"];
   const rows = [
-    ["","Animals","","","Living creatures in this collection.","","","","","","yes"],
-    ["","Dog","Canine | Hound","","A domesticated canine.","Use for pet dogs, not wild canids.","","Animals","Cat","http://www.wikidata.org/entity/Q144",""],
-    ["","Cat","Feline","","A domesticated feline.","","","Animals","Dog","",""],
-    ["","Puppy","","","A young dog.","","","Dog","","",""]
+    ["","Animals","","","Living creatures in this collection.","","","","","","yes",""],
+    ["","Dog","Canine | Hound","","A domesticated canine.","Use for pet dogs, not wild canids.","","Animals","Cat","http://www.wikidata.org/entity/Q144","",""],
+    ["","Cat","Feline","","A domesticated feline.","","","Animals","Dog","","",""],
+    ["","Puppy","","","A young dog.","","","Dog","","","",""]
   ];
   return [cols.join(",")].concat(rows.map(r => r.map(csvCell).join(","))).join("\r\n") + "\r\n";
 }
@@ -4016,6 +4030,7 @@ $('#btnImport').onclick=()=>{
   const cur=(loadProjects()[currentPid]||{}).name||"current project";
   const el=$('#impCurName'); if(el) el.textContent="“"+cur+"”";
   const rn=document.querySelector('input[name="impDest"][value="new"]'); if(rn) rn.checked=true;
+  const li=$('#importLang'); if(li) li.value = (model.defaultLang || (model.scheme&&model.scheme.lang) || 'en');   // default to the current scheme's language
   $('#importModal').classList.add('show'); $('#importText').focus();
 };
 $('#importClose').onclick=$('#importCancel').onclick=()=>$('#importModal').classList.remove('show');
@@ -4070,8 +4085,9 @@ $('#importGo').onclick=()=>{
   const dest=(document.querySelector('input[name="impDest"]:checked')||{}).value||"new";
   try{
     let m, onto=null, nC=0, nK=0, nP=0, isCsv=false;
+    const impLang = (($('#importLang')&&$('#importLang').value.trim()) || model.defaultLang || 'en');
     if(Core.looksLikeCsv(txt)){
-      isCsv=true; m=Core.csvToModel(txt); nC=m.order.length;
+      isCsv=true; m=Core.csvToModel(txt, {defaultLang: impLang}); nC=m.order.length;
       if(!nC){ toast("No rows found in this spreadsheet"); return; }
     } else {
       const { triples, prefixes } = Core.parseTriples(txt);
