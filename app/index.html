@@ -926,6 +926,20 @@
         <div class="subtle" id="shareLinkNote" style="font-size:11px;margin-top:5px"></div>
       </div>
     </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-weight:700">Publish to a server <span class="subtle" style="font-weight:400">(Apache Jena Fuseki)</span></div>
+          <div class="subtle" style="font-size:12px;margin-top:2px">Store this taxonomy in a triplestore and get a <b>short link</b> that loads it from the server — no size limit, SPARQL-queryable. Needs a Fuseki endpoint (<a href="#" id="connOpen2">connect one</a>).</div>
+        </div>
+        <button class="btn" id="btnConnections" title="Configure the server connection">⚙ Connections…</button>
+        <button class="btn primary" id="btnPublish" title="Publish this taxonomy to the connected server">⤴ Publish to server</button>
+      </div>
+      <div id="publishWrap" style="display:none;margin-top:10px">
+        <input id="publishBox" readonly onclick="this.select()" style="width:100%;font-family:var(--mono);font-size:11px;padding:8px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box">
+        <div class="subtle" id="publishNote" style="font-size:11px;margin-top:5px"></div>
+      </div>
+    </div>
     <div class="card">
       <div class="exp-opts">
         <div class="optset"><span class="h">Format</span><div class="radios" id="expFormat">
@@ -1072,6 +1086,23 @@
     <div class="modal-f">
       <button class="btn" id="importCancel">Cancel</button>
       <button class="btn primary" id="importGo">Import</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="connModal">
+  <div class="modal">
+    <div class="modal-h">Server connection <button class="btn sm" id="connClose" style="margin-left:auto">✕</button></div>
+    <div class="modal-b">
+      <p class="subtle" style="margin-top:0">Connect an <b>Apache Jena Fuseki</b> dataset to publish taxonomies server-side and share short links. Everything else keeps working offline without this.</p>
+      <div class="fld"><label>Fuseki dataset URL</label>
+        <input id="connUrl" type="url" placeholder="https://your-host/skos" spellcheck="false" style="width:100%">
+        <div class="subtle" style="font-size:11px;margin-top:4px">The dataset base — the app uses its Graph Store Protocol (<code>…/data</code>) and SPARQL (<code>…/sparql</code>). CORS must allow this site's origin.</div>
+      </div>
+      <div class="rowline" style="margin-top:10px"><button class="btn sm" id="connTest">Test connection</button><span id="connStatus" class="subtle" style="margin-left:8px;font-size:12px"></span></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn" id="connClear">Disconnect</button>
+      <button class="btn primary" id="connSave">Save</button>
     </div>
   </div>
 </div>
@@ -6105,7 +6136,47 @@ function startSharedView(){ SHARED=true; model.proposals=model.proposals||[]; mo
   try{ switchTab('browse'); }catch(e){}
   shareBanner();
 }
+// ================= Server backend — Apache Jena Fuseki (Graph Store Protocol) =================
+// Optional. Publish a taxonomy to a named graph and share a short ?g= link that loads it
+// back from the server. The app stays fully usable offline without any of this.
+const GRAPH_NS = "https://iaskos.app/g/";
+function fusekiBase(){ try{ return (localStorage.getItem('iaskos.fuseki')||'').trim().replace(/\/+$/,''); }catch(e){ return ''; } }
+function setFusekiBase(u){ try{ if(u) localStorage.setItem('iaskos.fuseki', u.trim().replace(/\/+$/,'')); else localStorage.removeItem('iaskos.fuseki'); }catch(e){} }
+function gspUrl(base, graphUri){ return base + '/data?graph=' + encodeURIComponent(graphUri); }
+async function fusekiPing(base){ const r = await fetch(base + '/sparql?query=' + encodeURIComponent('ASK{}'), { headers:{ 'Accept':'application/sparql-results+json' } }); return r.ok; }
+async function publishToServer(){
+  const base = fusekiBase(); if(!base){ openConn(); return; }
+  const wrap=document.getElementById('publishWrap'), box=document.getElementById('publishBox'), note=document.getElementById('publishNote');
+  const ttl = Core.toTurtle(model, { dc:true });
+  const slug = ((model.scheme&&model.scheme.title)||'taxonomy').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'taxonomy';
+  const gid = slug + '-' + Math.random().toString(36).slice(2,8);
+  const graphUri = GRAPH_NS + gid;
+  if(wrap) wrap.style.display=''; if(note) note.textContent='Publishing…';
+  try{
+    const r = await fetch(gspUrl(base, graphUri), { method:'PUT', headers:{ 'Content-Type':'text/turtle' }, body: ttl });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const link = location.origin + location.pathname + '?g=' + encodeURIComponent(gid) + '&s=' + encodeURIComponent(base);
+    if(box) box.value = link;
+    let copied=false; try{ await navigator.clipboard.writeText(link); copied=true; }catch(e){}
+    if(note) note.innerHTML = (copied?'✓ Published and link copied. ':'✓ Published — select the link above to copy. ') + 'Anyone who can reach this server can open it read-only.';
+    toast('Published to server');
+  }catch(e){
+    if(note) note.innerHTML = '<span style="color:var(--err)">Publish failed: ' + escapeHtml(e.message) + '. Check the endpoint and that its CORS allows this origin (Connections).</span>';
+    toast('Publish failed');
+  }
+}
+function openConn(){ const i=document.getElementById('connUrl'); if(i) i.value=fusekiBase(); const st=document.getElementById('connStatus'); if(st) st.textContent=''; document.getElementById('connModal').classList.add('show'); setTimeout(()=>{ try{ i.focus(); }catch(e){} },50); }
+function closeConn(){ document.getElementById('connModal').classList.remove('show'); }
+if(document.getElementById('btnConnections')) document.getElementById('btnConnections').onclick=openConn;
+if(document.getElementById('connOpen2')) document.getElementById('connOpen2').onclick=e=>{ e.preventDefault(); openConn(); };
+if(document.getElementById('connClose')) document.getElementById('connClose').onclick=closeConn;
+if(document.getElementById('connSave')) document.getElementById('connSave').onclick=()=>{ setFusekiBase(document.getElementById('connUrl').value); closeConn(); toast(fusekiBase()?'Server connected':'Server disconnected'); };
+if(document.getElementById('connClear')) document.getElementById('connClear').onclick=()=>{ setFusekiBase(''); const i=document.getElementById('connUrl'); if(i) i.value=''; const st=document.getElementById('connStatus'); if(st) st.textContent='Disconnected.'; toast('Server disconnected'); };
+if(document.getElementById('connTest')) document.getElementById('connTest').onclick=async ()=>{ const st=document.getElementById('connStatus'); const base=(document.getElementById('connUrl').value||'').trim().replace(/\/+$/,''); if(!base){ st.textContent='Enter a URL first.'; return; } st.textContent='Testing…'; try{ const ok=await fusekiPing(base); st.innerHTML= ok? '<span style="color:var(--ok,#0a8f74)">✓ Reachable</span>' : '<span style="color:var(--err)">Responded, but not a SPARQL endpoint</span>'; }catch(e){ st.innerHTML='<span style="color:var(--err)">✕ Unreachable (check URL + CORS)</span>'; } };
+if(document.getElementById('btnPublish')) document.getElementById('btnPublish').onclick=publishToServer;
+
 async function initShareOrApp(){ const h=location.hash||""; if(h.indexOf('#t=')===0||h.indexOf('#tu=')===0){ try{ const m=await decodeShareHash(h); if(m&&m.concepts&&Object.keys(m.concepts).length){ model=m; startSharedView(); return; } }catch(e){ console.error('share load failed',e); } }
+  try{ const sp=new URLSearchParams(location.search); if(sp.get('g')){ const gid=sp.get('g'); const base=((sp.get('s')||fusekiBase())||'').trim().replace(/\/+$/,''); if(base){ const r=await fetch(gspUrl(base, GRAPH_NS+gid), { headers:{ 'Accept':'text/turtle' } }); if(r.ok){ const ttl=await r.text(); const m=Core.parseTurtle(ttl); if(m&&m.concepts&&Object.keys(m.concepts).length){ model=m; startSharedView(); return; } } } } }catch(e){ console.error('server load failed', e); }
   initProjects(); boot(); initGate(); initTour(); initNav(); }
 if(document.getElementById('btnShareLink')) document.getElementById('btnShareLink').onclick=shareLink;
 initShareOrApp();
