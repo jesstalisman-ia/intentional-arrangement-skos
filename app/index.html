@@ -1297,7 +1297,7 @@ function termId(x){
 
 // ---- model helpers ----
 const LABEL_FIELDS = ["pref", "alt", "hidden"];
-const NOTE_FIELDS = ["definition", "scopeNote"];
+const NOTE_FIELDS = ["definition", "scopeNote", "changeNote", "historyNote", "editorialNote", "example"];
 const MAP_FIELDS = ["exactMatch", "closeMatch", "broadMatch", "narrowMatch", "relatedMatch"];
 const XL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 const SKOS_LABEL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
@@ -1306,7 +1306,8 @@ function conceptUri(model, id){ return model.base + id; }
 
 function emptyConcept(id){
   return { id, notation: "", pref: [], alt: [], hidden: [],
-    definition: [], scopeNote: [], broader: [], related: [],
+    definition: [], scopeNote: [], changeNote: [], historyNote: [], editorialNote: [], example: [],
+    broader: [], related: [],
     exactMatch: [], closeMatch: [], broadMatch: [], narrowMatch: [], relatedMatch: [],
     artifacts: [], history: [], top: false };
 }
@@ -1393,7 +1394,7 @@ function buildTriples(model, opts){
       (c[m] || []).forEach(u => { if (u) add(s, iri(NS.skos + m), iri(u)); });
     // linked artifacts (documents, images, spreadsheets, wikis) as rdfs:seeAlso
     (c.artifacts || []).forEach(a => { if (a && a.url) add(s, iri(NS.rdfs + "seeAlso"), iri(a.url)); });
-    // provenance timestamps derived from the term's change history
+    // provenance timestamps + the recorded edit history, exported as skos:changeNote
     if (opts.dc && c.history && c.history.length){
       const times = c.history.map(h => h.ts).filter(Boolean);
       if (times.length){
@@ -1401,6 +1402,14 @@ function buildTriples(model, opts){
         if (ci) add(s, iri(NS.dcterms + "created"), lit(ci, "", NS.xsd + "dateTime"));
         if (mi) add(s, iri(NS.dcterms + "modified"), lit(mi, "", NS.xsd + "dateTime"));
       }
+      // each history entry → one skos:changeNote (date — what changed; by whom)
+      c.history.forEach(h => {
+        const changes = (h.changes || []).filter(Boolean).join("; ");
+        if (!changes) return;
+        const when = h.ts ? (isoDateTime(h.ts) || "").slice(0, 10) : "";
+        const who = h.author ? " (by " + h.author + ")" : "";
+        add(s, iri(NS.skos + "changeNote"), lit((when ? when + " — " : "") + changes + who, ""));
+      });
     }
   }
   return { triples: T, schemeUri };
@@ -1546,7 +1555,8 @@ function toJsonLd(model, opts){
 // ============================================================================
 function csvCell(s){ s = String(s == null ? "" : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function modelToGrid(model){
-  const cols = ["id","uri","prefLabel","altLabel","hiddenLabel","definition","scopeNote","notation",
+  const cols = ["id","uri","prefLabel","altLabel","hiddenLabel","definition","scopeNote",
+    "changeNote","historyNote","editorialNote","example","notation",
     "broader","related","exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch","artifacts","topConcept"];
   const fmt = arr => (arr || []).map(l => l.lang ? l.val + "@" + l.lang : l.val).join(" | ");
   const fmtArt = arr => (arr || []).map(a => (a.title || "(untitled)") + " [" + (a.type || "link") + "] " + (a.url || "")).join(" | ");
@@ -1555,6 +1565,7 @@ function modelToGrid(model){
   for (const id of ids){
     const c = model.concepts[id]; if (!c) continue;
     grid.push([ id, model.base + id, fmt(c.pref), fmt(c.alt), fmt(c.hidden), fmt(c.definition), fmt(c.scopeNote),
+      fmt(c.changeNote), fmt(c.historyNote), fmt(c.editorialNote), fmt(c.example),
       c.notation || "", (c.broader || []).join(" | "), (c.related || []).join(" | "),
       (c.exactMatch || []).join(" | "), (c.closeMatch || []).join(" | "), (c.broadMatch || []).join(" | "),
       (c.narrowMatch || []).join(" | "), (c.relatedMatch || []).join(" | "), fmtArt(c.artifacts), c.top ? "yes" : "" ]);
@@ -1611,6 +1622,7 @@ function gridToModel(grid, opts){
     hiddenlabel:"hidden", hidden:"hidden",
     definition:"definition", def:"definition", description:"definition",
     scopenote:"scopeNote", scope:"scopeNote", note:"scopeNote",
+    changenote:"changeNote", historynote:"historyNote", editorialnote:"editorialNote", example:"example", examples:"example",
     notation:"notation", code:"notation",
     broader:"broader", parent:"broader", broaderterm:"broader", bt:"broader",
     narrower:"narrower", nt:"narrower",
@@ -1656,6 +1668,10 @@ function gridToModel(grid, opts){
     splitText(cell(r, "hidden")).forEach(v => cpt.hidden.push(toLit(v, rowLang)));
     splitText(cell(r, "definition")).forEach(v => cpt.definition.push(toLit(v, rowLang)));
     splitText(cell(r, "scopeNote")).forEach(v => cpt.scopeNote.push(toLit(v, rowLang)));
+    splitText(cell(r, "changeNote")).forEach(v => cpt.changeNote.push(toLit(v, rowLang)));
+    splitText(cell(r, "historyNote")).forEach(v => cpt.historyNote.push(toLit(v, rowLang)));
+    splitText(cell(r, "editorialNote")).forEach(v => cpt.editorialNote.push(toLit(v, rowLang)));
+    splitText(cell(r, "example")).forEach(v => cpt.example.push(toLit(v, rowLang)));
     const nota = cell(r, "notation").trim(); if (nota) cpt.notation = nota;
     ["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].forEach(k => splitRef(cell(r, k)).forEach(v => cpt[k].push(v)));
     const topv = cell(r, "top").trim().toLowerCase(); if (["yes","y","true","1","x","top"].includes(topv)) cpt.top = true;
@@ -2361,6 +2377,10 @@ function triplesToModel(triples, prefixes){
     else if (pv === P + "hiddenLabel") addLabel("hidden");
     else if (pv === P + "definition") addLabel("definition");
     else if (pv === P + "scopeNote") addLabel("scopeNote");
+    else if (pv === P + "changeNote") addLabel("changeNote");
+    else if (pv === P + "historyNote") addLabel("historyNote");
+    else if (pv === P + "editorialNote") addLabel("editorialNote");
+    else if (pv === P + "example") addLabel("example");
     else if (pv === P + "notation"){ const c = ensure(s); if (c) c.notation = o.v; }
     else if (pv === P + "broader" && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const pid = localOf(o.v); if (!c.broader.includes(pid)) c.broader.push(pid); } }
     else if (pv === P + "narrower" && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const pid = localOf(s); if (!child.broader.includes(pid)) child.broader.push(pid); } }
@@ -3130,6 +3150,10 @@ function renderEditor(){
   host.appendChild(labelGroup("Hidden labels", c, "hidden", false));
   host.appendChild(noteGroup("Definition", c, "definition"));
   host.appendChild(noteGroup("Scope notes", c, "scopeNote"));
+  host.appendChild(noteGroup("Change notes", c, "changeNote"));
+  host.appendChild(noteGroup("History notes", c, "historyNote"));
+  host.appendChild(noteGroup("Editorial notes", c, "editorialNote"));
+  host.appendChild(noteGroup("Examples", c, "example"));
   host.appendChild(relGroup("Broader (parents)", c, "broader"));
   host.appendChild(relGroup("Related", c, "related"));
   host.appendChild(mapGroup(c));
@@ -3194,7 +3218,7 @@ function labelGroup(title, c, field, isPref){
   return g;
 }
 function noteGroup(title, c, field){
-  const g=groupShell(title, ()=>{ c[field].push({lang:model.defaultLang,val:""}); renderEditor(); focusLast(field); });
+  const g=groupShell(title, ()=>{ (c[field]=c[field]||[]).push({lang:model.defaultLang,val:""}); renderEditor(); focusLast(field); });
   (c[field]||[]).forEach((L,i)=>{
     const row=document.createElement("div"); row.className="rowline";
     const lang=document.createElement("input"); lang.className="lang"; lang.value=L.lang||""; lang.placeholder="lang";
