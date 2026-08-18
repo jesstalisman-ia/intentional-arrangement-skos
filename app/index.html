@@ -2936,6 +2936,17 @@ function genUuid32(){
   return u;
 }
 function uniqueUuid(){ let id=genUuid32(); while(model.concepts[id]) id=genUuid32(); return id; }
+// SKOS-XL: each skosxl:Label is its own resource, so give it a stable identifier the
+// moment it's created (stored on the label) — a UUID when the scheme uses UUID ids, else
+// a readable, stable one. This survives reordering/edits, unlike an export-time pattern.
+function collectLabelUris(){ const s=new Set(); for(const id in model.concepts){ const c=model.concepts[id]; for(const k of ["pref","alt","hidden"]){ (c[k]||[]).forEach(L=>{ if(L.uri) s.add(L.uri); }); } } return s; }
+function mintLabelUri(cid, kind, used){ used=used||collectLabelUris();
+  if((model.idStyle||"text")==="uuid"){ let u; do{ u=model.base+genUuid32(); }while(used.has(u)||model.concepts[u.slice(model.base.length)]); used.add(u); return u; }
+  const stem=model.base+cid+"-xl-"+kind; let u=stem+"-1", n=1; while(used.has(u)){ u=stem+"-"+(++n); } used.add(u); return u;
+}
+function ensureXlUris(){ if(!model.xlLabels) return false; const used=collectLabelUris(); let changed=false;
+  for(const id in model.concepts){ const c=model.concepts[id]; for(const k of ["pref","alt","hidden"]){ (c[k]||[]).forEach(L=>{ if(L.val && !L.uri){ L.uri=mintLabelUri(id,k,used); changed=true; } }); } }
+  return changed; }
 // A readable PascalCase identifier from a label ("Month journal" -> "MonthJournal").
 function slugId(s){ const parts=String(s||"").trim().split(/[^A-Za-z0-9]+/).filter(Boolean); return parts.map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(""); }
 function uniqueLocalExcept(base, keepId){ base=base||"Concept"; let id=base, n=1; while(model.concepts[id] && id!==keepId) id=base+(++n); return id; }
@@ -3296,7 +3307,7 @@ function groupShell(title, onAdd){
   g.appendChild(l); return g;
 }
 function labelGroup(title, c, field, isPref){
-  const g=groupShell(title, ()=>{ c[field].push({lang:model.defaultLang,val:""}); renderEditor(); focusLast(field); });
+  const g=groupShell(title, ()=>{ const L={lang:model.defaultLang,val:""}; if(model.xlLabels) L.uri=mintLabelUri(c.id, field); c[field].push(L); renderEditor(); focusLast(field); });
   (c[field]||[]).forEach((L,i)=>{
     const row=document.createElement("div"); row.className="rowline";
     const lang=document.createElement("input"); lang.className="lang"; lang.value=L.lang||""; lang.placeholder="lang"; lang.title="language tag";
@@ -3311,9 +3322,9 @@ function labelGroup(title, c, field, isPref){
     // SKOS-XL: each label carries its own URI + optional source/provenance
     if(model.xlLabels){
       const meta=document.createElement("div"); meta.className="lbl-xl";
-      const uri=document.createElement("input"); uri.className="xluri"; uri.value=L.uri||""; uri.title="skosxl:Label URI (leave blank to auto-generate on export)";
+      const uri=document.createElement("input"); uri.className="xluri"; uri.value=L.uri||""; uri.title="skosxl:Label identifier — assigned automatically ("+((model.idStyle||"text")==="uuid"?"UUID":"stable")+"). Edit to override; clear to regenerate.";
       uri.placeholder=Core.xlLabelUri(model, selected, field, i+1, L.lang);
-      uri.onchange=()=>{ const v=uri.value.trim(); L.uri=v||undefined; save(); };
+      uri.onchange=()=>{ const v=uri.value.trim(); L.uri = v || (model.xlLabels && L.val ? mintLabelUri(selected, field) : undefined); save(); renderEditor(); };
       const src=document.createElement("input"); src.className="xlsrc"; src.value=L.source||""; src.title="dcterms:source for this label (provenance)"; src.placeholder="source / provenance (optional)";
       src.oninput=()=>{ L.source=src.value||undefined; save(); };
       meta.append(uri,src); g.appendChild(meta);
@@ -3407,7 +3418,7 @@ function renderScheme(){
   updateXlUi();
 }
 function setLabelStyle(v){
-  model.xlLabels=(v==="xl"); save(); updateXlUi();
+  model.xlLabels=(v==="xl"); if(model.xlLabels) ensureXlUris(); save(); updateXlUi(); renderEditor();
   // make export match the build choice: XL mode → SKOS-XL + plain (safe for all consumers)
   const want=model.xlLabels?"xlplain":"plain"; const er=$(`input[name=lbl][value="${want}"]`); if(er){ er.checked=true; if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
   const sq=$('#sqXl'); if(sq) sq.checked=model.xlLabels;
@@ -5685,7 +5696,7 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
+function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
   browseSel=null; browseFilter=""; if($('#browseSearch')) $('#browseSearch').value="";
   if(valAuto) runValidation(); else updateBadgeQuick();
   if($('.panel[data-panel=export]').classList.contains('active')) renderExport();
