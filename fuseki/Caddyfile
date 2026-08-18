@@ -1,0 +1,20 @@
+# Caddy in front of Fuseki: proxy every request to Fuseki and add CORS headers
+# so the browser app (a different origin) is allowed to call it.
+:3030 {
+	# Preflight
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, PUT, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Accept, Authorization"
+		header Access-Control-Max-Age "86400"
+		respond 204
+	}
+
+	# Actual requests
+	header Access-Control-Allow-Origin "*"
+	header Access-Control-Allow-Methods "GET, POST, PUT, OPTIONS"
+	header Access-Control-Allow-Headers "Content-Type, Accept, Authorization"
+
+	reverse_proxy fuseki:3030
+}

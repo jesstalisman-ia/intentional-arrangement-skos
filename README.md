@@ -20,7 +20,10 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 | **`app/`** | The browser app — one self-contained `index.html`. |
 | **`api/`** | A small REST API (Flask + rdflib + pySHACL) to validate a vocabulary and convert between RDF serializations. |
 | **`mcp-server/`** | An MCP server exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
-| **`docs/`** | [Documentation hub](docs/): install, using the editor, workspace, spreadsheet import, SKOS reference, and the API/MCP guides. |
+| **`fuseki/`** | A **ready-to-run Apache Jena Fuseki** setup (Docker Compose + Caddy for CORS) — `docker compose up -d` and connect the app to it. See [`fuseki/README.md`](fuseki/README.md). |
+| **`docs/`** | [Documentation hub](docs/): install, using the editor, workspace, spreadsheet import, SKOS reference, [hosting Fuseki](docs/hosting-fuseki.md), and the API/MCP guides. |
+
+> **Where's Jena/Fuseki?** Fuseki is a separate Java server, so its *source* isn't vendored here — but `fuseki/` ships a one-command Docker setup that runs it with CORS ready, and the **publish-to-server** feature in `app/index.html` talks to it over the SPARQL Graph Store Protocol. Publishing is optional; the app works fully without it.
 
 ## What the app does
 
