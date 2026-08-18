@@ -93,6 +93,7 @@
   #tabs .tab[data-tab=browse]{--c:var(--c-browse)} #tabs .tab[data-tab=proposals]{--c:var(--c-proposals)}
   #tabs .tab[data-tab=graph]{--c:var(--c-graph)} #tabs .tab[data-tab=validate]{--c:var(--c-validate)}
   #tabs .tab[data-tab=sparql]{--c:var(--c-sparql)} #tabs .tab[data-tab=export]{--c:var(--c-export)}
+  #tabs .tab[data-tab=collections]{--c:var(--c-validate)}
   #tabs .tab{border-bottom-color:color-mix(in srgb,var(--c) 35%,transparent)}
   #tabs .tab:hover{border-bottom-color:var(--c)}
   #tabs .tab .pill{color:var(--c)}
@@ -369,6 +370,7 @@
     <button class="tab active" data-tab="build">Build <span class="pill" id="pillCount">0</span></button>
     <button class="tab" data-tab="browse">Business view</button>
     <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
+    <button class="tab" data-tab="collections">Collections <span class="pill" id="pillColl">0</span></button>
     <button class="tab" data-tab="graph">Graph</button>
     <button class="tab" data-tab="validate">Validate <span class="pill" id="pillVal">qSKOS</span></button>
     <button class="tab" data-tab="sparql">SPARQL <span class="pill" id="pillSparql">ask</span></button>
@@ -803,6 +805,20 @@
         <button class="btn sm primary" id="btnProposeFromList">＋ New proposal</button>
       </div>
       <div class="prop-list" id="proposalList"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="collections">
+    <div class="card">
+      <div class="card-h"><h2>Collections</h2>
+        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1">Group concepts as <code>skos:Collection</code> / <code>skos:OrderedCollection</code> — alternative groupings that sit <em>alongside</em> the <code>broader</code>/<code>narrower</code> hierarchy, not inside it.</span>
+        <button class="btn sm" id="collNew">＋ Collection</button>
+        <button class="btn sm" id="collNewOrdered">＋ Ordered</button>
+      </div>
+      <div class="browse" style="grid-template-columns:minmax(0,300px) minmax(0,1fr)">
+        <div id="collList"></div>
+        <div id="collEditor" class="browse-detail"></div>
+      </div>
     </div>
   </section>
 
@@ -1292,8 +1308,9 @@ const NS = {
 const iri = v => ({ t: "iri", v });
 const lit = (v, lang, dt) => ({ t: "lit", v, lang: lang || "", dt: dt || "" });
 function termId(x){
-  return x.t === "iri" ? "I" + x.v : "L" + x.v + "" + x.lang + "" + x.dt;
+  return x.t === "bnode" ? "B" + x.v : x.t === "iri" ? "I" + x.v : "L" + x.v + "" + x.lang + "" + x.dt;
 }
+const bnode = v => ({ t: "bnode", v });
 
 // ---- model helpers ----
 const LABEL_FIELDS = ["pref", "alt", "hidden"];
@@ -1412,6 +1429,28 @@ function buildTriples(model, opts){
       });
     }
   }
+  // collections — skos:Collection (unordered) / skos:OrderedCollection (ordered)
+  let _bn = 0;
+  for (const cid in (model.collections || {})){
+    const col = model.collections[cid];
+    const cs = iri(conceptUri(model, cid));
+    add(cs, A, iri(NS.skos + (col.ordered ? "OrderedCollection" : "Collection")));
+    (col.label || []).forEach(L => { if (L.val) add(cs, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
+    (col.note || []).forEach(L => { if (L.val) add(cs, iri(NS.skos + "note"), lit(L.val, L.lang)); });
+    const mems = (col.members || []).filter(mid => model.concepts[mid]);
+    mems.forEach(mid => add(cs, iri(NS.skos + "member"), iri(conceptUri(model, mid))));
+    if (col.ordered && mems.length){        // ordered members as an rdf:List via skos:memberList
+      let head = null, prev = null;
+      mems.forEach(mid => {
+        const node = bnode("L" + cid.replace(/[^A-Za-z0-9]/g, "") + "_" + (++_bn));
+        add(node, iri(NS.rdf + "first"), iri(conceptUri(model, mid)));
+        if (prev) add(prev, iri(NS.rdf + "rest"), node); else head = node;
+        prev = node;
+      });
+      add(prev, iri(NS.rdf + "rest"), iri(NS.rdf + "nil"));
+      add(cs, iri(NS.skos + "memberList"), head);
+    }
+  }
   return { triples: T, schemeUri };
 }
 
@@ -1435,6 +1474,7 @@ function qname(model, uri){
   return "<" + uri + ">";
 }
 function termTurtle(model, o){
+  if (o.t === "bnode") return "_:" + o.v;
   if (o.t === "iri") return qname(model, o.v);
   let s = '"' + escLit(o.v) + '"';
   if (o.lang) s += "@" + o.lang;
@@ -1495,13 +1535,15 @@ function toRdfXml(model, opts){
   const rdfType = NS.rdf + "type";
   for (const k of order){
     const g = groups.get(k);
-    const about = g.s.t === "iri" ? g.s.v : "";
-    out += `  <rdf:Description rdf:about="${xmlEsc(about)}">\n`;
+    const idAttr = g.s.t === "bnode" ? `rdf:nodeID="${xmlEsc(g.s.v)}"` : `rdf:about="${xmlEsc(g.s.v)}"`;
+    out += `  <rdf:Description ${idAttr}>\n`;
     for (const t of g.arr){
       const pn = pfxName(t.p.v); if (!pn) continue;
       const [pp, pl] = pn;
       if (t.p.v === rdfType && t.o.t === "iri"){
         out += `    <rdf:type rdf:resource="${xmlEsc(t.o.v)}"/>\n`;
+      } else if (t.o.t === "bnode"){
+        out += `    <${pp}:${pl} rdf:nodeID="${xmlEsc(t.o.v)}"/>\n`;
       } else if (t.o.t === "iri"){
         out += `    <${pp}:${pl} rdf:resource="${xmlEsc(t.o.v)}"/>\n`;
       } else {
@@ -1532,12 +1574,13 @@ function toJsonLd(model, opts){
   const rdfType = NS.rdf + "type";
   const graph = [];
   for (const k of order){
-    const g = groups.get(k), node = { "@id": g.s.v }, props = {};
+    const g = groups.get(k), node = { "@id": g.s.t === "bnode" ? "_:" + g.s.v : g.s.v }, props = {};
     for (const t of g.arr){
       if (t.p.v === rdfType){ (node["@type"] = node["@type"] || []).push(compact(t.o.v)); continue; }
       const key = compact(t.p.v);
       let val;
-      if (t.o.t === "iri") val = { "@id": t.o.v };
+      if (t.o.t === "bnode") val = { "@id": "_:" + t.o.v };
+      else if (t.o.t === "iri") val = { "@id": t.o.v };
       else if (t.o.lang) val = { "@value": t.o.v, "@language": t.o.lang };
       else if (t.o.dt) val = { "@value": t.o.v, "@type": compact(t.o.dt) };
       else val = t.o.v;
@@ -2315,7 +2358,7 @@ function triplesToModel(triples, prefixes){
   if (prefixes) for (const [k, v] of Object.entries(prefixes)) if (v === base && !STD[k]){ prefix = k; break; }
   const model = { base, prefix, defaultLang: "en", idStyle: "text",
     scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", issued: "", modified: "", rights: "", lang: "en" },
-    concepts: {}, order: [] };
+    concepts: {}, order: [], collections: {} };
   const localOf = u => (u.startsWith(base) ? u.slice(base.length) : u);
   // Only genuine SKOS concepts become concepts. An owl:Class/property that merely carries
   // skos annotations (common in OBO/FaBiO ontologies) must NOT be turned into a concept.
@@ -2404,6 +2447,36 @@ function triplesToModel(triples, prefixes){
     }
   }
   if (!model.scheme.uri) model.scheme.uri = base.replace(/[#/]$/, "");
+
+  // ---- collections: skos:Collection / skos:OrderedCollection ----
+  const collTypes = {}; // uri -> ordered?
+  for (const t of triples) if (t.p.t==="iri" && t.p.v===NS.rdf+"type" && t.o.t==="iri"){
+    if (t.o.v===P+"Collection") collTypes[t.s.v] = collTypes[t.s.v] || false;
+    else if (t.o.v===P+"OrderedCollection") collTypes[t.s.v] = true;
+  }
+  if (Object.keys(collTypes).length){
+    // index rdf:List nodes (bnodes) → {first, rest}
+    const first = {}, rest = {};
+    for (const t of triples){ if (t.p.t!=="iri") continue;
+      if (t.p.v===NS.rdf+"first") first[termId(t.s)] = t.o;
+      else if (t.p.v===NS.rdf+"rest") rest[termId(t.s)] = t.o;
+    }
+    const walkList = head => { const out=[]; let cur=head, guard=0; while(cur && !(cur.t==="iri"&&cur.v===NS.rdf+"nil") && guard++<100000){ const k=termId(cur); const f=first[k]; if(f&&f.t==="iri") out.push(localOf(f.v)); cur=rest[k]; } return out; };
+    for (const uri in collTypes){
+      const cid = localOf(uri);
+      const col = { id:cid, label:[], note:[], ordered:!!collTypes[uri], members:[] };
+      const memberList = triples.find(t => t.p.t==="iri" && t.s.v===uri && t.p.v===P+"memberList");
+      const orderedMembers = memberList ? walkList(memberList.o) : null;
+      for (const t of triples){ if (t.p.t!=="iri" || t.s.v!==uri) continue;
+        if (t.p.v===NS.rdfs+"label" && t.o.t==="lit") col.label.push({lang:t.o.lang||"", val:t.o.v});
+        else if (t.p.v===P+"prefLabel" && t.o.t==="lit" && !col.label.length) col.label.push({lang:t.o.lang||"", val:t.o.v});
+        else if (t.p.v===P+"note" && t.o.t==="lit") col.note.push({lang:t.o.lang||"", val:t.o.v});
+        else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=localOf(t.o.v); if(model.concepts[m] && col.members.indexOf(m)<0) col.members.push(m); }
+      }
+      if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(m=>model.concepts[m]); }
+      model.collections[cid] = col;
+    }
+  }
   return model;
 }
 function guessBase(triples){
@@ -2820,7 +2893,7 @@ const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 Jessica Tali
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
     scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", lang:"en" },
-    concepts:{}, order:[] };
+    concepts:{}, order:[], collections:{} };
 }
 // 32-char hex UUID (dashes stripped), guaranteed unique within the model
 function genUuid32(){
@@ -3749,6 +3822,7 @@ function switchTab(name){
   if(name==="export") renderExport();
   if(name==="browse") renderBrowse();
   if(name==="proposals") renderProposals();
+  if(name==="collections") renderCollections();
   
   if(name==="corpus") renderCorpus();
   
@@ -4216,6 +4290,55 @@ let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.class
 // ---------- business view (browse) ----------
 let browseSel=null, browseFilter="", browseVis=null; const browseOpen=new Set();
 function plabel(id){ const c=model.concepts[id]; if(!c) return id; const p=(c.pref||[]).find(l=>l.lang===model.defaultLang&&l.val)||(c.pref||[]).find(l=>l.val); return p?p.val:id; }
+
+// ================= Collections — skos:Collection / skos:OrderedCollection =================
+let collSel=null;
+function colls(){ return model.collections=model.collections||{}; }
+function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
+function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
+function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) el.textContent=Object.keys(colls()).length; }
+function createCollection(ordered){ const cs=colls(); const id=newCollId(); cs[id]={id,label:[{lang:model.defaultLang,val:ordered?"New ordered collection":"New collection"}],note:[],ordered:!!ordered,members:[]}; collSel=id; save(); renderCollections(); }
+function deleteCollection(id){ if(!confirm('Delete this collection? The concepts themselves are not affected.')) return; delete colls()[id]; if(collSel===id) collSel=null; save(); renderCollections(); }
+function renderCollections(){ updateCollPill(); const cs=colls(); const list=document.getElementById('collList'); const ed=document.getElementById('collEditor'); if(!list||!ed) return;
+  const ids=Object.keys(cs); list.innerHTML="";
+  if(!ids.length) list.innerHTML='<div class="subtle" style="padding:14px 4px">No collections yet. Use <b>＋ Collection</b> (unordered) or <b>＋ Ordered</b> above to group concepts.</div>';
+  ids.forEach(id=>{ const col=cs[id]; const row=document.createElement('div'); row.style.cssText="padding:9px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:3px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
+    const nm=document.createElement('span'); nm.textContent=collLabel(col); nm.style.cssText="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
+    const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
+    row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row); });
+  if(!collSel||!cs[collSel]){ ed.innerHTML='<div class="subtle" style="padding:16px">Select a collection on the left, or create one above.</div>'; return; }
+  const col=cs[collSel]; ed.innerHTML="";
+  const wrap=el2=>{ const d=document.createElement('div'); d.style.cssText="margin-bottom:14px"; return d; };
+  // name
+  const nameW=wrap(); const nlab=document.createElement('label'); nlab.textContent="Name (rdfs:label)"; nlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nin=document.createElement('input'); nin.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=collLabel(col); nin.oninput=()=>{ col.label=[{lang:model.defaultLang,val:nin.value}]; save(); updateCollPill(); const r=document.getElementById('collList'); /*live*/ }; nin.onchange=()=>renderCollections(); nameW.append(nlab,nin); ed.appendChild(nameW);
+  // type toggle + delete
+  const tW=document.createElement('div'); tW.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap";
+  const ol=document.createElement('label'); ol.style.cssText="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"; const ocb=document.createElement('input'); ocb.type="checkbox"; ocb.checked=!!col.ordered; ocb.onchange=()=>{ col.ordered=ocb.checked; save(); renderCollections(); }; ol.append(ocb, document.createTextNode("Ordered collection (preserves member order via skos:memberList)"));
+  const del=document.createElement('button'); del.className="btn sm"; del.textContent="Delete collection"; del.style.marginLeft="auto"; del.onclick=()=>deleteCollection(col.id);
+  tW.append(ol,del); ed.appendChild(tW);
+  // note
+  const noteW=wrap(); const nolab=document.createElement('label'); nolab.textContent="Note (skos:note, optional)"; nolab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nta=document.createElement('textarea'); nta.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nta.rows=2; nta.value=(col.note&&col.note[0]&&col.note[0].val)||""; nta.oninput=()=>{ col.note=nta.value.trim()?[{lang:model.defaultLang,val:nta.value}]:[]; save(); }; noteW.append(nolab,nta); ed.appendChild(noteW);
+  // members
+  const mh=document.createElement('div'); mh.style.cssText="font-size:12px;font-weight:600;margin-bottom:6px"; mh.textContent="Members ("+(col.members||[]).length+")"; ed.appendChild(mh);
+  const mlist=document.createElement('div'); mlist.style.cssText="margin-bottom:10px";
+  (col.members||[]).forEach((mid,i)=>{ const r=document.createElement('div'); r.style.cssText="display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px";
+    const missing=!model.concepts[mid]; const nm=document.createElement('span'); nm.textContent=missing?(mid+" (missing)"):plabel(mid); nm.style.cssText="flex:1"+(missing?";color:var(--err)":""); r.appendChild(nm);
+    if(col.ordered){ const up=document.createElement('button'); up.className="btn sm"; up.textContent="▲"; up.disabled=i===0; up.onclick=()=>{ const m=col.members; [m[i-1],m[i]]=[m[i],m[i-1]]; save(); renderCollections(); };
+      const dn=document.createElement('button'); dn.className="btn sm"; dn.textContent="▼"; dn.disabled=i===col.members.length-1; dn.onclick=()=>{ const m=col.members; [m[i+1],m[i]]=[m[i],m[i+1]]; save(); renderCollections(); }; r.append(up,dn); }
+    const rm=document.createElement('button'); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from collection"; rm.onclick=()=>{ col.members.splice(i,1); save(); renderCollections(); }; r.appendChild(rm); mlist.appendChild(r); });
+  if(!(col.members||[]).length){ const e=document.createElement('div'); e.className="subtle"; e.style.cssText="font-size:12px;padding:4px 0 10px"; e.textContent="No members yet — add concepts below."; mlist.appendChild(e); }
+  ed.appendChild(mlist);
+  // add member
+  const addW=document.createElement('div'); addW.style.cssText="display:flex;gap:6px;align-items:center";
+  const sel=document.createElement('select'); sel.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px";
+  const avail=(model.order&&model.order.length?model.order:Object.keys(model.concepts)).filter(id=>(col.members||[]).indexOf(id)<0);
+  sel.innerHTML='<option value="">Add a concept…</option>'+avail.map(id=>'<option value="'+id+'">'+escapeHtml(plabel(id))+'</option>').join("");
+  sel.onchange=()=>{ if(sel.value){ (col.members=col.members||[]).push(sel.value); save(); renderCollections(); } };
+  addW.appendChild(sel); ed.appendChild(addW);
+}
+if(document.getElementById('collNew')) document.getElementById('collNew').onclick=()=>createCollection(false);
+if(document.getElementById('collNewOrdered')) document.getElementById('collNewOrdered').onclick=()=>createCollection(true);
 function browseChildren(id){ return model.order.filter(x=>(model.concepts[x].broader||[]).includes(id)); }
 function browseRoots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top||!(c.broader||[]).some(b=>model.concepts[b]); }); }
 function bdesc(id,seen){ seen=seen||new Set(); let n=0; for(const k of browseChildren(id)){ if(seen.has(k))continue; seen.add(k); n+=1+bdesc(k,seen);} return n; }
@@ -5531,7 +5654,7 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); renderTree(); renderEditor(); updateProposalPill();
+function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
   browseSel=null; browseFilter=""; if($('#browseSearch')) $('#browseSearch').value="";
   if(valAuto) runValidation(); else updateBadgeQuick();
   if($('.panel[data-panel=export]').classList.contains('active')) renderExport();
