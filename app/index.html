@@ -119,6 +119,9 @@
   .card-h .sp{margin-left:auto}
   .treewrap{padding:6px;max-height:calc(100vh - 220px);overflow:auto}
   .tsearch{padding:8px 10px;border-bottom:1px solid var(--border-soft)}
+  .treeopts{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border-soft);font-size:11.5px;color:var(--muted)}
+  .treeopts label{display:inline-flex;align-items:center;gap:4px}
+  .treeopts select{font:inherit;font-size:11.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:2px 5px}
   .tsearch input{width:100%;font:inherit;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:6px 9px}
   .kids{margin-left:13px;padding-left:9px;border-left:1.5px solid var(--surface-3)}
   .trow{display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:6px;cursor:pointer;scroll-margin:40px}
@@ -393,6 +396,11 @@
           <button class="btn sm" id="btnUndo" title="Undo the last delete (⌘/Ctrl+Z)">↶ Undo</button>
           <button class="btn sm primary" id="addTop">+ Top concept</button></div>
         <div class="tsearch"><input id="treeSearch" type="search" placeholder="Filter concepts…" autocomplete="off"></div>
+        <div class="treeopts" id="treeOpts">
+          <label>Show <select id="tvRender" title="How concept nodes are labelled in the tree and pickers"><option value="pref">Label</option><option value="qname">Qualified name</option><option value="iri">Full IRI</option></select></label>
+          <label id="tvLangWrap" style="display:none">Lang <select id="tvLang" title="Preferred label language for display"></select></label>
+          <label>Sort <select id="tvSort" title="Order concepts in the tree"><option value="doc">Document</option><option value="az">A–Z</option><option value="za">Z–A</option></select></label>
+        </div>
         <div class="bulkbar" id="bulkBar" style="display:none">
           <span id="bulkCount">0 selected</span>
           <button class="btn sm" id="bulkAll">All</button>
@@ -2561,6 +2569,15 @@ function triplesToModel(triples, prefixes){
     if (lg){ model.defaultLang = lg; if (model.scheme) model.scheme.lang = lg; }
   })();
 
+  // A ConceptScheme titled with skos:prefLabel (or rdfs:label) rather than dcterms:title
+  // still fills the title — prefer the default language, else any. (order-independent post-pass)
+  if (model.scheme.uri && !model.scheme.title){
+    const cand = triples.filter(t => t.s.v === model.scheme.uri && t.o.t === "lit" && t.o.v &&
+      t.p.t === "iri" && (t.p.v === NS.skos + "prefLabel" || t.p.v === NS.rdfs + "label"));
+    const pick = cand.find(t => t.o.lang === model.defaultLang) || cand[0];
+    if (pick){ model.scheme.title = pick.o.v; if (pick.o.lang && !model.scheme.lang) model.scheme.lang = pick.o.lang; }
+  }
+
   // ---- collections: skos:Collection / skos:OrderedCollection ----
   const collTypes = {}; // uri -> ordered?
   for (const t of triples) if (t.p.t==="iri" && t.p.v===NS.rdf+"type" && t.o.t==="iri"){
@@ -3124,6 +3141,39 @@ async function assignAllUuids(){
 }
 function label(id){ const c=model.concepts[id]; const p=c&&c.pref&&c.pref.find(l=>l.val); return p?p.val:""; }
 
+// #16 — how node text renders in the tree and relationship pickers (view-only; never
+// touches the data model or exports). render: pref | qname | iri; lang: a BCP-47 tag or
+// "" (auto = default language); sort: doc | az | za.
+let treeView = { render:"pref", lang:"", sort:"doc" };
+try{ const s=JSON.parse(localStorage.getItem("iaskos.treeview")||"null"); if(s&&typeof s==="object") treeView=Object.assign(treeView,s); }catch(e){}
+function saveTreeView(){ try{ localStorage.setItem("iaskos.treeview", JSON.stringify(treeView)); }catch(e){} }
+function treeLangs(){ const set=new Set(); for(const id in model.concepts) for(const l of (model.concepts[id].pref||[])) if(l.val&&l.lang) set.add(l.lang); return [...set].sort(); }
+function nodeText(id){
+  const c=model.concepts[id]; if(!c) return id;
+  if(treeView.render==="iri") return Core.conceptUri(model,id);
+  if(treeView.render==="qname") return (model.prefix||"")+":"+id;
+  const prefs=c.pref||[]; let hit=null;
+  if(treeView.lang) hit=prefs.find(l=>l.lang===treeView.lang&&l.val);   // requested language first
+  if(!hit) hit=prefs.find(l=>l.lang===model.defaultLang&&l.val)||prefs.find(l=>l.val);   // else default, else any
+  return hit?hit.val:id;   // unlabeled → the id
+}
+function nodeUnlabeled(id){ if(treeView.render!=="pref") return false; const c=model.concepts[id]; return !c||!(c.pref||[]).some(l=>l.val); }
+function sortIds(ids){ if(treeView.sort==="doc") return ids; const arr=ids.slice(); arr.sort((a,b)=>nodeText(a).toLowerCase().localeCompare(nodeText(b).toLowerCase())); if(treeView.sort==="za") arr.reverse(); return arr; }
+function initTreeOpts(){
+  const rSel=$('#tvRender'), lSel=$('#tvLang'), sSel=$('#tvSort'), lWrap=$('#tvLangWrap');
+  if(!rSel) return;
+  rSel.value=treeView.render; sSel.value=treeView.sort;
+  const langs=treeLangs();
+  lSel.innerHTML='<option value="">auto ('+(model.defaultLang||"—")+')</option>'+langs.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+  if(!langs.includes(treeView.lang)) treeView.lang="";   // language no longer present → back to auto
+  lSel.value=treeView.lang;
+  const showLang=()=>{ lWrap.style.display=(treeView.render==="pref"&&treeLangs().length>1)?"inline-flex":"none"; };
+  showLang();
+  rSel.onchange=()=>{ treeView.render=rSel.value; saveTreeView(); showLang(); renderTree(); if(selected)renderEditor(); };
+  lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); renderTree(); if(selected)renderEditor(); };
+  sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); renderTree(); };
+}
+
 // ---------- tree ----------
 const openIds = new Set();
 function childrenOf(id){ return model.order.filter(x=>(model.concepts[x].broader||[]).includes(id)); }
@@ -3155,12 +3205,12 @@ function renderTree(){
     host.appendChild(warn);
   }
   const frag=document.createDocumentFragment();
-  for(const r of rootList) frag.appendChild(treeNode(r, new Set()));
+  for(const r of sortIds(rootList)) frag.appendChild(treeNode(r, new Set()));
   host.appendChild(frag);
 }
 function treeNode(id, path){
   const c=model.concepts[id];
-  const kids=childrenOf(id).filter(k=>!window._vis||window._vis.has(k));
+  const kids=sortIds(childrenOf(id).filter(k=>!window._vis||window._vis.has(k)));
   const node=document.createElement("div");
   const row=document.createElement("div");
   const hasKids=kids.length>0;
@@ -3178,7 +3228,7 @@ function treeNode(id, path){
   row.appendChild(caret);
   const dot=document.createElement("span"); dot.className="tdot"; row.appendChild(dot);
   const lab=document.createElement("span"); lab.className="tlabel";
-  const lv=label(id); lab.innerHTML = lv? escapeHtml(lv) : '<span class="unl">'+escapeHtml(id)+'</span>';
+  const disp=nodeText(id); lab.innerHTML = nodeUnlabeled(id) ? '<span class="unl">'+escapeHtml(disp)+'</span>' : escapeHtml(disp);
   if(window._match&&window._match.has(id)) lab.classList.add('fmatch');   // a direct filter hit (ancestors shown but not highlighted)
   row.appendChild(lab);
   if(hasKids){ const cc=document.createElement("span"); cc.className="tcount"; cc.textContent=descCount(id); row.appendChild(cc); }
@@ -3440,7 +3490,7 @@ function relGroup(title, c, field){
   const chips=document.createElement("div"); chips.className="chips";
   (c[field]||[]).forEach((rid,i)=>{
     const chip=document.createElement("span"); chip.className="chip";
-    const nm=model.concepts[rid]? (label(rid)||rid) : rid+" (missing)";
+    const nm=model.concepts[rid]? nodeText(rid) : rid+" (missing)";
     chip.appendChild(document.createTextNode(nm));
     const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ const rid=c[field][i]; c[field].splice(i,1);
       // skos:related is symmetric (owl:SymmetricProperty) — drop the inverse too
@@ -3452,8 +3502,8 @@ function relGroup(title, c, field){
   const add=document.createElement("div"); add.className="reladd";
   const sel=document.createElement("select");
   sel.innerHTML='<option value="">add '+(field==="broader"?"parent":"related")+'…</option>'+
-    model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>(label(a)||a).localeCompare(label(b)||b))
-      .map(x=>`<option value="${x}">${escapeHtml(label(x)||x)}</option>`).join("");
+    model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>nodeText(a).toLowerCase().localeCompare(nodeText(b).toLowerCase()))
+      .map(x=>`<option value="${x}">${escapeHtml(nodeText(x))}</option>`).join("");
   sel.onchange=()=>{ if(sel.value){ c[field]=c[field]||[]; if(!c[field].includes(sel.value)) c[field].push(sel.value);
     // skos:related is symmetric — assert the inverse on the other concept so it holds both ways (and shows in the graph)
     if(field==="related"){ const o=model.concepts[sel.value]; if(o){ o.related=o.related||[]; if(!o.related.includes(selected)) o.related.push(selected); } }
@@ -3480,7 +3530,7 @@ function mapGroup(c){
   return g;
 }
 function focusLast(field){ const els=$$('#editor .rowline .val[data-field="'+field+'"]'); if(els.length) els[els.length-1].focus(); }
-function updateTreeLabel(){ const row=$$('.trow.sel .tlabel')[0]; if(row){ const lv=label(selected); row.innerHTML=lv?escapeHtml(lv):'<span class="unl">'+escapeHtml(selected)+'</span>'; } }
+function updateTreeLabel(){ const row=$$('.trow.sel .tlabel')[0]; if(row){ const lv=nodeText(selected); row.innerHTML=nodeUnlabeled(selected)?'<span class="unl">'+escapeHtml(lv)+'</span>':escapeHtml(lv); } }
 
 // ---------- scheme editor ----------
 const SCHEME_FIELDS=[
@@ -4329,7 +4379,13 @@ $('#importGo').onclick=()=>{
       m=Core.triplesToModel(triples, prefixes);
       onto=buildOntoFromTriples(triples, prefixes);
       nC=m.order.length; nK=onto.order.classes.length; nP=onto.order.props.length;
-      if(!nC && !nK && !nP){ toast("No skos:Concept or owl:Class / property found in this file"); return; }
+      if(!nC && !nK && !nP){
+        const n = triples.length;
+        toast(n
+          ? `Read ${n} RDF statement${n===1?"":"s"}, but none are skos:Concept. If this is an OWL ontology or plain RDF, it has no SKOS concepts to import.`
+          : "Couldn't read any RDF here — check the text is valid Turtle, RDF/XML, JSON-LD, or a CSV/Excel spreadsheet.");
+        return;
+      }
       if(nK||nP){ m.onto=onto; if(onto.base && (nK+nP)>=nC){ m.base=onto.base; if(onto.prefix) m.prefix=onto.prefix; } }
       if(!m.order) m.order=Object.keys(m.concepts);
     }
@@ -4357,7 +4413,7 @@ $('#importGo').onclick=()=>{
     const cls=(nK||nP)?`, ${nK} class${nK===1?"":"es"}, ${nP} propert${nP===1?"y":"ies"}`:"";
     toast(`New project “${impName}” — ${nC} concept${nC===1?"":"s"}${cls} · ${h.roots} top · other projects untouched${stub}${importWarn(h)}`);
     if((nK||nP) && !nC) switchTab("onto"); else switchTab("build");
-  }catch(e){ toast("Parse error: "+e.message); }
+  }catch(e){ toast("Couldn't import this file: "+e.message); }
 };
 // Read a chosen file into the import textarea (all local; no network).
 // RDF and CSV load as text; .xlsx is unzipped in-browser and shown as CSV.
@@ -5823,7 +5879,7 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
+function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); initTreeOpts(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
   browseSel=null; browseFilter=""; if($('#browseSearch')) $('#browseSearch').value="";
   if(valAuto) runValidation(); else updateBadgeQuick();
   if($('.panel[data-panel=export]').classList.contains('active')) renderExport();
