@@ -6190,7 +6190,10 @@ async function publishToServer(){
   const wrap=document.getElementById('publishWrap'), box=document.getElementById('publishBox'), note=document.getElementById('publishNote');
   const ttl = Core.toTurtle(model, { dc:true });
   const slug = ((model.scheme&&model.scheme.title)||'taxonomy').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'taxonomy';
-  const gid = slug + '-' + Math.random().toString(36).slice(2,8);
+  // one named graph per project (stable), so each project stays separate in Jena and
+  // re-publishing the same project overwrites its own graph instead of piling up copies
+  const pid = (typeof currentPid!=='undefined' && currentPid) ? String(currentPid) : 'draft';
+  const gid = slug + '--' + pid.replace(/[^A-Za-z0-9_.-]/g,'');
   const graphUri = GRAPH_NS + gid;
   if(wrap) wrap.style.display=''; if(note) note.textContent='Publishing…';
   try{
