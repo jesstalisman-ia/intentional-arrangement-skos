@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <!--
   Intentional Arrangement SKOS Editor © 2026 Jessica Talisman
   Size-based source-available license: Apache License 2.0 for organizations under
@@ -6,7 +9,10 @@
   Taxonomies you create with this tool are your own; this license covers the editor.
 -->
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Intentional Arrangement SKOS</title>
+</head>
+<body>
 <style>
   /* Forced light theme: white background, black + dark-navy text, dark-navy
      highlights/tiles with white text. Applied to every theme context (including
@@ -124,6 +130,7 @@
   .tdot{width:6px;height:6px;border-radius:50%;background:var(--faint);opacity:.5;flex:0 0 auto}
   .trow.top>.tdot{background:var(--teal);opacity:1;width:8px;height:8px}
   .tlabel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tlabel.fmatch{font-weight:700;color:#8a5a00;background:#fff3c4;border-radius:4px;padding:0 4px;box-decoration-break:clone}
   .tlabel .unl{color:var(--faint);font-style:italic}
   .tacts{display:none;gap:2px;flex:0 0 auto} .trow:hover .tacts{display:flex}
   .tbtn{border:0;background:transparent;color:var(--faint);cursor:pointer;border-radius:4px;padding:2px;display:grid;place-items:center;width:20px;height:20px}
@@ -1395,6 +1402,9 @@ function buildTriples(model, opts){
     if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
     if (model.scheme.rights) add(s, dct("rights"), lit(model.scheme.rights, L));
+    // dcterms:language — the vocabulary's default language as a BCP-47 tag (plain literal)
+    const lg = (model.scheme.lang || model.defaultLang || "").trim();
+    if (lg) add(s, dct("language"), lit(lg));
   }
 
   const ids = model.order && model.order.length ? model.order : Object.keys(model.concepts);
@@ -2441,6 +2451,7 @@ function triplesToModel(triples, prefixes){
       else if (pv === D + "created") model.scheme.created = o.v;
       else if (pv === D + "issued") model.scheme.issued = o.v;
       else if (pv === D + "modified") model.scheme.modified = o.v;
+      else if (pv === D + "language") model.scheme.language = o.v;
       else if (pv === D + "rights") model.scheme.rights = o.v;
       else if (pv === P + "hasTopConcept" && o.t === "iri"){ const c = ensure(o.v); if(c) c.top = true; }
       continue;
@@ -2479,6 +2490,19 @@ function triplesToModel(triples, prefixes){
     }
   }
   if (!model.scheme.uri) model.scheme.uri = base.replace(/[#/]$/, "");
+
+  // Default language from the file itself, so new edits aren't silently tagged with the
+  // wrong language (dcterms:language if the scheme declares it, else the dominant
+  // language among skos:prefLabel literals). BCP-47 tags per SKOS practice.
+  (() => {
+    let lg = (model.scheme && model.scheme.language ? String(model.scheme.language).trim() : "");
+    if (!lg){
+      const freq = {}; for (const id in model.concepts) for (const L of (model.concepts[id].pref || [])) if (L.lang){ freq[L.lang] = (freq[L.lang] || 0) + 1; }
+      let best = "", max = 0; for (const k in freq) if (freq[k] > max){ max = freq[k]; best = k; }
+      lg = best;
+    }
+    if (lg){ model.defaultLang = lg; if (model.scheme) model.scheme.lang = lg; }
+  })();
 
   // ---- collections: skos:Collection / skos:OrderedCollection ----
   const collTypes = {}; // uri -> ordered?
@@ -2973,6 +2997,9 @@ function save(){
   flashSaved();
 }
 function flashSaved(){ const c=document.getElementById('savedChip'); if(!c) return; c.classList.add('show'); clearTimeout(window._savedT); window._savedT=setTimeout(()=>c.classList.remove('show'),1100); }
+// dcterms:modified reflects the last real edit. Stamp it (date granularity) whenever
+// the vocabulary or its metadata changes; leave dcterms:created untouched.
+function touchModified(){ if(SHARED) return; if(!model||!model.scheme) return; const d=todayISO(); if(!d||model.scheme.modified===d) return; model.scheme.modified=d; const el=document.getElementById('fldModified'); if(el&&el.value!==d) el.value=d; }
 
 function uid(base){ base = base || "Concept"; let n=1, id=base; while(model.concepts[id]){ id = base+(++n); } return id; }
 function addConcept(parentId){
@@ -3059,9 +3086,9 @@ function renderTree(){
     // include ancestors
     const vis=new Set(match);
     for(const id of match){ let cur=[id]; while(cur.length){ const u=cur.pop(); for(const p of (model.concepts[u].broader||[])) if(model.concepts[p]&&!vis.has(p)){vis.add(p);cur.push(p);} } }
-    window._vis=vis; rootList=rootList.filter(r=>vis.has(r));
+    window._vis=vis; window._match=match; rootList=rootList.filter(r=>vis.has(r));
     if(rootList.length===0){ host.innerHTML='<div class="edit-empty">No matches.</div>'; return; }
-  } else window._vis=null;
+  } else { window._vis=null; window._match=null; }
   // Robustness: if there are concepts but none qualify as a root (e.g. a broader
   // cycle, or every concept has a parent), show them all so nothing is ever hidden.
   if(!rootList.length && model.order.length){
@@ -3095,6 +3122,7 @@ function treeNode(id, path){
   const dot=document.createElement("span"); dot.className="tdot"; row.appendChild(dot);
   const lab=document.createElement("span"); lab.className="tlabel";
   const lv=label(id); lab.innerHTML = lv? escapeHtml(lv) : '<span class="unl">'+escapeHtml(id)+'</span>';
+  if(window._match&&window._match.has(id)) lab.classList.add('fmatch');   // a direct filter hit (ancestors shown but not highlighted)
   row.appendChild(lab);
   if(hasKids){ const cc=document.createElement("span"); cc.className="tcount"; cc.textContent=descCount(id); row.appendChild(cc); }
   if(!bulkMode){ const acts=document.createElement("span"); acts.className="tacts";
@@ -3357,7 +3385,10 @@ function relGroup(title, c, field){
     const chip=document.createElement("span"); chip.className="chip";
     const nm=model.concepts[rid]? (label(rid)||rid) : rid+" (missing)";
     chip.appendChild(document.createTextNode(nm));
-    const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); renderTree(); afterChange(); };
+    const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ const rid=c[field][i]; c[field].splice(i,1);
+      // skos:related is symmetric (owl:SymmetricProperty) — drop the inverse too
+      if(field==="related"&&rid){ const o=model.concepts[rid]; if(o&&o.related) o.related=o.related.filter(r=>r!==selected); }
+      renderEditor(); save(); renderTree(); afterChange(); };
     chip.appendChild(x); chips.appendChild(chip);
   });
   g.appendChild(chips);
@@ -3366,7 +3397,10 @@ function relGroup(title, c, field){
   sel.innerHTML='<option value="">add '+(field==="broader"?"parent":"related")+'…</option>'+
     model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>(label(a)||a).localeCompare(label(b)||b))
       .map(x=>`<option value="${x}">${escapeHtml(label(x)||x)}</option>`).join("");
-  sel.onchange=()=>{ if(sel.value){ c[field]=c[field]||[]; c[field].push(sel.value); renderEditor(); save(); renderTree(); afterChange(); } };
+  sel.onchange=()=>{ if(sel.value){ c[field]=c[field]||[]; if(!c[field].includes(sel.value)) c[field].push(sel.value);
+    // skos:related is symmetric — assert the inverse on the other concept so it holds both ways (and shows in the graph)
+    if(field==="related"){ const o=model.concepts[sel.value]; if(o){ o.related=o.related||[]; if(!o.related.includes(selected)) o.related.push(selected); } }
+    renderEditor(); save(); renderTree(); afterChange(); } };
   add.appendChild(sel); g.appendChild(add);
   return g;
 }
@@ -3406,8 +3440,9 @@ function renderScheme(){
     const l=document.createElement("label"); l.textContent=lbl; f.appendChild(l);
     let el; const getv=()=> key==="base"?model.base : key==="prefix"?(model.prefix||"") : key==="defaultLang"?model.defaultLang : model.scheme[key]||"";
     if(type==="area"){ el=document.createElement("textarea"); } else { el=document.createElement("input"); if(type==="date") el.type="date"; }
+    if(key==="modified") el.id="fldModified";
     el.value=getv();
-    el.oninput=()=>{ let v=el.value; if(key==="base"){ model.base=v; } else if(key==="prefix"){ const s=v.replace(/[^A-Za-z0-9_-]/g,""); if(s!==v){ el.value=s; } model.prefix=s; } else if(key==="defaultLang"){ model.defaultLang=v.trim(); model.scheme.lang=v.trim(); } else model.scheme[key]=v; save(); if(selected) $('#editor .uri')&&($('#editor .uri').textContent=Core.conceptUri(model,selected)); };
+    el.oninput=()=>{ let v=el.value; if(key==="base"){ model.base=v; } else if(key==="prefix"){ const s=v.replace(/[^A-Za-z0-9_-]/g,""); if(s!==v){ el.value=s; } model.prefix=s; } else if(key==="defaultLang"){ model.defaultLang=v.trim(); model.scheme.lang=v.trim(); } else model.scheme[key]=v; if(key!=="modified") touchModified(); save(); if(selected) $('#editor .uri')&&($('#editor .uri').textContent=Core.conceptUri(model,selected)); };
     f.appendChild(el); g.appendChild(f);
   }
   // identifier style controls
@@ -4020,7 +4055,7 @@ function jumpToConcept(id){
 $('#valRun').onclick=runValidation;
 $$('#valMode button').forEach(b=>b.onclick=()=>{ $$('#valMode button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); valAuto=b.dataset.m==="auto"; if(valAuto) runValidation(); else updateValWhen(); });
 let autoT; function scheduleAuto(){ if(!valAuto) return; clearTimeout(autoT); autoT=setTimeout(runValidation,400); }
-function afterChange(){ if(valAuto) scheduleAuto(); else { /* keep badge fresh cheaply */ updateBadgeQuick(); } updateValWhen(); if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
+function afterChange(){ touchModified(); if(valAuto) scheduleAuto(); else { /* keep badge fresh cheaply */ updateBadgeQuick(); } updateValWhen(); if($('.panel[data-panel=export]').classList.contains('active')) renderExport(); }
 function updateBadge(){
   const counts={error:0,warning:0,info:0}; lastIssues.forEach(it=>counts[it.severity]++);
   const b=$('#vBadge');
@@ -6230,3 +6265,5 @@ async function initShareOrApp(){ const h=location.hash||""; if(h.indexOf('#t=')=
 if(document.getElementById('btnShareLink')) document.getElementById('btnShareLink').onclick=shareLink;
 initShareOrApp();
 </script>
+</body>
+</html>
