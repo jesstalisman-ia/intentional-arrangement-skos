@@ -2263,7 +2263,64 @@ function components(model){
 // Turtle importer (tolerant subset: prefixes, ; , lists, lang/dt, skos + skosxl)
 // ============================================================================
 function parseTurtle(text){ const { triples, prefixes } = parseTriples(text); return triplesToModel(triples, prefixes); }
+// RDF/XML importer (subset): rdf:Description and typed node elements; rdf:about / rdf:ID /
+// rdf:nodeID subjects; rdf:resource / rdf:nodeID objects; xml:lang, rdf:datatype,
+// rdf:parseType="Resource", nested node elements, and xml:base resolution. Namespace-aware
+// via DOMParser. Returns the same {triples, prefixes} shape as the Turtle parser.
+function parseRdfXml(text){
+  const RDF = NS.rdf, XMLNS = "http://www.w3.org/XML/1998/namespace";
+  const triples = [], prefixes = {};
+  const doc = new DOMParser().parseFromString(text.replace(/^[\s﻿]+/, ""), "application/xml");
+  const err = doc.getElementsByTagName("parsererror");
+  if (err && err.length) throw new Error("RDF/XML parse error: " + (err[0].textContent || "").replace(/\s+/g, " ").trim().slice(0, 160));
+  const root = doc.documentElement;
+  if (!root) throw new Error("Empty RDF/XML document");
+  const collectNs = el => { const at = el.attributes; if (at) for (let i = 0; i < at.length; i++){ const a = at[i]; if (a.name === "xmlns") prefixes[""] = a.value; else if (a.name.indexOf("xmlns:") === 0) prefixes[a.name.slice(6)] = a.value; } };
+  collectNs(root);
+  let bn = 0; const newB = () => ({ t: "bnode", v: "_:rx" + (++bn) });
+  const abs = (ref, base) => { if (ref == null) return ref; try { return new URL(ref, base || undefined).href; } catch(e){ return ref; } };
+  const baseOf = (el, inh) => el.getAttributeNS(XMLNS, "base") || inh || "";
+  function nodeElem(el, inh){
+    collectNs(el);
+    const base = baseOf(el, inh);
+    let subj;
+    const about = el.getAttributeNS(RDF, "about"), nid = el.getAttributeNS(RDF, "nodeID"), rid = el.getAttributeNS(RDF, "ID");
+    if (about != null) subj = { t: "iri", v: abs(about, base) };
+    else if (nid != null) subj = { t: "bnode", v: "_:" + nid };
+    else if (rid != null) subj = { t: "iri", v: abs("#" + rid, base) };
+    else subj = newB();
+    if (!(el.namespaceURI === RDF && el.localName === "Description"))
+      triples.push({ s: subj, p: { t: "iri", v: RDF + "type" }, o: { t: "iri", v: (el.namespaceURI || "") + el.localName } });
+    for (let i = 0; i < el.children.length; i++) propElem(el.children[i], subj, base);
+    return subj;
+  }
+  function propElem(pe, subj, base){
+    collectNs(pe);
+    const b = baseOf(pe, base);
+    const pred = { t: "iri", v: (pe.namespaceURI || "") + pe.localName };
+    const res = pe.getAttributeNS(RDF, "resource"), nid = pe.getAttributeNS(RDF, "nodeID"),
+          dt = pe.getAttributeNS(RDF, "datatype"), pt = pe.getAttributeNS(RDF, "parseType"),
+          lang = pe.getAttributeNS(XMLNS, "lang");
+    const kids = pe.children;
+    if (res != null){ triples.push({ s: subj, p: pred, o: { t: "iri", v: abs(res, b) } }); return; }
+    if (nid != null){ triples.push({ s: subj, p: pred, o: { t: "bnode", v: "_:" + nid } }); return; }
+    if (pt === "Resource"){ const o = newB(); triples.push({ s: subj, p: pred, o }); for (let i = 0; i < kids.length; i++) propElem(kids[i], o, b); return; }
+    if (kids.length){ for (let i = 0; i < kids.length; i++){ const o = nodeElem(kids[i], b); triples.push({ s: subj, p: pred, o }); } return; }
+    const o = { t: "lit", v: pe.textContent != null ? pe.textContent : "" };
+    if (lang) o.lang = lang; if (dt) o.dt = dt;
+    triples.push({ s: subj, p: pred, o });
+  }
+  const top = (root.namespaceURI === RDF && root.localName === "RDF") ? Array.from(root.children) : [root];
+  const rootBase = baseOf(root, "");
+  for (const nd of top) nodeElem(nd, rootBase);
+  return { triples, prefixes };
+}
 function parseTriples(text){
+  // RDF/XML is a different syntax — detect it and hand off to the XML parser.
+  const _h = text.slice(0, 1200);
+  if (/^\s*﻿?\s*<\?xml/i.test(text) || /<rdf:RDF[\s>]/.test(_h) ||
+      (/^\s*﻿?\s*</.test(text) && /xmlns:rdf\s*=\s*["']http:\/\/www\.w3\.org\/1999\/02\/22-rdf-syntax-ns#["']/.test(_h)))
+    return parseRdfXml(text);
   // tokenizer
   const toks = [];
   let i = 0; const n = text.length;
@@ -2926,7 +2983,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
