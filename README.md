@@ -9,7 +9,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 
 **Curious why it's built this way?** → [Why it works this way](docs/why-it-works-this-way.md) — the thinking behind running in the browser, the license, SKOS-XL, collections, and sharing.
 
-📍 [Roadmap](ROADMAP.md) · 💡 [Request a feature](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml) or [report a bug](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
+📍 [Roadmap](ROADMAP.md) · 💬 [Discussions](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions) (questions & ideas) · 💡 [Request a feature](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml) or [report a bug](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
 
 ---
 
@@ -96,13 +96,14 @@ All data stays in the visitor's browser, so hosting shares the tool and never an
 
 ## Roadmap & feedback
 
-[ROADMAP.md](ROADMAP.md) tracks what's shipped, in progress, and planned. Ideas and bug reports shape that list — several recent releases came straight from GitHub issues.
+[ROADMAP.md](ROADMAP.md) tracks what's shipped, in progress, and planned. Ideas and bug reports shape that list — several recent releases came straight from the community.
 
+- **Ask a question / share an idea** → [Discussions](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions) — Q&A, Ideas, Show and tell
 - **Request a feature** → [feature request](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)
 - **Report a bug** → [bug report](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
 - **Prefer email?** → Hello@ontologypipeline.com
 
-Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that fits helps it rise.
+Rule of thumb: **Discussions** for how-to questions and half-formed ideas, **Issues** for concrete bugs and feature requests. Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that fits helps it rise.
 
 ## License
 
