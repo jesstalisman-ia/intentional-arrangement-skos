@@ -24,6 +24,20 @@ That starts two containers:
 Publishing writes your taxonomy to a named graph and copies a short `?g=…` link that loads
 it back from the server.
 
+## Query what you published
+
+Each project is stored in **its own named graph** (`https://iaskos.app/g/<project>`), so
+projects stay separate. Two things follow from that:
+
+- `config.ttl` turns on a **union default graph**, so a plain query still sees everything:
+  ```sparql
+  SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100
+  ```
+  Without the union setting, a plain `?s ?p ?o` reads only the (empty) default graph and
+  returns nothing — the data would sit unseen in the named graphs.
+- **List your projects:** `SELECT DISTINCT ?g WHERE { GRAPH ?g {} }`
+- **Query one project only:** `SELECT * WHERE { GRAPH <https://iaskos.app/g/…> { ?s ?p ?o } }`
+
 ## Local vs hosted
 
 - **Locally**, run the *app* over `http://` too (e.g. `python3 -m http.server` in `app/`).

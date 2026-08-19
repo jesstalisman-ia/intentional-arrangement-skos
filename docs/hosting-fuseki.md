@@ -57,6 +57,27 @@ deployment.**
   (with **Save a copy to edit**). The link carries the server URL (`s=`) so a recipient
   doesn't need to configure anything — they just need network access to your Fuseki.
 
+## Querying what you published
+
+Each project publishes to **its own named graph** (`https://iaskos.app/g/<project>`), which
+keeps projects separate but has one consequence people hit right away: a plain
+`SELECT ?s ?p ?o` in Fuseki reads only the **default graph**, which is empty — so it returns
+nothing even though the data is there.
+
+Fix it once, at the dataset. Give the dataset a **union default graph** so a plain query sees
+every named graph. The `fuseki/config.ttl` in this repo does this for the Docker setup
+(`tdb2:unionDefaultGraph true`); for a hand-run Fuseki, add the same to your dataset config.
+Then:
+
+```sparql
+# everything (union of all projects)
+SELECT ?s ?p ?o WHERE { ?s ?p ?o } LIMIT 100
+# list the projects
+SELECT DISTINCT ?g WHERE { GRAPH ?g {} }
+# one project only
+SELECT * WHERE { GRAPH <https://iaskos.app/g/…> { ?s ?p ?o } }
+```
+
 ## Which store?
 
 Fuseki is the simplest fit — one container, the Graph Store Protocol, cheap to run (even

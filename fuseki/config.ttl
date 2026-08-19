@@ -1,0 +1,23 @@
+# Fuseki dataset "skos" for the Docker setup: persistent TDB2 with a UNION
+# default graph. The app publishes each project into its own named graph
+# (https://iaskos.app/g/<project>) for separation — with a union default graph,
+# a plain `SELECT ?s ?p ?o` still returns every project's data, so queries
+# "just work" without naming a graph. To query one project only, wrap the
+# pattern in `GRAPH <that-uri> { ... }`.
+@prefix fuseki: <http://jena.apache.org/fuseki#> .
+@prefix tdb2:   <http://jena.apache.org/2016/tdb#> .
+@prefix ja:     <http://jena.hpl.hp.com/2005/11/Assembler#> .
+
+<#service> a fuseki:Service ;
+    fuseki:name "skos" ;
+    fuseki:endpoint [ fuseki:operation fuseki:query ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:query  ; fuseki:name "sparql" ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:query  ; fuseki:name "query" ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:update ; fuseki:name "update" ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:gsp-rw ; fuseki:name "data" ] ;
+    fuseki:endpoint [ fuseki:operation fuseki:gsp-r  ; fuseki:name "get" ] ;
+    fuseki:dataset <#dataset> .
+
+<#dataset> a tdb2:DatasetTDB2 ;
+    tdb2:location "/fuseki/databases/skos" ;
+    tdb2:unionDefaultGraph true .

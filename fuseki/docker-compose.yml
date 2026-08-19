@@ -12,9 +12,11 @@ services:
     image: stain/jena-fuseki:latest
     environment:
       ADMIN_PASSWORD: "${FUSEKI_ADMIN_PASSWORD:-change-me}"
-      FUSEKI_DATASET_1: "skos"        # creates a persistent TDB dataset served at /skos
     volumes:
       - fuseki-data:/fuseki
+      # config.ttl defines the /skos dataset with a UNION default graph, so a plain
+      # SELECT ?s ?p ?o sees data the app publishes into per-project named graphs.
+      - ./config.ttl:/fuseki/config.ttl:ro
     expose:
       - "3030"
     restart: unless-stopped
