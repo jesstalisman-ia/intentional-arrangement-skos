@@ -1,0 +1,19 @@
+# OPTIONAL. Not required to use the editor — see README.md before running.
+#
+# Builds the pinned Dockerfile (Apache Jena Fuseki 5.6.0, official distribution)
+# and serves the "skos" dataset with a union default graph. Safe defaults:
+#   * bound to 127.0.0.1 only — NOT exposed to the network until you change it
+#   * runs as a non-root user (see Dockerfile)
+#   * no admin password baked in — set up auth before exposing it (README)
+services:
+  fuseki:
+    build: .
+    image: ia-skos-fuseki:5.6.0
+    ports:
+      - "127.0.0.1:3030:3030"   # loopback only. Change to expose — and read the hardening list first.
+    volumes:
+      - fuseki-data:/fuseki/databases
+    restart: unless-stopped
+
+volumes:
+  fuseki-data:

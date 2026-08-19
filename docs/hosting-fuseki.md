@@ -12,20 +12,23 @@ Everything else keeps working offline. The server is optional power, not a depen
 
 ## Run Fuseki
 
-The quickest way is Docker:
+Use the pinned setup in [`deploy/`](../deploy/README.md) — it builds Fuseki **5.6.0** from the
+official Apache distribution (base image pinned by digest, tarball by SHA-512) with the `skos`
+dataset and a union default graph already configured:
 
 ```bash
-docker run -d --name fuseki -p 3030:3030 \
-  -e ADMIN_PASSWORD=change-me \
-  stain/jena-fuseki
+cd deploy
+docker compose up -d --build
 ```
 
-Then open `http://localhost:3030`, sign in, and **create a dataset** (e.g. named `skos`,
-type *persistent (TDB2)*). Its URL is `http://localhost:3030/skos` — that's what you paste
-into the app.
+It binds to `127.0.0.1:3030`; the dataset is `http://localhost:3030/skos` — that's what you
+paste into the app. **Read [`deploy/README.md`](../deploy/README.md) first** — it's optional,
+and its hardening checklist (auth, CORS, network exposure) must be worked through before you
+expose it to anyone else.
 
-Or download the [Fuseki distribution](https://jena.apache.org/download/) and run
-`./fuseki-server --update --loc=DB /skos` (needs Java 17+).
+Prefer to run it by hand? Download the [Fuseki distribution](https://jena.apache.org/download/)
+(**5.5.0 or later** — CVE-2025-49656 / CVE-2025-50151 are fixed in 5.5.0) and run
+`./fuseki-server --update --loc=DB /skos` (Java 17+).
 
 ## Allow the app to reach it (CORS)
 
@@ -65,7 +68,7 @@ keeps projects separate but has one consequence people hit right away: a plain
 nothing even though the data is there.
 
 Fix it once, at the dataset. Give the dataset a **union default graph** so a plain query sees
-every named graph. The `fuseki/config.ttl` in this repo does this for the Docker setup
+every named graph. The `deploy/config.ttl` in this repo does this for the Docker setup
 (`tdb2:unionDefaultGraph true`); for a hand-run Fuseki, add the same to your dataset config.
 Then:
 
