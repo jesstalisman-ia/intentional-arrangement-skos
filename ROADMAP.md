@@ -8,6 +8,17 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### v0.7.0 — standards fixes & display options (from GitHub issues #16–#22)
+- **RDF/XML import** — the importer now reads RDF/XML (`rdf:Description`, typed nodes, `rdf:about`/`ID`/`nodeID`, `xml:lang`, `rdf:datatype`, `xml:base`), so `.rdf`/`.xml` files load and the app's own RDF/XML export round-trips. (#18)
+- **SKOS-XL export toggle** — a checkbox in the Export dialog puts `skosxl:Label` resources in every download (Turtle, RDF/XML, JSON-LD), defaulted on for SKOS-XL projects.
+- **`skos:related` is symmetric** — adding or removing a related term mirrors the inverse and shows in the graph. (#22)
+- **`dcterms:modified`** updates on every change; **`dcterms:language`** is exported and read back on import (with the file's own default language detected). (#20, #21)
+- **Tree & picker display options** — show nodes by label / qualified name / full IRI, pick the display language, and sort document / A–Z / Z–A. (#16)
+- **Filter highlighting** — matches are highlighted in the concept tree and the Collections tree. (#17)
+- **Collections: hierarchy + filter** — a collection's concept members arrange by their own broader/narrower (ordered collections keep their sequence), with a filter box that highlights members. (#5, extended)
+- **Clearer imports** — a ConceptScheme titled with `skos:prefLabel` fills the title; failed/empty imports say why instead of failing silently.
+
+### earlier
 - **SKOS-XL build mode** — a per-taxonomy **Label style** choice (Plain SKOS vs **SKOS-XL**) in the concept-scheme panel, with an *XL* badge when it's on. In SKOS-XL mode every label becomes a `skosxl:Label` resource with its own URI and an optional **source / provenance** (`dcterms:source`) you can record per label; exports default to SKOS-XL + plain, and imports of SKOS-XL round-trip the URI and source back in.
 - **Glossary (on-ramp)** — a staging bucket for **candidate terms**, the first tab because it comes before building. Import a flat list from paste, a text/markdown file (bullets, numbering, headings), CSV, or `.xlsx`; keep a list **unlinked** or associate it with a taxonomy; then **promote** terms into that taxonomy as SKOS top concepts you can arrange. Matches how people actually start — collect first, structure later.
 - **Workspace & onboarding** — optional local passcode (per-browser lock, salted hash, not encryption), a welcome screen to open or start a taxonomy, and guided new-project setup with Dublin Core metadata (title required; created/published/modified auto-filled).
