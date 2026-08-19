@@ -134,6 +134,7 @@
   .trow.top>.tdot{background:var(--teal);opacity:1;width:8px;height:8px}
   .tlabel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tlabel.fmatch{font-weight:700;color:#8a5a00;background:#fff3c4;border-radius:4px;padding:0 4px;box-decoration-break:clone}
+  #collList .fmatch{font-weight:700;color:#8a5a00;background:#fff3c4;border-radius:4px;padding:0 4px}
   .tlabel .unl{color:var(--faint);font-style:italic}
   .tacts{display:none;gap:2px;flex:0 0 auto} .trow:hover .tacts{display:flex}
   .tbtn{border:0;background:transparent;color:var(--faint);cursor:pointer;border-radius:4px;padding:2px;display:grid;place-items:center;width:20px;height:20px}
@@ -830,6 +831,7 @@
         <button class="btn sm" id="collNew">＋ Collection</button>
         <button class="btn sm" id="collNewOrdered">＋ Ordered</button>
       </div>
+      <div class="tsearch" style="border-bottom:none;padding:2px 0 10px"><input id="collSearch" type="search" placeholder="Filter collections & members…" autocomplete="off" style="max-width:340px"></div>
       <div class="browse" style="grid-template-columns:minmax(0,300px) minmax(0,1fr)">
         <div id="collList"></div>
         <div id="collEditor" class="browse-detail"></div>
@@ -4487,6 +4489,7 @@ function plabel(id){ const c=model.concepts[id]; if(!c) return id; const p=(c.pr
 
 // ================= Collections — skos:Collection / skos:OrderedCollection =================
 let collSel=null;
+let collFilter="";
 function colls(){ return model.collections=model.collections||{}; }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
@@ -4500,27 +4503,62 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const ids=Object.keys(cs); list.innerHTML="";
   if(!ids.length) list.innerHTML='<div class="subtle" style="padding:14px 4px">No collections yet. Use <b>＋ Collection</b> (unordered) or <b>＋ Ordered</b> above to group concepts.</div>';
   const rendered=new Set();
-  const renderNode=(id,depth)=>{ if(rendered.has(id)) return; rendered.add(id); const col=cs[id]; if(!col) return;
+  const f=collFilter;
+  // filter matches: concepts (by label/alt/id/rendered text) and collections (by label/id)
+  const matchC=new Set(), matchK=new Set();
+  if(f){
+    for(const cid in model.concepts){ const c=model.concepts[cid];
+      const hay=([...(c.pref||[]),...(c.alt||[])].map(l=>l.val).join(" ")+" "+cid+" "+nodeText(cid)).toLowerCase();
+      if(hay.includes(f)) matchC.add(cid); }
+    for(const kid in cs){ if((collLabel(cs[kid])+" "+kid).toLowerCase().includes(f)) matchK.add(kid); }
+  }
+  // does a collection hold a match anywhere in its subtree (so we keep its branch visible)?
+  const containsMatch=(kid,seen)=>{ seen=seen||new Set(); if(seen.has(kid)) return false; seen.add(kid);
+    if(matchK.has(kid)) return true;
+    for(const m of (cs[kid].members||[])){ if(cs[m]){ if(containsMatch(m,seen)) return true; } else if(matchC.has(m)) return true; }
+    return false; };
+  const conceptLeaf=(m, leafDepth)=>{
+    const miss=!model.concepts[m];
+    const leaf=document.createElement('div'); leaf.style.cssText="padding:4px 11px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:"+(miss?"default":"pointer")+";padding-left:"+(13+leafDepth*15)+"px;color:"+(miss?"var(--err)":"var(--muted)");
+    const dot=document.createElement('span'); dot.textContent="•"; dot.style.color="var(--faint)";
+    const nm2=document.createElement('span'); nm2.textContent=miss?(m+" (missing)"):nodeText(m); nm2.style.cssText="overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    if(f && matchC.has(m)) nm2.classList.add('fmatch');
+    leaf.append(dot,nm2);
+    if(!miss) leaf.onclick=()=>{ selected=m; switchTab('build'); if(typeof renderTree==='function')renderTree(); if(typeof renderEditor==='function')renderEditor(); };
+    list.appendChild(leaf);
+  };
+  const renderNode=(id,depth)=>{ if(rendered.has(id)) return; const col=cs[id]; if(!col) return;
+    if(f && !containsMatch(id)) return;   // filtering: hide branches with no match
+    rendered.add(id);
     const row=document.createElement('div'); row.style.cssText="padding:8px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:7px;margin-bottom:2px;padding-left:"+(11+depth*15)+"px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
     if(depth){ const tw=document.createElement('span'); tw.textContent="›"; tw.style.color="var(--faint)"; row.appendChild(tw); }
-    const nm=document.createElement('span'); nm.textContent=collLabel(col); nm.style.cssText="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    const nm=document.createElement('span'); nm.textContent=collLabel(col); nm.style.cssText="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"; if(f&&matchK.has(id)) nm.classList.add('fmatch');
     const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
     const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
     row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
-    // children: sub-collections nest, concepts are leaves. Honor the Sort option for
-    // unordered collections; an OrderedCollection keeps its member order (that's its point).
+    // members: sort unordered (ordered keeps its skos:memberList sequence)
     let _mem=col.members||[];
     if(treeView.sort!=="doc" && !col.ordered){ _mem=_mem.slice().sort((a,b)=>{ const an=cs[a]?collLabel(cs[a]):nodeText(a), bn=cs[b]?collLabel(cs[b]):nodeText(b); return an.toLowerCase().localeCompare(bn.toLowerCase()); }); if(treeView.sort==="za") _mem.reverse(); }
-    _mem.forEach(m=>{
-      if(cs[m]){ renderNode(m,depth+1); return; }
-      const miss=!model.concepts[m];
-      const leaf=document.createElement('div'); leaf.style.cssText="padding:4px 11px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:"+(miss?"default":"pointer")+";padding-left:"+(13+(depth+1)*15)+"px;color:"+(miss?"var(--err)":"var(--muted)");
-      const dot=document.createElement('span'); dot.textContent="•"; dot.style.color="var(--faint)";
-      const nm2=document.createElement('span'); nm2.textContent=miss?(m+" (missing)"):nodeText(m); nm2.style.cssText="overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
-      leaf.append(dot,nm2);
-      if(!miss) leaf.onclick=()=>{ selected=m; switchTab('build'); if(typeof renderTree==='function')renderTree(); if(typeof renderEditor==='function')renderEditor(); };
-      list.appendChild(leaf);
-    });
+    // 1) sub-collections nest (skos:member collection-in-collection)
+    for(const m of _mem) if(cs[m]) renderNode(m, depth+1);
+    // 2) concept members
+    const concepts=_mem.filter(m=>!cs[m]);
+    if(f){
+      for(const m of concepts) if(matchC.has(m)) conceptLeaf(m, depth+1);   // matches only, flat + highlighted
+    } else if(col.ordered){
+      for(const m of concepts) conceptLeaf(m, depth+1);                     // ordered: flat sequence
+    } else {
+      // unordered: arrange concept members by their own broader/narrower — among the members only
+      const memberSet=new Set(concepts.filter(m=>model.concepts[m]));
+      const childrenInSet=pid=>[...memberSet].filter(x=>(model.concepts[x].broader||[]).includes(pid));
+      const hasParentInSet=cid=>(model.concepts[cid].broader||[]).some(b=>memberSet.has(b));
+      const roots=[...memberSet].filter(cid=>!hasParentInSet(cid));
+      const seen=new Set();
+      const walk=(cid,d)=>{ if(seen.has(cid)) return; seen.add(cid); conceptLeaf(cid,d); for(const ch of sortIds(childrenInSet(cid))) walk(ch,d+1); };
+      for(const r of sortIds(roots)) walk(r, depth+1);
+      for(const m of concepts){ if(model.concepts[m] && !seen.has(m)) conceptLeaf(m, depth+1);   // cycle-orphaned members
+        else if(!model.concepts[m]) conceptLeaf(m, depth+1); }                                    // missing members
+    }
   };
   let _tops=topCollections(); if(treeView.sort!=="doc"){ _tops=_tops.slice().sort((a,b)=>collLabel(cs[a]).toLowerCase().localeCompare(collLabel(cs[b]).toLowerCase())); if(treeView.sort==="za") _tops.reverse(); }
   _tops.forEach(id=>renderNode(id,0));
@@ -4565,6 +4603,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
 }
 if(document.getElementById('collNew')) document.getElementById('collNew').onclick=()=>createCollection(false);
 if(document.getElementById('collNewOrdered')) document.getElementById('collNewOrdered').onclick=()=>createCollection(true);
+if(document.getElementById('collSearch')) document.getElementById('collSearch').oninput=(e)=>{ collFilter=(e.target.value||"").trim().toLowerCase(); renderCollections(); };
 function browseChildren(id){ return model.order.filter(x=>(model.concepts[x].broader||[]).includes(id)); }
 function browseRoots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top||!(c.broader||[]).some(b=>model.concepts[b]); }); }
 function bdesc(id,seen){ seen=seen||new Set(); let n=0; for(const k of browseChildren(id)){ if(seen.has(k))continue; seen.add(k); n+=1+bdesc(k,seen);} return n; }
