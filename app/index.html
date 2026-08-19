@@ -1132,8 +1132,9 @@
         <button class="btn" data-exp="jsonld"><b>JSON-LD</b> &nbsp;.jsonld</button>
         <button class="btn" data-exp="audit" style="grid-column:1/-1"><b>Audit log</b> &nbsp;.csv — full change history with author &amp; timestamp</button>
       </div>
-      <label class="toggle" style="margin-top:12px"><input type="checkbox" id="expCopyMode"> Downloads blocked by your browser? Show the text to copy instead</label>
-      <p class="subtle" style="margin-bottom:0">Need SKOS-XL or plain-label variants? Use the <b>Export</b> tab for full formatting options and a live preview.</p>
+      <label class="toggle" style="margin-top:12px;align-items:flex-start;gap:7px"><input type="checkbox" id="expXlMode" style="margin-top:2px"><span><b>SKOS-XL labels</b> — emit <code>skosxl:Label</code> resources (plus plain <code>skos:</code> labels) in Turtle, RDF/XML &amp; JSON-LD</span></label>
+      <label class="toggle" style="margin-top:8px;align-items:flex-start;gap:7px"><input type="checkbox" id="expCopyMode" style="margin-top:2px"><span>Downloads blocked by your browser? Show the text to copy instead</span></label>
+      <p class="subtle" style="margin-bottom:0">Want a live preview or more formats (RDF/JSON, Markdown, Excel)? Use the <b>Export</b> tab.</p>
     </div>
   </div>
 </div>
@@ -5707,16 +5708,20 @@ if($('#projPKO')) $('#projPKO').onclick=()=>{ try{ createProject("Procedural Kno
 function doExport(kind){
   const slug=(model.scheme.title||"taxonomy").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"taxonomy";
   let text, mime, ext, bom="";
-  if(kind==="ttl"){ text=Core.toTurtle(model,{dc:true,xl:false}); mime="text/turtle"; ext="ttl"; }
-  else if(kind==="rdf"){ text=Core.toRdfXml(model,{dc:true,xl:false}); mime="application/rdf+xml"; ext="rdf"; }
-  else if(kind==="jsonld"){ text=Core.toJsonLd(model,{dc:true,xl:false}); mime="application/ld+json"; ext="jsonld"; }
+  // SKOS-XL is chosen at export time via the modal's toggle (defaulted from the project).
+  // When on, emit skosxl:Label resources AND dumb-down to plain skos labels, so consumers
+  // that don't read SKOS-XL still get labels.
+  const xl = !!($('#expXlMode') && $('#expXlMode').checked); const ropts = {dc:true, xl, dumbDown:xl};
+  if(kind==="ttl"){ text=Core.toTurtle(model,ropts); mime="text/turtle"; ext="ttl"; }
+  else if(kind==="rdf"){ text=Core.toRdfXml(model,ropts); mime="application/rdf+xml"; ext="rdf"; }
+  else if(kind==="jsonld"){ text=Core.toJsonLd(model,ropts); mime="application/ld+json"; ext="jsonld"; }
   else if(kind==="csv"){ text=Core.toCsv(model); mime="text/csv"; ext="csv"; bom="﻿"; }
   else if(kind==="audit"){ text=Core.toAuditCsv(model); mime="text/csv"; ext="csv"; bom="﻿"; }
   const fname = kind==="audit" ? slug+"-audit-log.csv" : slug+"."+ext;
   if($('#expCopyMode').checked){ showText(fname, text); }
   else { downloadFile(fname, bom+text, mime); toast("Downloaded "+fname); }
 }
-$('#btnExport').onclick=()=>$('#exportModal').classList.add('show');
+$('#btnExport').onclick=()=>{ const x=$('#expXlMode'); if(x) x.checked=!!model.xlLabels; $('#exportModal').classList.add('show'); };
 $('#exportClose').onclick=()=>$('#exportModal').classList.remove('show');
 $$('#exportList .btn').forEach(b=>b.onclick=()=>{ doExport(b.dataset.exp); if(!$('#expCopyMode').checked) $('#exportModal').classList.remove('show'); });
 $('#textClose').onclick=()=>$('#textModal').classList.remove('show');
