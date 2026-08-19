@@ -3169,9 +3169,10 @@ function initTreeOpts(){
   lSel.value=treeView.lang;
   const showLang=()=>{ lWrap.style.display=(treeView.render==="pref"&&treeLangs().length>1)?"inline-flex":"none"; };
   showLang();
-  rSel.onchange=()=>{ treeView.render=rSel.value; saveTreeView(); showLang(); renderTree(); if(selected)renderEditor(); };
-  lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); renderTree(); if(selected)renderEditor(); };
-  sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); renderTree(); };
+  const reflow=()=>{ renderTree(); if(typeof renderCollections==="function") renderCollections(); };
+  rSel.onchange=()=>{ treeView.render=rSel.value; saveTreeView(); showLang(); reflow(); if(selected)renderEditor(); };
+  lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); reflow(); if(selected)renderEditor(); };
+  sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); reflow(); };
 }
 
 // ---------- tree ----------
@@ -3188,7 +3189,7 @@ function renderTree(){
   if(treeFilter){
     const match=new Set();
     for(const id of model.order){ const c=model.concepts[id];
-      const hay=[...(c.pref||[]),...(c.alt||[])].map(l=>l.val).join(" ").toLowerCase()+" "+id.toLowerCase();
+      const hay=[...(c.pref||[]),...(c.alt||[])].map(l=>l.val).join(" ").toLowerCase()+" "+id.toLowerCase()+" "+nodeText(id).toLowerCase();
       if(hay.includes(treeFilter)) match.add(id); }
     // include ancestors
     const vis=new Set(match);
@@ -4506,19 +4507,23 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
     const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
     row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
-    // children in member order: sub-collections nest, concepts are leaves
-    (col.members||[]).forEach(m=>{
+    // children: sub-collections nest, concepts are leaves. Honor the Sort option for
+    // unordered collections; an OrderedCollection keeps its member order (that's its point).
+    let _mem=col.members||[];
+    if(treeView.sort!=="doc" && !col.ordered){ _mem=_mem.slice().sort((a,b)=>{ const an=cs[a]?collLabel(cs[a]):nodeText(a), bn=cs[b]?collLabel(cs[b]):nodeText(b); return an.toLowerCase().localeCompare(bn.toLowerCase()); }); if(treeView.sort==="za") _mem.reverse(); }
+    _mem.forEach(m=>{
       if(cs[m]){ renderNode(m,depth+1); return; }
       const miss=!model.concepts[m];
       const leaf=document.createElement('div'); leaf.style.cssText="padding:4px 11px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:"+(miss?"default":"pointer")+";padding-left:"+(13+(depth+1)*15)+"px;color:"+(miss?"var(--err)":"var(--muted)");
       const dot=document.createElement('span'); dot.textContent="•"; dot.style.color="var(--faint)";
-      const nm2=document.createElement('span'); nm2.textContent=miss?(m+" (missing)"):plabel(m); nm2.style.cssText="overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      const nm2=document.createElement('span'); nm2.textContent=miss?(m+" (missing)"):nodeText(m); nm2.style.cssText="overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
       leaf.append(dot,nm2);
       if(!miss) leaf.onclick=()=>{ selected=m; switchTab('build'); if(typeof renderTree==='function')renderTree(); if(typeof renderEditor==='function')renderEditor(); };
       list.appendChild(leaf);
     });
   };
-  topCollections().forEach(id=>renderNode(id,0));
+  let _tops=topCollections(); if(treeView.sort!=="doc"){ _tops=_tops.slice().sort((a,b)=>collLabel(cs[a]).toLowerCase().localeCompare(collLabel(cs[b]).toLowerCase())); if(treeView.sort==="za") _tops.reverse(); }
+  _tops.forEach(id=>renderNode(id,0));
   ids.forEach(id=>{ if(!rendered.has(id)) renderNode(id,0); });   // any left (e.g. in a cycle)
   if(!collSel||!cs[collSel]){ ed.innerHTML='<div class="subtle" style="padding:16px">Select a collection on the left, or create one above.</div>'; return; }
   const col=cs[collSel]; ed.innerHTML="";
