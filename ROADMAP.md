@@ -31,9 +31,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 - **Guided first-build walkthrough** — a skippable, 11-step tour with tooltips that spotlights the build flow (top concepts, the tree, identifier vs. label and UUIDs, top vs. child, labels, definitions, linked data, validate/export). Auto-starts once; reopen anytime from the ☰ menu.
 - **Hamburger menu** — one **☰** menu that mirrors the tabs and gathers the documentation, feedback (feature request / bug report / email), and the tour in a single place.
 
-## 🔜 Next
+## 🚧 In progress
 
-Nothing in active development right now — the **Planned** items below are candidates, and your requests shape the order. See [how to request a feature](#feedback--requests).
+- **Schema Binding — projection & mapping.** A shared, app-neutral engine ([`lib/schema-projection.js`](lib/schema-projection.js)) that projects the ontology model onto implementation targets and maps them back, through an **editable projection map**. Targets: **MongoDB** (`$jsonSchema`), **GraphQL** (SDL), **SwiftData** (`@Model`), **Obsidian** (frontmatter). The engine is built and tested (project-out for all four, round-trip for the three importable ones); **next** is the in-app "Project schema" panel and the per-app IR adapters.
 
 ## 💡 Planned
 
