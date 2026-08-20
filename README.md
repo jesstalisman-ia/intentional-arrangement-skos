@@ -20,6 +20,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 | **`app/`** | The browser app — one self-contained `index.html`. |
 | **`api/`** | A small REST API (Flask + rdflib + pySHACL) to validate a vocabulary and convert between RDF serializations. |
 | **`mcp-server/`** | An MCP server exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
+| **`connectors/`** | Bridges that pull external vocabularies into the editor as SKOS. First one: **[SharePoint Term Store → SKOS](connectors/sharepoint-termstore/)** (Microsoft Graph or an offline export). Example/reference software — see its README's disclaimer before any live use. |
 | **`deploy/`** | **Optional** Apache Jena Fuseki server for the app's "Publish to server" feature — a Dockerfile that builds Fuseki **5.6.0** from the official distribution (base image pinned by digest, tarball by SHA-512). **Not required; review [`deploy/README.md`](deploy/README.md) and harden before deploying.** |
 | **`docs/`** | [Documentation hub](docs/): install, using the editor, workspace, spreadsheet import, SKOS reference, [hosting Fuseki](docs/hosting-fuseki.md), and the API/MCP guides. |
 

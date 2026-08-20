@@ -1,0 +1,9 @@
+# Mapping engine (offline conversion) needs only:
+rdflib>=7.0
+
+# Live pull from Microsoft Graph adds:
+msal>=1.28
+requests>=2.31
+
+# Bridge service (live sync) adds:
+flask>=3.0
