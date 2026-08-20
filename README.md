@@ -45,7 +45,7 @@ Several taxonomies at once, each autosaved to your browser with a **✓ Saved** 
 
 ## Three ways to use it
 
-New here? [Install & setup](docs/install.md) covers the hosted app, running it locally, and deploying your own copy.
+New here? Start with the **[Getting-started runbook](docs/getting-started.md)** — the fastest way in, what runs locally, and how the tool behaves hosted vs. as a local file. [Install & setup](docs/install.md) goes deeper on running it locally and deploying your own copy.
 
 ### 1. In your browser
 Open `app/index.html`, or serve it:
