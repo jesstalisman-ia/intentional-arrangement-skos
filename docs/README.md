@@ -6,6 +6,7 @@ Use the tool now at **https://jesstalisman-ia.github.io/intentional-arrangement-
 
 ## Start here
 
+- **[Getting started (runbook)](getting-started.md)** — start here: the fastest way in, what runs locally, and hosted vs. local-file behavior.
 - **[Install & run](install.md)** — use it hosted, run the single file locally, or deploy your own copy.
 - **[Using the editor](using-the-editor.md)** — the full workflow, tab by tab: collect candidate terms in the Glossary, author concepts (plain SKOS or SKOS-XL), review Proposals, validate, browse, visualize, query with SPARQL, and export.
 - **[The guided walkthrough](guided-walkthrough.md)** — the written companion to the in-app tour, step by step, each one expanded.
