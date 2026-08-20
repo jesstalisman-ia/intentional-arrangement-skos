@@ -4490,6 +4490,7 @@ function plabel(id){ const c=model.concepts[id]; if(!c) return id; const p=(c.pr
 // ================= Collections — skos:Collection / skos:OrderedCollection =================
 let collSel=null;
 let collFilter="";
+const openColls=new Set();   // #24: expandable/collapsible collection nodes (like the concept tree)
 function colls(){ return model.collections=model.collections||{}; }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
@@ -4503,6 +4504,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const ids=Object.keys(cs); list.innerHTML="";
   if(!ids.length) list.innerHTML='<div class="subtle" style="padding:14px 4px">No collections yet. Use <b>＋ Collection</b> (unordered) or <b>＋ Ordered</b> above to group concepts.</div>';
   const rendered=new Set();
+  const accounted=new Set();   // sub-collections shown (or collapsed) under a parent — not orphans
   const f=collFilter;
   // filter matches: concepts (by label/alt/id/rendered text) and collections (by label/id)
   const matchC=new Set(), matchK=new Set();
@@ -4530,12 +4532,25 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const renderNode=(id,depth)=>{ if(rendered.has(id)) return; const col=cs[id]; if(!col) return;
     if(f && !containsMatch(id)) return;   // filtering: hide branches with no match
     rendered.add(id);
-    const row=document.createElement('div'); row.style.cssText="padding:8px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:7px;margin-bottom:2px;padding-left:"+(11+depth*15)+"px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
-    if(depth){ const tw=document.createElement('span'); tw.textContent="›"; tw.style.color="var(--faint)"; row.appendChild(tw); }
+    const hasChildren=(col.members||[]).length>0;
+    const isOpen=openColls.has(id) || (f && hasChildren);   // filtering auto-expands matches
+    const row=document.createElement('div'); row.style.cssText="padding:7px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-bottom:2px;padding-left:"+(9+depth*15)+"px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
+    // caret to expand/collapse (like the Concept tree); spacer keeps names aligned when there's nothing to open
+    const caret=document.createElement('span'); caret.textContent=hasChildren?(isOpen?"▾":"▸"):""; caret.style.cssText="width:12px;flex:0 0 auto;text-align:center;color:var(--faint);font-size:10px;"+(hasChildren?"cursor:pointer":"");
+    if(hasChildren) caret.onclick=(e)=>{ e.stopPropagation(); if(openColls.has(id))openColls.delete(id); else openColls.add(id); renderCollections(); };
+    row.appendChild(caret);
+    // green circle marks a Collection (replaces the "set"/"sub-collection" tags); ordered keeps a small badge
+    const dot=document.createElement('span'); dot.textContent="●"; dot.title=col.ordered?"ordered collection":"collection"; dot.style.cssText="color:var(--c-validate,#0a8f74);font-size:10px;flex:0 0 auto";
+    row.appendChild(dot);
     const nm=document.createElement('span'); nm.textContent=collLabel(col); nm.style.cssText="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"; if(f&&matchK.has(id)) nm.classList.add('fmatch');
-    const badge=document.createElement('span'); badge.textContent=col.ordered?"ordered":"set"; badge.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px";
-    const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right";
-    row.append(nm,badge,ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
+    row.appendChild(nm);
+    if(col.ordered){ const ob=document.createElement('span'); ob.textContent="ordered"; ob.title="skos:OrderedCollection — member order is significant"; ob.style.cssText="font-size:9px;font-family:var(--mono);color:var(--c-validate,#0a8f74);border:1px solid var(--c-validate,#0a8f74);border-radius:4px;padding:0 4px;flex:0 0 auto"; row.appendChild(ob); }
+    const ct=document.createElement('span'); ct.textContent=(col.members||[]).length; ct.style.cssText="font-size:11px;color:var(--faint);min-width:14px;text-align:right;flex:0 0 auto";
+    row.appendChild(ct); row.onclick=()=>{ collSel=id; renderCollections(); }; list.appendChild(row);
+    // sub-collections are "accounted" (belong under this parent) even when collapsed, so the
+    // orphan/cycle fallback below never re-shows them at the top level.
+    for(const m of (col.members||[])) if(cs[m]) accounted.add(m);
+    if(!isOpen) return;   // collapsed — stop here
     // members: sort unordered (ordered keeps its skos:memberList sequence)
     let _mem=col.members||[];
     if(treeView.sort!=="doc" && !col.ordered){ _mem=_mem.slice().sort((a,b)=>{ const an=cs[a]?collLabel(cs[a]):nodeText(a), bn=cs[b]?collLabel(cs[b]):nodeText(b); return an.toLowerCase().localeCompare(bn.toLowerCase()); }); if(treeView.sort==="za") _mem.reverse(); }
@@ -4562,7 +4577,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   };
   let _tops=topCollections(); if(treeView.sort!=="doc"){ _tops=_tops.slice().sort((a,b)=>collLabel(cs[a]).toLowerCase().localeCompare(collLabel(cs[b]).toLowerCase())); if(treeView.sort==="za") _tops.reverse(); }
   _tops.forEach(id=>renderNode(id,0));
-  ids.forEach(id=>{ if(!rendered.has(id)) renderNode(id,0); });   // any left (e.g. in a cycle)
+  ids.forEach(id=>{ if(!rendered.has(id) && !accounted.has(id)) renderNode(id,0); });   // true orphans only (not collapsed sub-collections)
   if(!collSel||!cs[collSel]){ ed.innerHTML='<div class="subtle" style="padding:16px">Select a collection on the left, or create one above.</div>'; return; }
   const col=cs[collSel]; ed.innerHTML="";
   const wrap=el2=>{ const d=document.createElement('div'); d.style.cssText="margin-bottom:14px"; return d; };
