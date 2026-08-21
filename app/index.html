@@ -373,6 +373,12 @@
         <div class="subtle" id="labelStyleHint"></div>
       </div>
     </div>
+    <div class="scheme-idstyle" id="isoThesBox">
+      <div class="isb-left">
+        <div class="isb-h">ISO 25964 relations</div>
+        <label class="toggle" style="align-items:flex-start;gap:7px;font-size:13px"><input type="checkbox" id="isoThesToggle" style="margin-top:2px"><span>Show the specialised hierarchy pickers — <code>iso-thes:</code> generic (is-a), partitive (part of), instantial (instance of) — in the concept editor, alongside plain <code>skos:broader</code>.</span></label>
+      </div>
+    </div>
     <div class="scheme-grid" id="schemeGrid"></div>
   </details>
 
@@ -1366,6 +1372,11 @@ const bnode = v => ({ t: "bnode", v });
 const LABEL_FIELDS = ["pref", "alt", "hidden"];
 const NOTE_FIELDS = ["definition", "scopeNote", "changeNote", "historyNote", "editorialNote", "example"];
 const MAP_FIELDS = ["exactMatch", "closeMatch", "broadMatch", "narrowMatch", "relatedMatch"];
+// ISO 25964 (iso-thes) specialised hierarchy. Stored broader-side; narrower is the inverse.
+const ISO_BROADER = ["broaderGeneric", "broaderPartitive", "broaderInstantial"];
+const ISO_INVERSE = { broaderGeneric: "narrowerGeneric", broaderPartitive: "narrowerPartitive", broaderInstantial: "narrowerInstantial" };
+// Which specialisations also assert their skos:broader super-property. Partitive is kept out for now.
+const ISO_ENTAILS_SKOS = { broaderGeneric: true, broaderPartitive: false, broaderInstantial: true };
 const XL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 const SKOS_LABEL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 
@@ -1375,6 +1386,7 @@ function emptyConcept(id){
   return { id, notation: "", pref: [], alt: [], hidden: [],
     definition: [], scopeNote: [], changeNote: [], historyNote: [], editorialNote: [], example: [],
     broader: [], related: [],
+    broaderGeneric: [], broaderPartitive: [], broaderInstantial: [],
     exactMatch: [], closeMatch: [], broadMatch: [], narrowMatch: [], relatedMatch: [],
     artifacts: [], history: [], top: false };
 }
@@ -1459,6 +1471,18 @@ function buildTriples(model, opts){
       if (!model.concepts[rid]) return;
       add(s, iri(NS.skos + "related"), iri(conceptUri(model, rid)));
     });
+    // ISO 25964 specialised hierarchy (iso-thes). Emit the specialisation + its narrower
+    // inverse; generic/instantial also assert their skos:broader super-property (partitive
+    // is kept iso-thes-only for now), so plain-SKOS consumers still see the hierarchy.
+    for (const fld of ISO_BROADER){
+      (c[fld] || []).forEach(pid => {
+        if (!model.concepts[pid]) return;
+        const pu = iri(conceptUri(model, pid));
+        add(s, iri(NS.isothes + fld), pu);
+        add(pu, iri(NS.isothes + ISO_INVERSE[fld]), s);
+        if (ISO_ENTAILS_SKOS[fld]){ add(s, iri(NS.skos + "broader"), pu); add(pu, iri(NS.skos + "narrower"), s); }
+      });
+    }
     // mappings
     for (const m of MAP_FIELDS)
       (c[m] || []).forEach(u => { if (u) add(s, iri(NS.skos + m), iri(u)); });
@@ -1549,7 +1573,7 @@ function toTurtle(model, opts){
   let out = "";
   const usedNs = new Set(["skos", "rdf"]);
   for (const p of Object.keys(NS)) usedNs.add(p);
-  for (const p of ["skos", "skosxl", "rdf", "rdfs", "dcterms", "xsd"])
+  for (const p of Object.keys(NS))
     out += "@prefix " + p + ": <" + NS[p] + "> .\n";
   out += "@prefix " + (model.prefix || "") + ": <" + model.base + "> .\n\n";
 
@@ -2217,13 +2241,16 @@ function validate(model){
   return R;
 }
 
+// Effective hierarchy for validation: plain skos:broader plus the ISO 25964 specialisations
+// (they are sub-properties of skos:broader, so a cycle through any of them is still a cycle).
+function effBroader(c){ return c ? [...(c.broader||[]), ...(c.broaderGeneric||[]), ...(c.broaderPartitive||[]), ...(c.broaderInstantial||[])] : []; }
 function findCycles(model){
   const C = model.concepts, WHITE = 0, GRAY = 1, BLACK = 2;
   const color = {}, stack = [], cycles = [], seen = new Set();
   for (const id in C) color[id] = WHITE;
   function dfs(u){
     color[u] = GRAY; stack.push(u);
-    for (const p of (C[u].broader || [])){
+    for (const p of effBroader(C[u])){
       if (!C[p]) continue;
       if (color[p] === GRAY){
         const i = stack.indexOf(p);
@@ -2242,7 +2269,7 @@ function ancestorsMap(model){
   function anc(u, path){
     if (memo.has(u)) return memo.get(u);
     const set = new Set();
-    for (const p of (C[u] && C[u].broader || [])){
+    for (const p of effBroader(C[u])){
       if (!C[p] || path.has(p)) continue;
       set.add(p);
       path.add(p); for (const a of anc(p, path)) set.add(a); path.delete(p);
@@ -2539,6 +2566,9 @@ function triplesToModel(triples, prefixes){
     else if (pv === P + "broader" && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const pid = localOf(o.v); if (!c.broader.includes(pid)) c.broader.push(pid); } }
     else if (pv === P + "narrower" && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const pid = localOf(s); if (!child.broader.includes(pid)) child.broader.push(pid); } }
     else if (pv === P + "related" && o.t === "iri"){ const c = ensure(s), rc = ensure(o.v); if (c && rc){ const rid = localOf(o.v); if (!c.related.includes(rid)) c.related.push(rid); } }
+    // ISO 25964 iso-thes specialised hierarchy (+ narrower inverses)
+    else if (ISO_BROADER.some(fl => pv === NS.isothes + fl) && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const fl = pv.slice(NS.isothes.length); const pid = localOf(o.v); (c[fl] = c[fl] || []); if (!c[fl].includes(pid)) c[fl].push(pid); } }
+    else if (Object.values(ISO_INVERSE).some(nf => pv === NS.isothes + nf) && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const nf = pv.slice(NS.isothes.length); const bf = ISO_BROADER.find(b => ISO_INVERSE[b] === nf); const pid = localOf(s); if (bf){ (child[bf] = child[bf] || []); if (!child[bf].includes(pid)) child[bf].push(pid); } } }
     else if (pv === P + "topConceptOf"){ const c = ensure(s); if (c) c.top = true; }
     else if (MAP_FIELDS.some(m => pv === P + m) && o.t === "iri"){ const c = ensure(s); if (c){ const m = pv.slice(P.length); c[m].push(o.v); } }
     else if (pv === NS.rdfs + "seeAlso" && o.t === "iri"){ const c = ensure(s); if (c){ c.artifacts = c.artifacts || []; c.artifacts.push({ type: "link", title: "", url: o.v }); } }
@@ -2548,6 +2578,12 @@ function triplesToModel(triples, prefixes){
     else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
   }
   if (sawXl) model.xlLabels = true;
+  // De-dup: a plain skos:broader that's entailed by iso-thes:broaderGeneric/Instantial is
+  // redundant, so drop it (keeps round-trips clean). Partitive doesn't entail, so it's left alone.
+  for (const id in model.concepts){ const c = model.concepts[id];
+    const entailed = new Set([...(c.broaderGeneric || []), ...(c.broaderInstantial || [])]);
+    if (entailed.size && c.broader && c.broader.length) c.broader = c.broader.filter(p => !entailed.has(p));
+  }
   // fall back to rdfs:label for concepts that carry no skos:prefLabel
   for (const t of triples){ if (t.p.t==="iri" && t.p.v===NS.rdfs+"label" && t.o.t==="lit"){ const c = model.concepts[localOf(t.s.v)]; if (c && !c.pref.length) c.pref.push({ lang: t.o.lang||"", val: t.o.v }); } }
   // dedupe plain+XL duplicate labels
@@ -3098,7 +3134,7 @@ async function deleteConcept(id){
   pushUndo("delete of “"+nm+"”");
   delete model.concepts[id]; model.order = model.order.filter(x=>x!==id);
   for(const x of model.order){ const o=model.concepts[x];
-    o.broader=(o.broader||[]).filter(b=>b!==id); o.related=(o.related||[]).filter(r=>r!==id); }
+    o.broader=(o.broader||[]).filter(b=>b!==id); o.related=(o.related||[]).filter(r=>r!==id); for(const f of ISO_BROADER) o[f]=(o[f]||[]).filter(b=>b!==id); }
   if(selected===id) selected=null;
   save(); renderTree(); renderEditor(); afterChange(); toast("Deleted “"+nm+"” · ⌘/Ctrl+Z to undo");
 }
@@ -3269,7 +3305,7 @@ async function bulkDelete(){ if(!bulkSel.size) return; const ids=[...bulkSel];
   pushUndo("delete of "+ids.length+" concept"+(ids.length===1?"":"s"));
   const del=new Set(ids); for(const id of ids) delete model.concepts[id];
   model.order=model.order.filter(x=>!del.has(x));
-  for(const x of model.order){ const o=model.concepts[x]; o.broader=(o.broader||[]).filter(b=>!del.has(b)); o.related=(o.related||[]).filter(r=>!del.has(r)); }
+  for(const x of model.order){ const o=model.concepts[x]; o.broader=(o.broader||[]).filter(b=>!del.has(b)); o.related=(o.related||[]).filter(r=>!del.has(r)); for(const f of ISO_BROADER) o[f]=(o[f]||[]).filter(b=>!del.has(b)); }
   if(del.has(selected)) selected=null;
   bulkSel.clear(); save(); renderTree(); renderEditor(); afterChange(); bulkPopulateParent(); bulkCount(); toast(ids.length+" concept"+(ids.length===1?"":"s")+" deleted · ⌘/Ctrl+Z to undo"); }
 if($('#btnUndo')) $('#btnUndo').onclick=doUndo;
@@ -3412,6 +3448,11 @@ function renderEditor(){
   host.appendChild(noteGroup("Editorial notes", c, "editorialNote"));
   host.appendChild(noteGroup("Examples", c, "example"));
   host.appendChild(relGroup("Broader (parents)", c, "broader"));
+  if(model.isothes){
+    host.appendChild(relGroup("Broader — generic (is-a)", c, "broaderGeneric"));
+    host.appendChild(relGroup("Broader — partitive (part of)", c, "broaderPartitive"));
+    host.appendChild(relGroup("Broader — instantial (instance of)", c, "broaderInstantial"));
+  }
   host.appendChild(relGroup("Related", c, "related"));
   host.appendChild(mapGroup(c));
   host.appendChild(artifactGroup(c));
@@ -3505,7 +3546,7 @@ function relGroup(title, c, field){
   g.appendChild(chips);
   const add=document.createElement("div"); add.className="reladd";
   const sel=document.createElement("select");
-  sel.innerHTML='<option value="">add '+(field==="broader"?"parent":"related")+'…</option>'+
+  sel.innerHTML='<option value="">add '+(/^broader/.test(field)?"parent":"related")+'…</option>'+
     model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>nodeText(a).toLowerCase().localeCompare(nodeText(b).toLowerCase()))
       .map(x=>`<option value="${x}">${escapeHtml(nodeText(x))}</option>`).join("");
   sel.onchange=()=>{ if(sel.value){ c[field]=c[field]||[]; if(!c[field].includes(sel.value)) c[field].push(sel.value);
@@ -3564,6 +3605,7 @@ function renderScheme(){
   // label style (plain SKOS vs SKOS-XL)
   const ls=model.xlLabels?"xl":"plain";
   $$('#labelStyle input').forEach(r=>{ r.checked=r.value===ls; r.onchange=()=>{ if(r.checked){ setLabelStyle(r.value); } }; });
+  const iso=$('#isoThesToggle'); if(iso){ iso.checked=!!model.isothes; iso.onchange=()=>{ model.isothes=iso.checked; save(); if(selected) renderEditor(); }; }
   updateXlUi();
 }
 function setLabelStyle(v){
