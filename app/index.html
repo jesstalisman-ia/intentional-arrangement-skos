@@ -1387,6 +1387,7 @@ function emptyConcept(id){
     definition: [], scopeNote: [], changeNote: [], historyNote: [], editorialNote: [], example: [],
     broader: [], related: [],
     broaderGeneric: [], broaderPartitive: [], broaderInstantial: [],
+    rdfsLabel: [], comment: [],
     exactMatch: [], closeMatch: [], broadMatch: [], narrowMatch: [], relatedMatch: [],
     artifacts: [], history: [], top: false };
 }
@@ -1460,6 +1461,9 @@ function buildTriples(model, opts){
     // documentation
     for (const kind of NOTE_FIELDS)
       (c[kind] || []).forEach(L => { if (L.val) add(s, iri(NS.skos + kind), lit(L.val, L.lang)); });
+    // rdfs:label (optional alternate name) + rdfs:comment
+    (c.rdfsLabel || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
+    (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
 
     // hierarchy + associative (assert both directions for broader/narrower)
     (c.broader || []).forEach(pid => {
@@ -2572,6 +2576,8 @@ function triplesToModel(triples, prefixes){
     else if (pv === P + "topConceptOf"){ const c = ensure(s); if (c) c.top = true; }
     else if (MAP_FIELDS.some(m => pv === P + m) && o.t === "iri"){ const c = ensure(s); if (c){ const m = pv.slice(P.length); c[m].push(o.v); } }
     else if (pv === NS.rdfs + "seeAlso" && o.t === "iri"){ const c = ensure(s); if (c){ c.artifacts = c.artifacts || []; c.artifacts.push({ type: "link", title: "", url: o.v }); } }
+    else if (pv === NS.rdfs + "label" && o.t === "lit"){ const c = ensure(s); if (c){ (c.rdfsLabel = c.rdfsLabel || []).push({ lang: o.lang || "", val: o.v }); } }
+    else if (pv === NS.rdfs + "comment" && o.t === "lit"){ const c = ensure(s); if (c){ (c.comment = c.comment || []).push({ lang: o.lang || "", val: o.v }); } }
     // skos-xl
     else if (pv === X + "prefLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.pref.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.alt.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
@@ -2584,8 +2590,9 @@ function triplesToModel(triples, prefixes){
     const entailed = new Set([...(c.broaderGeneric || []), ...(c.broaderInstantial || [])]);
     if (entailed.size && c.broader && c.broader.length) c.broader = c.broader.filter(p => !entailed.has(p));
   }
-  // fall back to rdfs:label for concepts that carry no skos:prefLabel
-  for (const t of triples){ if (t.p.t==="iri" && t.p.v===NS.rdfs+"label" && t.o.t==="lit"){ const c = model.concepts[localOf(t.s.v)]; if (c && !c.pref.length) c.pref.push({ lang: t.o.lang||"", val: t.o.v }); } }
+  // A concept with no skos:prefLabel but an rdfs:label: promote the rdfs:label to prefLabel
+  // (so it has a skos name) and don't keep it as a duplicate alternate.
+  for (const id in model.concepts){ const c = model.concepts[id]; if (!c.pref.length && (c.rdfsLabel||[]).length) c.pref.push(c.rdfsLabel.shift()); }
   // dedupe plain+XL duplicate labels
   for (const id in model.concepts){
     const c = model.concepts[id];
@@ -3441,6 +3448,8 @@ function renderEditor(){
   host.appendChild(labelGroup("Preferred labels", c, "pref", true));
   host.appendChild(labelGroup("Alternative labels", c, "alt", false));
   host.appendChild(labelGroup("Hidden labels", c, "hidden", false));
+  host.appendChild(labelGroup("Alternate name (rdfs:label)", c, "rdfsLabel", false));
+  host.appendChild(noteGroup("Comment (rdfs:comment)", c, "comment"));
   host.appendChild(noteGroup("Definition", c, "definition"));
   host.appendChild(noteGroup("Scope notes", c, "scopeNote"));
   host.appendChild(noteGroup("Change notes", c, "changeNote"));
@@ -3503,7 +3512,7 @@ function labelGroup(title, c, field, isPref){
     rm.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); afterChange(); };
     row.append(lang,val,rm); g.appendChild(row);
     // SKOS-XL: each label carries its own URI + optional source/provenance
-    if(model.xlLabels){
+    if(model.xlLabels && LABEL_FIELDS.includes(field)){
       const meta=document.createElement("div"); meta.className="lbl-xl";
       const uri=document.createElement("input"); uri.className="xluri"; uri.value=L.uri||""; uri.title="skosxl:Label identifier — assigned automatically ("+((model.idStyle||"text")==="uuid"?"UUID":"stable")+"). Edit to override; clear to regenerate.";
       uri.placeholder=Core.xlLabelUri(model, selected, field, i+1, L.lang);
