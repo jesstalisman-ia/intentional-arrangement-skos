@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Collections tree UX (#24)
+- Collapsible/expandable collection nodes with a large caret (expanded by default), a green ● marking each collection (replacing the set/sub-collection tags; ordered keeps a badge), and the filter/highlight from before. The left-list + right-editor split was already in place.
+
 ### v0.7.0 — standards fixes & display options (from GitHub issues #16–#22)
 - **RDF/XML import** — the importer now reads RDF/XML (`rdf:Description`, typed nodes, `rdf:about`/`ID`/`nodeID`, `xml:lang`, `rdf:datatype`, `xml:base`), so `.rdf`/`.xml` files load and the app's own RDF/XML export round-trips. (#18)
 - **SKOS-XL export toggle** — a checkbox in the Export dialog puts `skosxl:Label` resources in every download (Turtle, RDF/XML, JSON-LD), defaulted on for SKOS-XL projects.

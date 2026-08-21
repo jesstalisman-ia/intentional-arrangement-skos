@@ -70,6 +70,12 @@ When SKOS-XL is on, a teal **SKOS-XL** badge appears in the header (click it to 
 
 **Linked artifacts.** Attach documents, images, or links that give a concept context for the people using it.
 
+## Collections — alternative groupings
+
+The **Collections** tab groups concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` whose member order is significant. Collections sit *beside* the broader/narrower hierarchy rather than inside it, and they nest — a collection can contain sub-collections, giving a second tree with concepts at the leaves.
+
+Each node has a **green ● circle** marking a collection; an ordered one also carries an **ordered** badge. Click the large **▶ / ▼ caret** to collapse or expand a node — the tree is expanded by default. Inside a collection, concept members arrange by their own broader/narrower (an ordered collection keeps its `skos:memberList` sequence instead). The **filter box** narrows the tree to matching collections and members and highlights the hits. Select a collection to edit its name, note, type, and members in the panel on the right.
+
 ## Proposals — suggest and review terms
 
 Not everyone who has an idea for a term should edit the vocabulary directly. In the **Proposals** tab, contributors *propose* a new term — with a definition, a suggested parent, synonyms, a scope note, a rationale, and links — and a taxonomist reviews each one. The reviewer sets the proposed concept's parent (or makes it a top concept) and **approves** it into the taxonomy, or **rejects** it with a reason. Every decision is recorded, and the whole log downloads as CSV or a readable report.
