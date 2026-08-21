@@ -28,7 +28,9 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 
 ## What the app does
 
-- **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it holds both ways and shows in the graph. Identifiers are readable or opaque UUIDs, your call. Language tags use BCP 47 / ISO 639.
+- **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, an optional `rdfs:label` alternate name and `rdfs:comment`, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it holds both ways and shows in the graph. Identifiers are readable or opaque UUIDs, your call. Language tags use BCP 47 / ISO 639.
+- **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. Generic and instantial also assert their `skos:broader` super-property, so plain-SKOS tools still read the hierarchy.
+- **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dct:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dct:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
 - **Display & filter.** Show the concept tree by **label** (with a language picker when the vocabulary is multilingual), **qualified name**, or **full IRI**, in document order or A–Z / Z–A. The filter box highlights matches (and matches by whatever form you're showing). Both apply to the relationship pickers as well.
 - **Collections.** Group concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` that keeps member order. Collections sit beside the broader/narrower tree instead of inside it, and they nest — a second tree with concepts at the leaves. Inside a collection, its concept members arrange by their own broader/narrower, and a filter box highlights members. An `OrderedCollection` keeps its `skos:memberList` sequence. Nodes collapse and expand (a green ● marks each collection, an *ordered* badge marks ordered ones).
 - **SKOS-XL.** Turn on SKOS-XL for a taxonomy and every label becomes a `skosxl:Label` resource with its own URI and optional `dcterms:source` provenance. The **Export** dialog has a **SKOS-XL toggle** so every download carries the `skosxl:Label` resources (dumbed-down to plain `skos:` labels too) across Turtle, RDF/XML, and JSON-LD.
@@ -82,8 +84,9 @@ This repo is meant to be read and rebuilt, not just run. The essays in [`docs/`]
 
 - **W3C SKOS** — the RDF vocabulary for concept schemes.
 - **ANSI/NISO Z39.19-2005** — controlled-vocabulary construction (term form, USE/UF, BT/NT/RT, scope notes).
-- **ISO 25964-1/-2** — thesauri and interoperability.
-- **DCMI / Dublin Core** — concept-scheme metadata.
+- **ISO 25964-1/-2** — thesauri and interoperability; the `iso-thes` generic/partitive/instantial relations are available in ISO 25964 mode.
+- **DCMI / Dublin Core** — concept-scheme metadata, `dct:source`, and attribution.
+- **FOAF** (`foaf:Document`, `foaf:page`, `foaf:name`) and **PROV-O** (`prov:Person`/`Organization`/`SoftwareAgent`) — documents and agents in the Sources tab.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 
 ## Hosting

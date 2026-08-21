@@ -8,6 +8,12 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### ISO 25964 relations, rdfs:label/comment, and a Sources tab (#25)
+- **ISO 25964 thesaurus relations** (opt-in): `iso-thes:broaderGeneric` / `broaderPartitive` / `broaderInstantial` (+ narrower inverses), toggled per taxonomy; generic & instantial also assert `skos:broader`.
+- **`rdfs:label`** (alternate name) and **`rdfs:comment`** on concepts.
+- **Sources tab** — reusable `foaf:Document` records (`dct:title`, `foaf:page`, `rdfs:comment`) cited by concepts via `dct:source`, and `prov:Agent` records (`prov:Person`/`Organization`/`SoftwareAgent` with `foaf:name`/`foaf:homepage`) creditable as the scheme's creator / contributor / publisher.
+- All of it round-trips in Turtle, RDF/XML, and JSON-LD. (International standards only — no country-specific profile.)
+
 ### Collections tree UX (#24)
 - Collapsible/expandable collection nodes with a large caret (expanded by default), a green ● marking each collection (replacing the set/sub-collection tags; ordered keeps a badge), and the filter/highlight from before. The left-list + right-editor split was already in place.
 

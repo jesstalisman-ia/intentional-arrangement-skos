@@ -28,6 +28,8 @@ The Build tab is where the work happens. The tree of concepts sits on the left; 
 - **Add a child** to build depth. A child points up to its parent through `broader`.
 - Select any concept in the tree to edit it. Drag or use the concept's own fields to change where it sits.
 
+**ISO 25964 relations (opt-in).** In the concept-scheme panel, turn on **ISO 25964 relations** to add three specialised broader pickers to the concept editor alongside plain `skos:broader`: **generic** (is-a, `iso-thes:broaderGeneric`), **partitive** (part-of, `iso-thes:broaderPartitive`), and **instantial** (instance-of, `iso-thes:broaderInstantial`). On export, generic and instantial also assert `skos:broader` so plain-SKOS tools still see the hierarchy; partitive is emitted as `iso-thes` only. Leave the toggle off and the editor stays plain SKOS.
+
 ### A concept's fields
 
 **Identifier vs. preferred label.** These are two different things, and keeping them straight saves pain later:
@@ -75,6 +77,15 @@ When SKOS-XL is on, a teal **SKOS-XL** badge appears in the header (click it to 
 The **Collections** tab groups concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` whose member order is significant. Collections sit *beside* the broader/narrower hierarchy rather than inside it, and they nest — a collection can contain sub-collections, giving a second tree with concepts at the leaves.
 
 Each node has a **green ● circle** marking a collection; an ordered one also carries an **ordered** badge. Click the large **▶ / ▼ caret** to collapse or expand a node — the tree is expanded by default. Inside a collection, concept members arrange by their own broader/narrower (an ordered collection keeps its `skos:memberList` sequence instead). The **filter box** narrows the tree to matching collections and members and highlights the hits. Select a collection to edit its name, note, type, and members in the panel on the right.
+
+## Sources — documents & agents
+
+The **Sources** tab holds reusable records that concepts and the scheme can point at.
+
+- **Documents** (`foaf:Document`) — a source document with a title (`dct:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dct:source`).
+- **Agents** (`prov:Agent`) — a **Person**, **Organization**, or **Software agent** (`prov:Person` / `prov:Organization` / `prov:SoftwareAgent`) with a name (`foaf:name`) and optional homepage (`foaf:homepage`). In the concept-scheme panel, link an agent as the scheme's **creator**, **contributor**, or **publisher** — the agent reference is exported in place of the plain-text field.
+
+Everything round-trips: documents, agents, `dct:source`, and the attribution references all export to RDF and read back on import.
 
 ## Proposals — suggest and review terms
 
