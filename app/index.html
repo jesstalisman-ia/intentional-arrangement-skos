@@ -386,6 +386,7 @@
     <button class="tab" data-tab="glossary">Glossary <span class="pill" id="pillGloss">0</span></button>
     <button class="tab active" data-tab="build">Build <span class="pill" id="pillCount">0</span></button>
     <button class="tab" data-tab="collections">Collections <span class="pill" id="pillColl">0</span></button>
+    <button class="tab" data-tab="sources">Sources <span class="pill" id="pillSrc">0</span></button>
     <button class="tab" data-tab="browse">Business view</button>
     <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
     <button class="tab" data-tab="graph">Graph</button>
@@ -842,6 +843,15 @@
         <div id="collList"></div>
         <div id="collEditor" class="browse-detail"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="sources">
+    <div class="card">
+      <div class="card-h"><h2>Sources</h2>
+        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dct:source</code> in the concept editor.</span>
+      </div>
+      <div id="sourcesBody"></div>
     </div>
   </section>
 
@@ -1358,6 +1368,8 @@ const NS = {
   dcterms: "http://purl.org/dc/terms/",
   xsd: "http://www.w3.org/2001/XMLSchema#",
   isothes: "http://purl.org/iso25964/skos-thes#",
+  foaf: "http://xmlns.com/foaf/0.1/",
+  prov: "http://www.w3.org/ns/prov#",
 };
 
 // ---- term constructors ----
@@ -1387,7 +1399,7 @@ function emptyConcept(id){
     definition: [], scopeNote: [], changeNote: [], historyNote: [], editorialNote: [], example: [],
     broader: [], related: [],
     broaderGeneric: [], broaderPartitive: [], broaderInstantial: [],
-    rdfsLabel: [], comment: [],
+    rdfsLabel: [], comment: [], source: [],
     exactMatch: [], closeMatch: [], broadMatch: [], narrowMatch: [], relatedMatch: [],
     artifacts: [], history: [], top: false };
 }
@@ -1464,6 +1476,8 @@ function buildTriples(model, opts){
     // rdfs:label (optional alternate name) + rdfs:comment
     (c.rdfsLabel || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
+    // dct:source -> foaf:Document
+    (c.source || []).forEach(did => { if (model.documents && model.documents[did]) add(s, iri(NS.dcterms + "source"), iri(conceptUri(model, did))); });
 
     // hierarchy + associative (assert both directions for broader/narrower)
     (c.broader || []).forEach(pid => {
@@ -1531,6 +1545,14 @@ function buildTriples(model, opts){
       add(prev, iri(NS.rdf + "rest"), iri(NS.rdf + "nil"));
       add(cs, iri(NS.skos + "memberList"), head);
     }
+  }
+  // foaf:Document sources
+  for (const did in (model.documents || {})){
+    const d = model.documents[did]; const du = iri(conceptUri(model, did));
+    add(du, A, iri(NS.foaf + "Document"));
+    (d.title || []).forEach(L => { if (L.val) add(du, iri(NS.dcterms + "title"), lit(L.val, L.lang)); });
+    (d.page || []).forEach(u => { if (u) add(du, iri(NS.foaf + "page"), iri(u)); });
+    (d.comment || []).forEach(L => { if (L.val) add(du, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
   }
   return { triples: T, schemeUri };
 }
@@ -2499,7 +2521,7 @@ function triplesToModel(triples, prefixes){
   if (prefixes) for (const [k, v] of Object.entries(prefixes)) if (v === base && !STD[k]){ prefix = k; break; }
   const model = { base, prefix, defaultLang: "en", idStyle: "text",
     scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", issued: "", modified: "", rights: "", lang: "en" },
-    concepts: {}, order: [], collections: {} };
+    concepts: {}, order: [], collections: {}, documents: {}, agents: {} };
   const localOf = u => (u.startsWith(base) ? u.slice(base.length) : u);
   // Only genuine SKOS concepts become concepts. An owl:Class/property that merely carries
   // skos annotations (common in OBO/FaBiO ontologies) must NOT be turned into a concept.
@@ -2578,6 +2600,7 @@ function triplesToModel(triples, prefixes){
     else if (pv === NS.rdfs + "seeAlso" && o.t === "iri"){ const c = ensure(s); if (c){ c.artifacts = c.artifacts || []; c.artifacts.push({ type: "link", title: "", url: o.v }); } }
     else if (pv === NS.rdfs + "label" && o.t === "lit"){ const c = ensure(s); if (c){ (c.rdfsLabel = c.rdfsLabel || []).push({ lang: o.lang || "", val: o.v }); } }
     else if (pv === NS.rdfs + "comment" && o.t === "lit"){ const c = ensure(s); if (c){ (c.comment = c.comment || []).push({ lang: o.lang || "", val: o.v }); } }
+    else if (pv === D + "source" && o.t === "iri"){ const c = ensure(s); if (c){ (c.source = c.source || []).push(localOf(o.v)); } }
     // skos-xl
     else if (pv === X + "prefLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.pref.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.alt.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
@@ -2653,6 +2676,21 @@ function triplesToModel(triples, prefixes){
       }
       if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
       model.collections[cid] = col;
+    }
+  }
+
+  // ---- foaf:Document sources ----
+  const docSubs = {};
+  for (const t of triples) if (t.p.t==="iri" && t.p.v===NS.rdf+"type" && t.o.t==="iri" && t.o.v===NS.foaf+"Document") docSubs[t.s.v]=true;
+  if (Object.keys(docSubs).length){
+    model.documents = model.documents || {};
+    for (const uri in docSubs){ const id=localOf(uri); const d={ id, title:[], page:[], comment:[] };
+      for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
+        if (t.p.v===NS.dcterms+"title" && t.o.t==="lit") d.title.push({ lang:t.o.lang||"", val:t.o.v });
+        else if (t.p.v===NS.foaf+"page" && t.o.t==="iri") d.page.push(t.o.v);
+        else if (t.p.v===NS.rdfs+"comment" && t.o.t==="lit") d.comment.push({ lang:t.o.lang||"", val:t.o.v });
+      }
+      model.documents[id]=d;
     }
   }
   return model;
@@ -3071,7 +3109,7 @@ const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 Jessica Tali
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
     scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", lang:"en" },
-    concepts:{}, order:[], collections:{} };
+    concepts:{}, order:[], collections:{}, documents:{}, agents:{} };
 }
 // 32-char hex UUID (dashes stripped), guaranteed unique within the model
 function genUuid32(){
@@ -3464,6 +3502,7 @@ function renderEditor(){
   }
   host.appendChild(relGroup("Related", c, "related"));
   host.appendChild(mapGroup(c));
+  host.appendChild(sourceGroup(c));
   host.appendChild(artifactGroup(c));
   host.appendChild(historyGroup(c));
   updateSaveState();
@@ -3536,6 +3575,23 @@ function noteGroup(title, c, field){
     rm.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); afterChange(); };
     row.append(lang,val,rm); g.appendChild(row);
   });
+  return g;
+}
+function sourceGroup(c){
+  c.source=c.source||[];
+  const g=document.createElement("div"); g.className="grp";
+  const l=document.createElement("div"); l.className="lbl"; l.textContent="Sources (dct:source → documents)"; g.appendChild(l);
+  const chips=document.createElement("div"); chips.className="chips";
+  (c.source||[]).forEach((did,i)=>{ const chip=document.createElement("span"); chip.className="chip"; const d=(model.documents||{})[did];
+    chip.appendChild(document.createTextNode(d?docTitle(d):did+" (missing)"));
+    const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ c.source.splice(i,1); renderEditor(); save(); afterChange(); }; chip.appendChild(x); chips.appendChild(chip); });
+  g.appendChild(chips);
+  const add=document.createElement("div"); add.className="reladd"; const sel=document.createElement("select");
+  const all=Object.keys(model.documents||{});
+  if(!all.length){ sel.innerHTML='<option value="">— no documents yet · add them in the Sources tab —</option>'; sel.disabled=true; }
+  else sel.innerHTML='<option value="">add a document…</option>'+all.filter(id=>!(c.source||[]).includes(id)).map(id=>`<option value="${id}">${escapeHtml(docTitle(model.documents[id]))}</option>`).join("");
+  sel.onchange=()=>{ if(sel.value){ (c.source=c.source||[]).push(sel.value); renderEditor(); save(); afterChange(); } };
+  add.appendChild(sel); g.appendChild(add);
   return g;
 }
 function relGroup(title, c, field){
@@ -4065,7 +4121,8 @@ function switchTab(name){
   if(name==="browse") renderBrowse();
   if(name==="proposals") renderProposals();
   if(name==="collections") renderCollections();
-  
+  if(name==="sources") renderSources();
+
   if(name==="corpus") renderCorpus();
   
   if(name==="crosswalk") renderCrosswalk();
@@ -4544,6 +4601,38 @@ let collSel=null;
 let collFilter="";
 const collapsedColls=new Set();   // #24: collapsible collection nodes — expanded by default
 function colls(){ return model.collections=model.collections||{}; }
+// ---------- Sources tab: foaf:Document + prov:Agent ----------
+function docs(){ return model.documents=model.documents||{}; }
+function provAgents(){ return model.agents=model.agents||{}; }
+function updateSrcPill(){ const el=document.getElementById('pillSrc'); if(el) el.textContent=Object.keys(docs()).length+Object.keys(provAgents()).length; }
+function newDocId(){ let n=1,id; do{ id="doc"+n++; }while(docs()[id]); return id; }
+function docTitle(d){ const t=(d&&d.title||[]).find(x=>x.val); return t?t.val:(d&&d.id||"(untitled document)"); }
+function createDocument(){ const d=docs(); const id=newDocId(); d[id]={id,title:[{lang:model.defaultLang,val:""}],page:[""],comment:[]}; save(); renderSources(); }
+function deleteDocument(id){ if(!confirm("Delete this document? Concepts that reference it keep the link until you remove it.")) return; delete docs()[id];
+  for(const cid in model.concepts){ const c=model.concepts[cid]; if(c.source) c.source=c.source.filter(x=>x!==id); }
+  save(); renderSources(); if(selected) renderEditor(); }
+const _srcInput="border:1px solid var(--border);border-radius:7px;padding:6px 9px;font:inherit;background:var(--surface-2)";
+function renderSources(){ updateSrcPill(); const body=document.getElementById("sourcesBody"); if(!body) return; body.innerHTML="";
+  // ----- Documents -----
+  const dh=document.createElement("div"); dh.style.cssText="display:flex;align-items:center;gap:10px;margin:2px 0 8px";
+  dh.innerHTML='<h3 style="margin:0;font-size:14px">Documents <span class="subtle" style="font-weight:400;font-size:12px;font-family:var(--mono)">foaf:Document</span></h3>';
+  const addD=document.createElement("button"); addD.className="btn sm primary"; addD.textContent="＋ Document"; addD.onclick=createDocument; dh.appendChild(addD); body.appendChild(dh);
+  const dl=docs();
+  if(!Object.keys(dl).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 14px"; e.textContent="No documents yet. Add one, then reference it from a concept with dct:source in the concept editor."; body.appendChild(e); }
+  for(const id in dl){ const d=dl[id]; d.title=d.title&&d.title.length?d.title:[{lang:model.defaultLang,val:""}]; d.page=d.page&&d.page.length?d.page:[""]; d.comment=d.comment||[];
+    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:grid;gap:7px";
+    const tr=document.createElement("div"); tr.style.cssText="display:flex;gap:6px;align-items:center";
+    const tl=document.createElement("input"); tl.style.cssText=_srcInput+";width:56px"; tl.placeholder="lang"; tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
+    const tv=document.createElement("input"); tv.style.cssText=_srcInput+";flex:1"; tv.placeholder="Title (dct:title)"; tv.value=d.title[0].val||""; tv.oninput=()=>{ d.title[0].val=tv.value; save(); updateSrcPill(); };
+    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete document"; del.onclick=()=>deleteDocument(id);
+    tr.append(tl,tv,del); card.appendChild(tr);
+    const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; card.appendChild(pg);
+    const cm=document.createElement("textarea"); cm.rows=2; cm.style.cssText=_srcInput+";width:100%;resize:vertical"; cm.placeholder="Comment (rdfs:comment, optional)"; cm.value=(d.comment[0]&&d.comment[0].val)||""; cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; card.appendChild(cm);
+    body.appendChild(card);
+  }
+  // ----- Agents (increment 4) -----
+  if(typeof renderAgentsSection==="function") renderAgentsSection(body);
+}
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
 function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) el.textContent=Object.keys(colls()).length; }
@@ -5990,7 +6079,7 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); initTreeOpts(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill();
+function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); initTreeOpts(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill(); if(typeof updateSrcPill==="function") updateSrcPill();
   browseSel=null; browseFilter=""; if($('#browseSearch')) $('#browseSearch').value="";
   if(valAuto) runValidation(); else updateBadgeQuick();
   if($('.panel[data-panel=export]').classList.contains('active')) renderExport();
