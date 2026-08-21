@@ -1351,6 +1351,7 @@ const NS = {
   rdfs: "http://www.w3.org/2000/01/rdf-schema#",
   dcterms: "http://purl.org/dc/terms/",
   xsd: "http://www.w3.org/2001/XMLSchema#",
+  isothes: "http://purl.org/iso25964/skos-thes#",
 };
 
 // ---- term constructors ----
@@ -4490,7 +4491,7 @@ function plabel(id){ const c=model.concepts[id]; if(!c) return id; const p=(c.pr
 // ================= Collections — skos:Collection / skos:OrderedCollection =================
 let collSel=null;
 let collFilter="";
-const openColls=new Set();   // #24: expandable/collapsible collection nodes (like the concept tree)
+const collapsedColls=new Set();   // #24: collapsible collection nodes — expanded by default
 function colls(){ return model.collections=model.collections||{}; }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
@@ -4533,11 +4534,11 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     if(f && !containsMatch(id)) return;   // filtering: hide branches with no match
     rendered.add(id);
     const hasChildren=(col.members||[]).length>0;
-    const isOpen=openColls.has(id) || (f && hasChildren);   // filtering auto-expands matches
+    const isOpen=hasChildren && (f || !collapsedColls.has(id));   // expanded by default; caret collapses; filter forces open
     const row=document.createElement('div'); row.style.cssText="padding:7px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-bottom:2px;padding-left:"+(9+depth*15)+"px;"+(id===collSel?"background:var(--c-validate-soft,#daf8f1);box-shadow:inset 0 0 0 1px var(--c-validate,#0a8f74)":"");
     // caret to expand/collapse (like the Concept tree); spacer keeps names aligned when there's nothing to open
-    const caret=document.createElement('span'); caret.textContent=hasChildren?(isOpen?"▾":"▸"):""; caret.style.cssText="width:12px;flex:0 0 auto;text-align:center;color:var(--faint);font-size:10px;"+(hasChildren?"cursor:pointer":"");
-    if(hasChildren) caret.onclick=(e)=>{ e.stopPropagation(); if(openColls.has(id))openColls.delete(id); else openColls.add(id); renderCollections(); };
+    const caret=document.createElement('span'); caret.textContent=hasChildren?(isOpen?"▼":"▶"):""; caret.title=hasChildren?(isOpen?"Collapse":"Expand"):""; caret.style.cssText="width:22px;flex:0 0 auto;text-align:center;color:var(--c-validate,#0a8f74);font-size:14px;font-weight:700;line-height:1;border-radius:5px;"+(hasChildren?"cursor:pointer":"");
+    if(hasChildren){ caret.onmouseenter=()=>caret.style.background="var(--c-validate-soft,#daf8f1)"; caret.onmouseleave=()=>caret.style.background=""; caret.onclick=(e)=>{ e.stopPropagation(); if(collapsedColls.has(id))collapsedColls.delete(id); else collapsedColls.add(id); renderCollections(); }; }
     row.appendChild(caret);
     // green circle marks a Collection (replaces the "set"/"sub-collection" tags); ordered keeps a small badge
     const dot=document.createElement('span'); dot.textContent="●"; dot.title=col.ordered?"ordered collection":"collection"; dot.style.cssText="color:var(--c-validate,#0a8f74);font-size:10px;flex:0 0 auto";
