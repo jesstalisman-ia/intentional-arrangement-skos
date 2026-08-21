@@ -379,6 +379,17 @@
         <label class="toggle" style="align-items:flex-start;gap:7px;font-size:13px"><input type="checkbox" id="isoThesToggle" style="margin-top:2px"><span>Show the specialised hierarchy pickers — <code>iso-thes:</code> generic (is-a), partitive (part of), instantial (instance of) — in the concept editor, alongside plain <code>skos:broader</code>.</span></label>
       </div>
     </div>
+    <div class="scheme-idstyle" id="attributionBox">
+      <div class="isb-left" style="width:100%">
+        <div class="isb-h">Attribution — link an agent</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12.5px">
+          <label style="display:inline-flex;align-items:center;gap:5px">Creator <select id="creatorAgentSel"></select></label>
+          <label style="display:inline-flex;align-items:center;gap:5px">Contributor <select id="contributorAgentSel"></select></label>
+          <label style="display:inline-flex;align-items:center;gap:5px">Publisher <select id="publisherAgentSel"></select></label>
+        </div>
+        <div class="subtle" style="font-size:11.5px;margin-top:4px">Point creator/contributor/publisher at an agent defined in the <b>Sources</b> tab (<code>prov:Agent</code>). An agent reference overrides the plain-text field on export.</div>
+      </div>
+    </div>
     <div class="scheme-grid" id="schemeGrid"></div>
   </details>
 
@@ -1432,8 +1443,13 @@ function buildTriples(model, opts){
     const dct = k => iri(NS.dcterms + k);
     if (model.scheme.title) add(s, dct("title"), lit(model.scheme.title, L));
     if (model.scheme.description) add(s, dct("description"), lit(model.scheme.description, L));
-    if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
-    if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
+    // creator / publisher / contributor — an agent reference (prov:Agent) if set, else the plain literal
+    const _ag = model.agents || {};
+    if (model.scheme.creatorAgent && _ag[model.scheme.creatorAgent]) add(s, dct("creator"), iri(conceptUri(model, model.scheme.creatorAgent)));
+    else if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
+    if (model.scheme.publisherAgent && _ag[model.scheme.publisherAgent]) add(s, dct("publisher"), iri(conceptUri(model, model.scheme.publisherAgent)));
+    else if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
+    if (model.scheme.contributorAgent && _ag[model.scheme.contributorAgent]) add(s, dct("contributor"), iri(conceptUri(model, model.scheme.contributorAgent)));
     if (model.scheme.created) add(s, dct("created"), lit(model.scheme.created, "", NS.xsd + "date"));
     if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
@@ -1553,6 +1569,14 @@ function buildTriples(model, opts){
     (d.title || []).forEach(L => { if (L.val) add(du, iri(NS.dcterms + "title"), lit(L.val, L.lang)); });
     (d.page || []).forEach(u => { if (u) add(du, iri(NS.foaf + "page"), iri(u)); });
     (d.comment || []).forEach(L => { if (L.val) add(du, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
+  }
+  // prov:Agent — Person / Organization / SoftwareAgent
+  const _agentCls = { person: "Person", organization: "Organization", software: "SoftwareAgent" };
+  for (const aid in (model.agents || {})){
+    const a = model.agents[aid]; const au = iri(conceptUri(model, aid));
+    add(au, A, iri(NS.prov + (_agentCls[a.kind] || "Person")));
+    if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name));
+    if (a.homepage) add(au, iri(NS.foaf + "homepage"), iri(a.homepage));
   }
   return { triples: T, schemeUri };
 }
@@ -2567,8 +2591,9 @@ function triplesToModel(triples, prefixes){
     if (model.scheme.uri && s === model.scheme.uri){
       if (pv === D + "title") model.scheme.title = o.v;
       else if (pv === D + "description") model.scheme.description = o.v;
-      else if (pv === D + "creator") model.scheme.creator = o.v;
-      else if (pv === D + "publisher") model.scheme.publisher = o.v;
+      else if (pv === D + "creator"){ if (o.t === "iri") model.scheme.creatorAgent = localOf(o.v); else model.scheme.creator = o.v; }
+      else if (pv === D + "publisher"){ if (o.t === "iri") model.scheme.publisherAgent = localOf(o.v); else model.scheme.publisher = o.v; }
+      else if (pv === D + "contributor" && o.t === "iri") model.scheme.contributorAgent = localOf(o.v);
       else if (pv === D + "created") model.scheme.created = o.v;
       else if (pv === D + "issued") model.scheme.issued = o.v;
       else if (pv === D + "modified") model.scheme.modified = o.v;
@@ -2691,6 +2716,21 @@ function triplesToModel(triples, prefixes){
         else if (t.p.v===NS.rdfs+"comment" && t.o.t==="lit") d.comment.push({ lang:t.o.lang||"", val:t.o.v });
       }
       model.documents[id]=d;
+    }
+  }
+
+  // ---- prov:Agent (Person / Organization / SoftwareAgent) ----
+  const _clsKind = { Person:"person", Organization:"organization", SoftwareAgent:"software" };
+  const agentSubs = {};
+  for (const t of triples) if (t.p.t==="iri" && t.p.v===NS.rdf+"type" && t.o.t==="iri" && t.o.v.indexOf(NS.prov)===0){ const cls=t.o.v.slice(NS.prov.length); if (_clsKind[cls]) agentSubs[t.s.v]=_clsKind[cls]; }
+  if (Object.keys(agentSubs).length){
+    model.agents = model.agents || {};
+    for (const uri in agentSubs){ const id=localOf(uri); const a={ id, kind:agentSubs[uri], name:"", homepage:"" };
+      for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
+        if (t.p.v===NS.foaf+"name" && t.o.t==="lit") a.name=t.o.v;
+        else if (t.p.v===NS.foaf+"homepage" && t.o.t==="iri") a.homepage=t.o.v;
+      }
+      model.agents[id]=a;
     }
   }
   return model;
@@ -3671,6 +3711,9 @@ function renderScheme(){
   const ls=model.xlLabels?"xl":"plain";
   $$('#labelStyle input').forEach(r=>{ r.checked=r.value===ls; r.onchange=()=>{ if(r.checked){ setLabelStyle(r.value); } }; });
   const iso=$('#isoThesToggle'); if(iso){ iso.checked=!!model.isothes; iso.onchange=()=>{ model.isothes=iso.checked; save(); if(selected) renderEditor(); }; }
+  // attribution: agent pickers for creator / contributor / publisher
+  const _ags=provAgents(); const _agOpts='<option value="">— none —</option>'+Object.keys(_ags).map(id=>`<option value="${id}">${escapeHtml(agentName(_ags[id]))}</option>`).join("");
+  [["creatorAgentSel","creatorAgent"],["contributorAgentSel","contributorAgent"],["publisherAgentSel","publisherAgent"]].forEach(([selId,field])=>{ const sel=$('#'+selId); if(!sel) return; sel.innerHTML=_agOpts; sel.value=model.scheme[field]||""; sel.onchange=()=>{ model.scheme[field]=sel.value; save(); }; });
   updateXlUi();
 }
 function setLabelStyle(v){
@@ -4630,8 +4673,31 @@ function renderSources(){ updateSrcPill(); const body=document.getElementById("s
     const cm=document.createElement("textarea"); cm.rows=2; cm.style.cssText=_srcInput+";width:100%;resize:vertical"; cm.placeholder="Comment (rdfs:comment, optional)"; cm.value=(d.comment[0]&&d.comment[0].val)||""; cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; card.appendChild(cm);
     body.appendChild(card);
   }
-  // ----- Agents (increment 4) -----
+  // ----- Agents -----
   if(typeof renderAgentsSection==="function") renderAgentsSection(body);
+}
+const AGENT_KINDS=[{v:"person",label:"Person",cls:"Person"},{v:"organization",label:"Organization",cls:"Organization"},{v:"software",label:"Software agent",cls:"SoftwareAgent"}];
+function agentClass(kind){ const k=AGENT_KINDS.find(x=>x.v===kind); return (k?k.cls:"Person"); }
+function newAgentId(){ let n=1,id; do{ id="agent"+n++; }while(provAgents()[id]); return id; }
+function agentName(a){ return (a&&a.name)||(a&&a.id)||"(unnamed agent)"; }
+function createAgent(){ const a=provAgents(); const id=newAgentId(); a[id]={id,kind:"person",name:"",homepage:""}; save(); renderSources(); }
+function deleteAgent(id){ if(!confirm("Delete this agent?")) return; delete provAgents()[id];
+  const sc=model.scheme||{}; ["creatorAgent","contributorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===id) sc[k]=""; });
+  save(); renderSources(); if(typeof renderScheme==="function") renderScheme(); }
+function renderAgentsSection(body){
+  const ah=document.createElement("div"); ah.style.cssText="display:flex;align-items:center;gap:10px;margin:18px 0 8px;border-top:1px solid var(--border-soft);padding-top:14px";
+  ah.innerHTML='<h3 style="margin:0;font-size:14px">Agents <span class="subtle" style="font-weight:400;font-size:12px;font-family:var(--mono)">prov:Agent</span></h3>';
+  const addA=document.createElement("button"); addA.className="btn sm primary"; addA.textContent="＋ Agent"; addA.onclick=createAgent; ah.appendChild(addA); body.appendChild(ah);
+  const al=provAgents();
+  if(!Object.keys(al).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 6px"; e.textContent="No agents yet. Add people, organizations, or software agents to credit as creator / contributor / publisher (set that in the scheme metadata)."; body.appendChild(e); }
+  for(const id in al){ const a=al[id];
+    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    const kind=document.createElement("select"); kind.style.cssText=_srcInput; kind.innerHTML=AGENT_KINDS.map(k=>`<option value="${k.v}" ${k.v===a.kind?"selected":""}>${k.label}</option>`).join(""); kind.onchange=()=>{ a.kind=kind.value; save(); };
+    const nm=document.createElement("input"); nm.style.cssText=_srcInput+";flex:1;min-width:150px"; nm.placeholder="Name (foaf:name)"; nm.value=a.name||""; nm.oninput=()=>{ a.name=nm.value; save(); };
+    const hp=document.createElement("input"); hp.style.cssText=_srcInput+";flex:1;min-width:150px"; hp.placeholder="Homepage (foaf:homepage) — https://…"; hp.value=a.homepage||""; hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); };
+    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete agent"; del.onclick=()=>deleteAgent(id);
+    card.append(kind,nm,hp,del); body.appendChild(card);
+  }
 }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
