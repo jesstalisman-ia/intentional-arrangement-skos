@@ -843,15 +843,16 @@
   </section>
 
   <section class="panel" data-panel="collections">
-    <div class="card">
-      <div class="card-h"><h2>Collections</h2>
-        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1">Group concepts as <code>skos:Collection</code> / <code>skos:OrderedCollection</code> — alternative groupings that sit <em>alongside</em> the <code>broader</code>/<code>narrower</code> hierarchy, not inside it.</span>
-        <button class="btn sm" id="collNew">＋ Collection</button>
-        <button class="btn sm" id="collNewOrdered">＋ Ordered</button>
-      </div>
-      <div class="tsearch" style="border-bottom:none;padding:2px 0 10px"><input id="collSearch" type="search" placeholder="Filter collections & members…" autocomplete="off" style="max-width:340px"></div>
-      <div class="browse" style="grid-template-columns:minmax(0,300px) minmax(0,1fr)">
+    <div class="build">
+      <div class="card">
+        <div class="card-h"><h2>Collections</h2><span class="sp"></span>
+          <button class="btn sm" id="collNew">＋ Collection</button>
+          <button class="btn sm" id="collNewOrdered">＋ Ordered</button></div>
+        <div class="subtle" style="font-size:12px;padding:2px 0 8px">Group concepts as <code>skos:Collection</code> / <code>skos:OrderedCollection</code> — alternative groupings that sit <em>alongside</em> the broader/narrower hierarchy, not inside it.</div>
+        <div class="tsearch"><input id="collSearch" type="search" placeholder="Filter collections & members…" autocomplete="off"></div>
         <div id="collList"></div>
+      </div>
+      <div class="card">
         <div id="collEditor" class="browse-detail"></div>
       </div>
     </div>
@@ -859,8 +860,8 @@
 
   <section class="panel" data-panel="sources">
     <div class="card">
-      <div class="card-h"><h2>Sources</h2>
-        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dct:source</code> in the concept editor.</span>
+      <div class="card-h"><h2 style="flex:0 0 auto;white-space:nowrap">Sources</h2>
+        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1;min-width:0">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dct:source</code> in the concept editor.</span>
       </div>
       <div id="sourcesBody"></div>
     </div>
@@ -3371,6 +3372,14 @@ function treeNode(id, path){
 }
 function mkBtn(txt,title,fn,cls){ const b=document.createElement("button"); b.className="tbtn"+(cls?" "+cls:""); b.title=title; b.textContent=txt; b.onclick=fn; return b; }
 function selectConcept(id){ if(histBaseId&&histBaseId!==id&&model.concepts[histBaseId]) commitHistory(false); selected=id; $$('.trow.sel').forEach(r=>r.classList.remove('sel')); renderTree(); renderEditor(); }
+// #29: jump to a concept in the Build tree from a relationship chip or collection member —
+// expand its broader ancestors so it's visible, select it, and scroll it into view.
+function goToConcept(id){ if(!model.concepts[id]) return;
+  const seen=new Set(); let cur=[id];
+  while(cur.length){ const u=cur.pop(); for(const p of (model.concepts[u].broader||[])){ if(model.concepts[p]&&!seen.has(p)){ seen.add(p); openIds.add(p); cur.push(p); } } }
+  switchTab('build'); selectConcept(id);
+  const row=document.querySelector('#tree .trow.sel'); if(row) row.scrollIntoView({block:'center',behavior:'smooth'});
+}
 
 // ---------- bulk select / edit / delete ----------
 let bulkMode=false; const bulkSel=new Set();
@@ -3640,8 +3649,10 @@ function relGroup(title, c, field){
   const chips=document.createElement("div"); chips.className="chips";
   (c[field]||[]).forEach((rid,i)=>{
     const chip=document.createElement("span"); chip.className="chip";
-    const nm=model.concepts[rid]? nodeText(rid) : rid+" (missing)";
-    chip.appendChild(document.createTextNode(nm));
+    const nm=document.createElement("span");
+    if(model.concepts[rid]){ nm.textContent=nodeText(rid); nm.style.cursor="pointer"; nm.title="Go to “"+nodeText(rid)+"” in the tree"; nm.onclick=()=>goToConcept(rid); }
+    else nm.textContent=rid+" (missing)";
+    chip.appendChild(nm);
     const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ const rid=c[field][i]; c[field].splice(i,1);
       // skos:related is symmetric (owl:SymmetricProperty) — drop the inverse too
       if(field==="related"&&rid){ const o=model.concepts[rid]; if(o&&o.related) o.related=o.related.filter(r=>r!==selected); }
@@ -4804,7 +4815,8 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     const isColl=!!cs[mid]; const missing=!model.concepts[mid] && !isColl;
     const nm=document.createElement('span'); nm.style.cssText="flex:1;display:flex;align-items:center;gap:6px"+(missing?";color:var(--err)":"");
     if(isColl){ const b=document.createElement('span'); b.textContent="▦ sub-collection"; b.style.cssText="font-size:9.5px;font-family:var(--mono);color:#fff;background:var(--c-validate,#0a8f74);border-radius:4px;padding:1px 5px"; const a=document.createElement('a'); a.href="#"; a.textContent=collLabel(cs[mid]); a.style.cssText="color:var(--c-validate,#0a8f74);font-weight:600;text-decoration:none"; a.onclick=(e)=>{ e.preventDefault(); collSel=mid; renderCollections(); }; nm.append(b,a); }
-    else nm.textContent=missing?(mid+" (missing)"):plabel(mid);
+    else if(missing) nm.textContent=mid+" (missing)";
+    else { const a=document.createElement('a'); a.href="#"; a.textContent=plabel(mid); a.style.cssText="color:var(--accent,#1c3f8f);font-weight:500;text-decoration:none;cursor:pointer"; a.title="Go to “"+plabel(mid)+"” in the concept tree"; a.onclick=(e)=>{ e.preventDefault(); goToConcept(mid); }; nm.appendChild(a); }
     r.appendChild(nm);
     if(col.ordered){ const up=document.createElement('button'); up.className="btn sm"; up.textContent="▲"; up.disabled=i===0; up.onclick=()=>{ const m=col.members; [m[i-1],m[i]]=[m[i],m[i-1]]; save(); renderCollections(); };
       const dn=document.createElement('button'); dn.className="btn sm"; dn.textContent="▼"; dn.disabled=i===col.members.length-1; dn.onclick=()=>{ const m=col.members; [m[i+1],m[i]]=[m[i],m[i+1]]; save(); renderCollections(); }; r.append(up,dn); }
