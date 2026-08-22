@@ -89,6 +89,7 @@
   .tabs{display:flex;flex-wrap:wrap;gap:5px;border-bottom:1px solid var(--border);margin-bottom:14px;padding-bottom:9px}
   .tab{font-size:13px;font-weight:600;color:var(--muted);background:transparent;border:1px solid transparent;border-radius:8px;
     padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
+  .tab>span:not(.pill){flex:0 0 auto}   /* keep the label from collapsing (Firefox bare-flex-item fix) */
   .tab:hover{color:var(--text);background:var(--surface-3)}
   .tab.active{color:#fff;background:var(--accent);border-color:var(--accent)}
   .tab .pill{font-family:var(--mono);font-size:10px;background:var(--surface-3);color:var(--muted);border-radius:9px;padding:0 6px}
@@ -394,16 +395,16 @@
   </details>
 
   <div class="tabs" id="tabs">
-    <button class="tab" data-tab="glossary">Glossary <span class="pill" id="pillGloss">0</span></button>
-    <button class="tab active" data-tab="build">Build <span class="pill" id="pillCount">0</span></button>
-    <button class="tab" data-tab="collections">Collections <span class="pill" id="pillColl">0</span></button>
-    <button class="tab" data-tab="sources">Sources <span class="pill" id="pillSrc">0</span></button>
-    <button class="tab" data-tab="browse">Business view</button>
-    <button class="tab" data-tab="proposals">Proposals <span class="pill" id="pillProp">0</span></button>
-    <button class="tab" data-tab="graph">Graph</button>
-    <button class="tab" data-tab="validate">Validate <span class="pill" id="pillVal">qSKOS</span></button>
-    <button class="tab" data-tab="sparql">SPARQL <span class="pill" id="pillSparql">ask</span></button>
-    <button class="tab" data-tab="export">Export</button>
+    <button class="tab" data-tab="glossary"><span>Glossary</span> <span class="pill" id="pillGloss">0</span></button>
+    <button class="tab active" data-tab="build"><span>Build</span> <span class="pill" id="pillCount">0</span></button>
+    <button class="tab" data-tab="collections"><span>Collections</span> <span class="pill" id="pillColl">0</span></button>
+    <button class="tab" data-tab="sources"><span>Sources</span> <span class="pill" id="pillSrc">0</span></button>
+    <button class="tab" data-tab="browse"><span>Business view</span></button>
+    <button class="tab" data-tab="proposals"><span>Proposals</span> <span class="pill" id="pillProp">0</span></button>
+    <button class="tab" data-tab="graph"><span>Graph</span></button>
+    <button class="tab" data-tab="validate"><span>Validate</span> <span class="pill" id="pillVal">qSKOS</span></button>
+    <button class="tab" data-tab="sparql"><span>SPARQL</span> <span class="pill" id="pillSparql">ask</span></button>
+    <button class="tab" data-tab="export"><span>Export</span></button>
   </div>
 
   <!-- BUILD -->
