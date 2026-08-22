@@ -28,6 +28,8 @@ The Build tab is where the work happens. The tree of concepts sits on the left; 
 - **Add a child** to build depth. A child points up to its parent through `broader`.
 - Select any concept in the tree to edit it. Drag or use the concept's own fields to change where it sits.
 
+**Jump to a related concept.** In a concept's **Broader**, **Related**, or ISO 25964 pickers, click a linked concept to jump straight to it in the tree (it expands and scrolls into view). The same works for concept members in the Collections editor.
+
 **ISO 25964 relations (opt-in).** In the concept-scheme panel, turn on **ISO 25964 relations** to add three specialised broader pickers to the concept editor alongside plain `skos:broader`: **generic** (is-a, `iso-thes:broaderGeneric`), **partitive** (part-of, `iso-thes:broaderPartitive`), and **instantial** (instance-of, `iso-thes:broaderInstantial`). On export, generic and instantial also assert `skos:broader` so plain-SKOS tools still see the hierarchy; partitive is emitted as `iso-thes` only. Leave the toggle off and the editor stays plain SKOS.
 
 ### A concept's fields
