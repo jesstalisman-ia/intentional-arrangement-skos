@@ -9,7 +9,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 ## ✅ Recently shipped
 
 ### Collections/Sources UI + editor navigation (#28, #29, #30)
-- Collections tab reframed as two cards (list + editor) matching the Build layout (#28); Sources heading fixed for Firefox (#30); relationship chips and collection members are now click-to-navigate — jump straight to the concept in the tree (#29).
+- Collections tab reframed as two cards (list + editor) matching the Build layout (#28); the Sources tab label and panel heading no longer collapse in Firefox (#30); relationship chips and collection members are now click-to-navigate — jump straight to the concept in the tree (#29).
 
 ### ISO 25964 relations, rdfs:label/comment, and a Sources tab (#25)
 - **ISO 25964 thesaurus relations** (opt-in): `iso-thes:broaderGeneric` / `broaderPartitive` / `broaderInstantial` (+ narrower inverses), toggled per taxonomy; generic & instantial also assert `skos:broader`.
