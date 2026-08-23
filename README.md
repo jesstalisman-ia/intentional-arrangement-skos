@@ -18,10 +18,15 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 | Folder | What it is |
 |---|---|
 | **`app/`** | The browser app — one self-contained `index.html`. |
+
 | **`api/`** | A small REST API (Flask + rdflib + pySHACL) to validate a vocabulary and convert between RDF serializations. |
+
 | **`mcp-server/`** | An MCP server exposing the same engine as tools, so an assistant like Claude can validate/convert/profile a vocabulary. |
+
 | **`connectors/`** | Bridges that pull external vocabularies into the editor as SKOS. First one: **[SharePoint Term Store → SKOS](connectors/sharepoint-termstore/)** (Microsoft Graph or an offline export). Example/reference software — see its README's disclaimer before any live use. |
+
 | **`deploy/`** | **Optional** Apache Jena Fuseki server for the app's "Publish to server" feature — a Dockerfile that builds Fuseki **5.6.0** from the official distribution (base image pinned by digest, tarball by SHA-512). **Not required; review [`deploy/README.md`](deploy/README.md) and harden before deploying.** |
+
 | **`docs/`** | [Documentation hub](docs/): install, using the editor, workspace, spreadsheet import, SKOS reference, [hosting Fuseki](docs/hosting-fuseki.md), and the API/MCP guides. |
 
 > **Where's Jena/Fuseki?** Fuseki is a separate Java server; `deploy/` builds it from the **official Apache distribution** (Jena 5.6.0, pinned by digest + checksum) for the *optional* "Publish to server" feature, with a hardening checklist. The app itself never needs it — it runs fully client-side.
@@ -29,16 +34,27 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 ## What the app does
 
 - **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, an optional `rdfs:label` alternate name and `rdfs:comment`, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it holds both ways and shows in the graph. Click a linked concept in any relationship picker to jump straight to it in the tree. Identifiers are readable or opaque UUIDs, your call. Language tags use BCP 47 / ISO 639.
+
 - **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. Generic and instantial also assert their `skos:broader` super-property, so plain-SKOS tools still read the hierarchy.
+
 - **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dct:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dct:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
+
 - **Display & filter.** Show the concept tree by **label** (with a language picker when the vocabulary is multilingual), **qualified name**, or **full IRI**, in document order or A–Z / Z–A. The filter box highlights matches (and matches by whatever form you're showing). Both apply to the relationship pickers as well.
+
 - **Collections.** Group concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` that keeps member order. Collections sit beside the broader/narrower tree instead of inside it, and they nest — a second tree with concepts at the leaves. Inside a collection, its concept members arrange by their own broader/narrower, and a filter box highlights members. An `OrderedCollection` keeps its `skos:memberList` sequence. Nodes collapse and expand (a green ● marks each collection, an *ordered* badge marks ordered ones).
+  
 - **SKOS-XL.** Turn on SKOS-XL for a taxonomy and every label becomes a `skosxl:Label` resource with its own URI and optional `dcterms:source` provenance. The **Export** dialog has a **SKOS-XL toggle** so every download carries the `skosxl:Label` resources (dumbed-down to plain `skos:` labels too) across Turtle, RDF/XML, and JSON-LD.
+  
 - **Business view.** A reading layout for the people who aren't taxonomists: breadcrumb, definition, synonyms, narrower terms. Copy a **read-only share link** and the taxonomy rides inside the link itself. Nothing gets uploaded.
+  
 - **Validate (qSKOS).** Quality checks run right in the edit loop — missing or duplicate preferred labels, label disjointness, related/broader conflicts, cyclic hierarchy, orphans, undocumented concepts — most with a one-click fix.
+  
 - **Import / export.** Out to Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV, Excel `.xlsx`, and Markdown. In from any of those RDF syntaxes — **Turtle, RDF/XML, JSON-LD, RDF/JSON** — or a spreadsheet; the import reads the file's own default language (its `dcterms:language`, else the dominant label language) so new edits aren't mistagged, and you can still override per import, row, or cell. Excel is zipped and unzipped in the browser, no library and no upload. When a file has no SKOS concepts, the tool says why instead of failing silently.
+  
 - **Visualize.** A force-directed picture of the scheme, synced to the editor.
+  
 - **Scheme metadata.** Dublin Core for the concept scheme. `dcterms:created`/`issued`/`modified` fill themselves in, `dcterms:modified` updates on every change, and `dcterms:language` is written out and read back on import.
+  
 - **Publish to a server** *(optional)*. Connect an Apache Jena Fuseki dataset to store a taxonomy and share a short link that loads it back. See [hosting Fuseki](docs/hosting-fuseki.md).
 
 ## Your workspace
