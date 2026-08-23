@@ -47,7 +47,7 @@ Because they can drift apart, the editor gives you help: **↦ from label** sets
 - **Alternative labels** — synonyms and accepted variants.
 - **Hidden labels** — terms you want found in search but not shown, such as common misspellings or retired names.
 
-Each label carries a language tag (`en`, `fr`, …). A whitespace-only label is trimmed when you leave the field, so an empty label doesn't quietly linger.
+Each label carries a language tag, chosen from a **dropdown** rather than typed. The supported languages are the six the editor ships with — English (`en`), Dutch (`nl`), French (`fr`), Spanish (`es`), Portuguese (`pt`), and Finnish (`fi`) — using ISO 639-1 two-letter codes, which is what BCP 47 requires for RDF/SKOS language tags. If a label imported from elsewhere carries a tag outside that set, it's preserved and shown as "*code* · (other)" so nothing is silently rewritten. The same dropdown appears on definitions and notes. A whitespace-only label is trimmed when you leave the field, so an empty label doesn't quietly linger.
 
 **Plain SKOS or SKOS-XL labels.** By default, labels are plain literals (`skos:prefLabel`, `skos:altLabel`, `skos:hiddenLabel`). Under **Concept scheme → Label style** you can switch a taxonomy to **SKOS-XL**, which turns every label into a first-class resource (`skosxl:Label`) with its own URI. In SKOS-XL mode each label in the editor gains two extra fields:
 

@@ -162,6 +162,7 @@
   .lbl-xl input.xluri{font-family:var(--mono);flex:1.3}
   .rowline{display:flex;gap:6px;margin-bottom:5px;align-items:flex-start}
   .rowline input.lang{width:52px;flex:0 0 auto;text-align:center;font-family:var(--mono);font-size:12px}
+  .rowline select.lang{width:auto;min-width:122px;flex:0 0 auto;text-align:left;font-family:var(--mono);font-size:12px}
   .rowline input.val,.rowline textarea.val,.rowline select.val{flex:1 1 auto;min-width:0}
   .rowline input,.rowline textarea,.rowline select{font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:5px 8px}
   .rowline textarea{resize:vertical;min-height:34px;line-height:1.4}
@@ -2295,7 +2296,7 @@ function validate(model){
 
 // Effective hierarchy for validation: plain skos:broader plus the ISO 25964 specialisations
 // (they are sub-properties of skos:broader, so a cycle through any of them is still a cycle).
-function effBroader(c){ return c ? [...(c.broader||[]), ...(c.broaderGeneric||[]), ...(c.broaderPartitive||[]), ...(c.broaderInstantial||[])] : []; }
+function effBroader(c){ if(!c) return []; const out=[...(c.broader||[])]; for(const f of ISO_BROADER) out.push(...(c[f]||[])); return out; }
 function findCycles(model){
   const C = model.concepts, WHITE = 0, GRAY = 1, BLACK = 2;
   const color = {}, stack = [], cycles = [], seen = new Set();
@@ -2634,10 +2635,12 @@ function triplesToModel(triples, prefixes){
     else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
   }
   if (sawXl) model.xlLabels = true;
-  // De-dup: a plain skos:broader that's entailed by iso-thes:broaderGeneric/Instantial is
-  // redundant, so drop it (keeps round-trips clean). Partitive doesn't entail, so it's left alone.
+  // De-dup: a plain skos:broader that's entailed by an iso-thes field (per
+  // ISO_ENTAILS_SKOS — generic & instantial, not partitive) is redundant, so drop
+  // it (keeps round-trips clean). Derived from the same table the exporter asserts.
   for (const id in model.concepts){ const c = model.concepts[id];
-    const entailed = new Set([...(c.broaderGeneric || []), ...(c.broaderInstantial || [])]);
+    const entailed = new Set();
+    for (const f of ISO_BROADER){ if (ISO_ENTAILS_SKOS[f]) for (const p of (c[f] || [])) entailed.add(p); }
     if (entailed.size && c.broader && c.broader.length) c.broader = c.broader.filter(p => !entailed.has(p));
   }
   // A concept with no skos:prefLabel but an rdfs:label: promote the rdfs:label to prefLabel
@@ -3126,7 +3129,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
@@ -3137,6 +3140,24 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const PKEY = "skosStudio.projects.v2", CKEY = "skosStudio.currentPid.v2", OLDKEY = "skosStudio.model.v1";
 const AKEY = "iaskos.auth.v1", SKEY = "iaskos.session.v1";
+// ISO 25964 broader fields. The Core module's copy is scoped inside its IIFE and
+// not visible to this UI script, so read the single source of truth off Core (it's
+// exported there) rather than keeping a second hardcoded list that could drift.
+const ISO_BROADER = Core.ISO_BROADER;
+// When a concept is deleted, any glossary term that was promoted into it is left
+// pointing at a concept that no longer exists — stuck as "promoted" and out of the
+// candidate pool. Clear those references so the term returns to a candidate.
+function unpromoteGlossRefs(ids){
+  try{
+    const set = (ids instanceof Set) ? ids : new Set([ids]);
+    const g = loadGloss(); let changed=false;
+    for(const gk of Object.keys(g)){ const b=g[gk];
+      if(!b || !b.terms || b.projectId!==currentPid) continue;
+      for(const t of b.terms){ if(t.conceptId && set.has(t.conceptId)){ t.conceptId=null; changed=true; } }
+    }
+    if(changed){ saveGloss(g); if(currentGid && typeof renderGlossary==='function') renderGlossary(); }
+  }catch(e){}
+}
 let model, selected = null, valAuto = false, lastIssues = [], currentPid = null, lastValidatedTs = 0;
 // Undo for destructive actions (delete). Snapshots the model before the change.
 let undoStack=[];
@@ -3223,6 +3244,7 @@ async function deleteConcept(id){
   for(const x of model.order){ const o=model.concepts[x];
     o.broader=(o.broader||[]).filter(b=>b!==id); o.related=(o.related||[]).filter(r=>r!==id); for(const f of ISO_BROADER) o[f]=(o[f]||[]).filter(b=>b!==id); }
   if(selected===id) selected=null;
+  unpromoteGlossRefs(id);
   save(); renderTree(); renderEditor(); afterChange(); toast("Deleted “"+nm+"” · ⌘/Ctrl+Z to undo");
 }
 // sandbox-safe confirmation (native confirm() is blocked inside the artifact iframe)
@@ -3402,6 +3424,7 @@ async function bulkDelete(){ if(!bulkSel.size) return; const ids=[...bulkSel];
   model.order=model.order.filter(x=>!del.has(x));
   for(const x of model.order){ const o=model.concepts[x]; o.broader=(o.broader||[]).filter(b=>!del.has(b)); o.related=(o.related||[]).filter(r=>!del.has(r)); for(const f of ISO_BROADER) o[f]=(o[f]||[]).filter(b=>!del.has(b)); }
   if(del.has(selected)) selected=null;
+  unpromoteGlossRefs(del);
   bulkSel.clear(); save(); renderTree(); renderEditor(); afterChange(); bulkPopulateParent(); bulkCount(); toast(ids.length+" concept"+(ids.length===1?"":"s")+" deleted · ⌘/Ctrl+Z to undo"); }
 if($('#btnUndo')) $('#btnUndo').onclick=doUndo;
 function bulkMoveUnder(parent){ if(!bulkSel.size) return; let moved=0, skipped=0;
@@ -3587,12 +3610,33 @@ function groupShell(title, onAdd){
   if(onAdd){ const a=document.createElement("button"); a.className="btn sm add"; a.textContent="+ add"; a.onclick=onAdd; l.appendChild(a); }
   g.appendChild(l); return g;
 }
+// Supported label languages — ISO 639-1 (two-letter) codes, which is what BCP 47
+// mandates for RDF/SKOS language tags (the shortest available code). Only these six
+// are offered; an existing tag outside the list is preserved, not overwritten.
+const LANGS = [
+  { code:"en", name:"English" },
+  { code:"nl", name:"Dutch" },
+  { code:"fr", name:"French" },
+  { code:"es", name:"Spanish" },
+  { code:"pt", name:"Portuguese" },
+  { code:"fi", name:"Finnish" },
+];
+const LANG_CODES = new Set(LANGS.map(l => l.code));
+function mkLangSelect(L, onchange){
+  const sel=document.createElement("select"); sel.className="lang"; sel.title="Language tag (ISO 639-1)";
+  const cur=(L.lang||"").trim();
+  if(!cur){ const o=document.createElement("option"); o.value=""; o.textContent="— no tag —"; sel.appendChild(o); }
+  else if(!LANG_CODES.has(cur)){ const o=document.createElement("option"); o.value=cur; o.textContent=cur+" · (other)"; sel.appendChild(o); }
+  for(const x of LANGS){ const o=document.createElement("option"); o.value=x.code; o.textContent=x.code+" · "+x.name; sel.appendChild(o); }
+  sel.value=cur;
+  sel.onchange=()=>{ L.lang=sel.value; if(typeof onchange==="function") onchange(); };
+  return sel;
+}
 function labelGroup(title, c, field, isPref){
   const g=groupShell(title, ()=>{ const L={lang:model.defaultLang,val:""}; if(model.xlLabels) L.uri=mintLabelUri(c.id, field); c[field].push(L); renderEditor(); focusLast(field); });
   (c[field]||[]).forEach((L,i)=>{
     const row=document.createElement("div"); row.className="rowline";
-    const lang=document.createElement("input"); lang.className="lang"; lang.value=L.lang||""; lang.placeholder="lang"; lang.title="language tag";
-    lang.oninput=()=>{ L.lang=lang.value.trim(); save(); scheduleAuto(); };
+    const lang=mkLangSelect(L, ()=>{ save(); scheduleAuto(); });
     const val=document.createElement("input"); val.className="val"; val.value=L.val||""; val.placeholder=isPref?"preferred label":"label"; val.dataset.field=field;
     val.oninput=()=>{ L.val=val.value; save(); updateTreeLabel(); scheduleAuto(); };
     // Trim on blur so a whitespace-only label doesn't silently persist as an empty literal.
@@ -3617,8 +3661,7 @@ function noteGroup(title, c, field){
   const g=groupShell(title, ()=>{ (c[field]=c[field]||[]).push({lang:model.defaultLang,val:""}); renderEditor(); focusLast(field); });
   (c[field]||[]).forEach((L,i)=>{
     const row=document.createElement("div"); row.className="rowline";
-    const lang=document.createElement("input"); lang.className="lang"; lang.value=L.lang||""; lang.placeholder="lang";
-    lang.oninput=()=>{ L.lang=lang.value.trim(); save(); scheduleAuto(); };
+    const lang=mkLangSelect(L, ()=>{ save(); scheduleAuto(); });
     const val=document.createElement("textarea"); val.className="val"; val.value=L.val||""; val.placeholder="text"; val.dataset.field=field; val.rows=2;
     val.oninput=()=>{ L.val=val.value; save(); scheduleAuto(); };
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕";
