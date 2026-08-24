@@ -135,6 +135,8 @@ Import (the **Import** button in the header) reads a SKOS taxonomy from RDF or a
 
 After an import, a short summary reports the concept count and top concepts, and warns if the result looks flat or disconnected — a sign a spreadsheet's `broader` column didn't match. For the spreadsheet format and a fill-in template, see [building a taxonomy in a spreadsheet](spreadsheet-import.md).
 
+**Metadata round-trips losslessly.** Any metadata on a concept or the concept scheme that the editor doesn't have a dedicated field for — per-concept `dcterms:created`, `dcterms:issued`, `dcterms:modified`, `dcterms:creator`, ISO 25964 properties, or any other predicate — is preserved on import and re-emitted on export exactly as it came in (across Turtle, RDF/XML, and JSON-LD). Nothing you import is dropped when you export.
+
 ## Scheme metadata
 
 Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, and language, plus the base namespace and whether identifiers are readable or UUIDs. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.

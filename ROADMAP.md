@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: exports dropped per-concept metadata (v0.8.2)
+- Per-concept Dublin Core and other metadata — `dcterms:created`, `dcterms:issued` (published), `dcterms:modified`, `dcterms:creator` (author), and any predicate the editor doesn't otherwise model — was silently dropped on import and never re-exported. The importer now **preserves every unmodeled triple** on a concept (and on the concept scheme), and the exporter re-emits it verbatim, so **all Dublin Core and ISO standard metadata round-trips** through Turtle, RDF/XML, and JSON-LD without loss.
+
 ### Fix: deleting a concept was broken (v0.8.1)
 - Deleting a concept (single or bulk) threw a scope error and never persisted — the concept came back on reload. The ISO 25964 field list the delete paths cleaned lived inside the `Core` module and wasn't visible to the UI script. It's now exported from `Core` as one source of truth (`ISO_BROADER`/`ISO_INVERSE`/`ISO_ENTAILS_SKOS`), so the delete paths, the entailment de-dup, and cycle detection all read the same list and can't drift.
 - Deleting a concept that a glossary term was promoted into now returns that term to the candidate pool instead of leaving it stuck as "promoted" pointing at a concept that no longer exists.
