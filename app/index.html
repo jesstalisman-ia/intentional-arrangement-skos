@@ -1415,6 +1415,7 @@ function emptyConcept(id){
     broaderGeneric: [], broaderPartitive: [], broaderInstantial: [],
     rdfsLabel: [], comment: [], source: [],
     exactMatch: [], closeMatch: [], broadMatch: [], narrowMatch: [], relatedMatch: [],
+    creator: "", created: "", issued: "", modified: "",
     artifacts: [], history: [], extra: [], top: false };
 }
 
@@ -1499,9 +1500,14 @@ function buildTriples(model, opts){
     (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
     // dct:source -> foaf:Document
     (c.source || []).forEach(did => { if (model.documents && model.documents[did]) add(s, iri(NS.dcterms + "source"), iri(conceptUri(model, did))); });
-    // Passthrough: any imported metadata the editor does not model (dcterms:created/
-    // issued/modified/creator, ISO 25964, or any other predicate) is re-emitted verbatim
-    // so nothing is dropped on a round-trip.
+    // per-concept Dublin Core metadata (editable fields)
+    if (c.creator) add(s, iri(NS.dcterms + "creator"), lit(c.creator, ""));
+    if (c.created) add(s, iri(NS.dcterms + "created"), lit(c.created, "", NS.xsd + "date"));
+    if (c.issued) add(s, iri(NS.dcterms + "issued"), lit(c.issued, "", NS.xsd + "date"));
+    if (c.modified) add(s, iri(NS.dcterms + "modified"), lit(c.modified, "", NS.xsd + "date"));
+    // Passthrough: any other imported metadata the editor does not model (ISO 25964,
+    // or any predicate beyond the fields above) is re-emitted verbatim so nothing is
+    // dropped on a round-trip.
     (c.extra || []).forEach(e => {
       if (!e || !e.p || !e.o) return;
       add(s, iri(e.p), e.o.t === "iri" ? iri(e.o.v) : lit(e.o.v || "", e.o.lang || "", e.o.dt || ""));
@@ -2643,6 +2649,11 @@ function triplesToModel(triples, prefixes){
     else if (pv === X + "prefLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.pref.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.alt.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
+    // per-concept Dublin Core metadata → editable fields
+    else if (pv === NS.dcterms + "creator" && o.t === "lit"){ const c = ensure(s); if (c) c.creator = o.v; }
+    else if (pv === NS.dcterms + "created" && o.t === "lit"){ const c = ensure(s); if (c) c.created = o.v; }
+    else if (pv === NS.dcterms + "issued" && o.t === "lit"){ const c = ensure(s); if (c) c.issued = o.v; }
+    else if (pv === NS.dcterms + "modified" && o.t === "lit"){ const c = ensure(s); if (c) c.modified = o.v; }
     // skos:inScheme is re-derived on export (single-scheme editor); consume it here so
     // the passthrough below doesn't duplicate what the exporter already emits.
     else if (pv === P + "inScheme"){ /* consumed */ }
@@ -3593,9 +3604,28 @@ function renderEditor(){
   host.appendChild(relGroup("Related", c, "related"));
   host.appendChild(mapGroup(c));
   host.appendChild(sourceGroup(c));
+  host.appendChild(metaGroup(c));
   host.appendChild(artifactGroup(c));
   host.appendChild(historyGroup(c));
   updateSaveState();
+}
+function metaGroup(c){
+  const g=document.createElement("div"); g.className="grp";
+  const l=document.createElement("div"); l.className="lbl"; l.textContent="Concept metadata (Dublin Core)"; g.appendChild(l);
+  const mk=(labelText, field, type)=>{
+    const row=document.createElement("div"); row.className="rowline";
+    const lab=document.createElement("span"); lab.style.cssText="flex:0 0 140px;font-size:12px;color:var(--faint);align-self:center"; lab.textContent=labelText;
+    const inp=document.createElement("input"); inp.type=type; inp.className="val";
+    inp.value = type==="date" ? String(c[field]||"").slice(0,10) : (c[field]||"");
+    inp.oninput=()=>{ c[field]=inp.value.trim(); save(); scheduleAuto(); };
+    inp.onchange=()=>{ afterChange(); };
+    row.append(lab, inp); g.appendChild(row);
+  };
+  mk("Author (creator)","creator","text");
+  mk("Created","created","date");
+  mk("Published (issued)","issued","date");
+  mk("Modified","modified","date");
+  return g;
 }
 const ARTIFACT_TYPES=[
   {v:"document",label:"Document",icon:"📄"},{v:"image",label:"Image",icon:"🖼️"},

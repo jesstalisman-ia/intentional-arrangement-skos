@@ -8,8 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
-### Fix: exports dropped per-concept metadata (v0.8.2)
-- Per-concept Dublin Core and other metadata — `dcterms:created`, `dcterms:issued` (published), `dcterms:modified`, `dcterms:creator` (author), and any predicate the editor doesn't otherwise model — was silently dropped on import and never re-exported. The importer now **preserves every unmodeled triple** on a concept (and on the concept scheme), and the exporter re-emits it verbatim, so **all Dublin Core and ISO standard metadata round-trips** through Turtle, RDF/XML, and JSON-LD without loss.
+### Per-concept Dublin Core metadata + lossless round-trip (v0.8.2)
+- **Every concept now has editable Dublin Core fields** — Author (`dcterms:creator`), Created (`dcterms:created`), Published (`dcterms:issued`), and Modified (`dcterms:modified`) — in a *Concept metadata* group in the editor. They're captured on import, editable per concept, and exported as typed Dublin Core across Turtle, RDF/XML, and JSON-LD.
+- **Nothing else is dropped either.** Any other predicate on a concept or the concept scheme that the editor doesn't model (ISO 25964, `dcterms:license`, `dcterms:subject`, custom metadata) is **preserved on import and re-emitted verbatim** on export — a lossless round-trip. This fixes the earlier silent loss of per-concept metadata.
 
 ### Fix: deleting a concept was broken (v0.8.1)
 - Deleting a concept (single or bulk) threw a scope error and never persisted — the concept came back on reload. The ISO 25964 field list the delete paths cleaned lived inside the `Core` module and wasn't visible to the UI script. It's now exported from `Core` as one source of truth (`ISO_BROADER`/`ISO_INVERSE`/`ISO_ENTAILS_SKOS`), so the delete paths, the entailment de-dup, and cycle detection all read the same list and can't drift.

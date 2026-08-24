@@ -70,6 +70,8 @@ When SKOS-XL is on, a teal **SKOS-XL** badge appears in the header (click it to 
 
 > **A note on `broader`.** SKOS `broader` covers both "is a kind of" and, in practice, "is a part of." If you use it for containment — say, *Day* is part of *Week* rather than a kind of week — record that in a scope note so the distinction survives into anything you build downstream.
 
+**Concept metadata (Dublin Core).** Each concept has its own Dublin Core fields — **Author** (`dcterms:creator`), **Created** (`dcterms:created`), **Published** (`dcterms:issued`), and **Modified** (`dcterms:modified`). Fill them per concept for governance; they export as typed Dublin Core in every RDF serialization and round-trip back on import.
+
 **Mappings.** Link a concept to the same or a related concept in another vocabulary with the mapping properties: `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`. Reserve `exactMatch` for concepts that are genuinely interchangeable.
 
 **Linked artifacts.** Attach documents, images, or links that give a concept context for the people using it.
