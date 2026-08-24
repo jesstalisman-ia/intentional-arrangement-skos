@@ -3264,6 +3264,22 @@ function enrichExampleMeta(m){
   }
   return m;
 }
+// On ingest (import/merge), stamp every concept that lacks Dublin Core dates with the
+// ingest date (created/issued/modified) and record who created it — the vocabulary's
+// creator (the file's scheme creator, else the current project's author). Fills empties
+// only, so metadata that came in the file is never overwritten.
+function markIngested(m){
+  if(!m || !m.concepts) return m;
+  const d = todayISO();
+  const who = (m.scheme && m.scheme.creator) || (model && model.scheme && model.scheme.creator) || "";
+  for(const id in m.concepts){ const c=m.concepts[id];
+    if(!c.created) c.created = d;
+    if(!c.issued) c.issued = d;
+    if(!c.modified) c.modified = d;
+    if(!c.creator && who) c.creator = who;
+  }
+  return m;
+}
 
 function uid(base){ base = base || "Concept"; let n=1, id=base; while(model.concepts[id]){ id = base+(++n); } return id; }
 function addConcept(parentId){
@@ -4680,6 +4696,7 @@ $('#importGo').onclick=()=>{
       if(!m.order) m.order=Object.keys(m.concepts);
     }
     const stub = m._importStubs ? ` · +${m._importStubs} parent stub${m._importStubs===1?"":"s"}` : "";
+    markIngested(m);   // stamp created/issued/modified + creator on every ingested concept
 
     if(dest==="merge"){
       const cur=loadProjects()[currentPid];
@@ -4687,6 +4704,7 @@ $('#importGo').onclick=()=>{
       if(nC===0 && (nK||nP)){ toast("This file has no SKOS concepts to merge — import it as a new project instead."); return; }
       const res=mergeModelInto(model, m);
       save(); selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show'); boot();
+      { const sb=$('#schemeBox'); if(sb && model.scheme && (model.scheme.title||model.scheme.creator||model.scheme.created)){ sb.open=true; renderScheme(); } }
       const h=importHealth(model);
       toast(`Merged into “${cur.name}” — ${res.added} added, ${res.updated} updated${stub}${importWarn(h)}`);
       switchTab("build");
@@ -4699,6 +4717,7 @@ $('#importGo').onclick=()=>{
       || ((nK||nP)&&!nC ? "Imported ontology" : "Imported taxonomy");
     createProject(impName, m);
     selected=null; openIds.clear(); window._importGraphName=""; $('#importModal').classList.remove('show');
+    { const sb=$('#schemeBox'); if(sb && m.scheme && (m.scheme.title||m.scheme.creator||m.scheme.created)){ sb.open=true; renderScheme(); } }
     const h=importHealth(m);
     const cls=(nK||nP)?`, ${nK} class${nK===1?"":"es"}, ${nP} propert${nP===1?"y":"ies"}`:"";
     toast(`New project “${impName}” — ${nC} concept${nC===1?"":"s"}${cls} · ${h.roots} top · other projects untouched${stub}${importWarn(h)}`);
