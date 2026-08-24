@@ -9,7 +9,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 ## ✅ Recently shipped
 
 ### Per-concept Dublin Core metadata + lossless round-trip (v0.8.2)
-- **Every concept now has editable Dublin Core fields** — Author (`dcterms:creator`), Created (`dcterms:created`), Published (`dcterms:issued`), and Modified (`dcterms:modified`) — in a *Concept metadata* group in the editor. They're captured on import, editable per concept, and exported as typed Dublin Core across Turtle, RDF/XML, and JSON-LD.
+- **Every concept now has editable Dublin Core fields** — Author (`dcterms:creator`), Created (`dcterms:created`), Published (`dcterms:issued`), and Modified (`dcterms:modified`) — in a *Concept metadata* group in the editor. They're captured on import, editable per concept, and exported as typed Dublin Core across Turtle, RDF/XML, and JSON-LD. **`created` and `modified` auto-stamp**: both are set when a concept is created, and `modified` bumps to today whenever the concept is edited (editing the metadata fields by hand still sticks).
 - **Nothing else is dropped either.** Any other predicate on a concept or the concept scheme that the editor doesn't model (ISO 25964, `dcterms:license`, `dcterms:subject`, custom metadata) is **preserved on import and re-emitted verbatim** on export — a lossless round-trip. This fixes the earlier silent loss of per-concept metadata.
 
 ### Fix: deleting a concept was broken (v0.8.1)

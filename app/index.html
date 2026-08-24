@@ -3255,6 +3255,7 @@ function addConcept(parentId){
   const id = genConceptId("NewConcept");
   const c = Core.emptyConcept(id);
   c.pref = [{lang:model.defaultLang, val:""}];
+  c.created = c.modified = todayISO();   // auto-stamp Dublin Core dates on creation
   if(parentId) c.broader=[parentId]; else c.top=true;
   seedHistory(c, parentId?`Term created under “${plabel(parentId)}”`:"Term created");
   model.concepts[id]=c; model.order.push(id);
@@ -3545,6 +3546,7 @@ function historyGroup(c){
 // ---------- editor ----------
 function renderEditor(){
   const host=$('#editor');
+  ensureStampListener();
   if(!selected||!model.concepts[selected]){ host.innerHTML='<div class="edit-empty">Select a concept on the left, or add a top concept to begin.</div>'; return; }
   const c=model.concepts[selected];
   if(selected!==histBaseId){ histBaseId=selected; histBaseline=snapshot(c); }
@@ -3616,6 +3618,8 @@ function metaGroup(c){
     const row=document.createElement("div"); row.className="rowline";
     const lab=document.createElement("span"); lab.style.cssText="flex:0 0 140px;font-size:12px;color:var(--faint);align-self:center"; lab.textContent=labelText;
     const inp=document.createElement("input"); inp.type=type; inp.className="val";
+    if(field==="modified") inp.id="fldConceptModified";
+    if(field==="created") inp.id="fldConceptCreated";
     inp.value = type==="date" ? String(c[field]||"").slice(0,10) : (c[field]||"");
     inp.oninput=()=>{ c[field]=inp.value.trim(); save(); scheduleAuto(); };
     inp.onchange=()=>{ afterChange(); };
@@ -3626,6 +3630,20 @@ function metaGroup(c){
   mk("Published (issued)","issued","date");
   mk("Modified","modified","date");
   return g;
+}
+// Auto-stamp dcterms:modified on the selected concept when it is edited in the editor
+// (edits to the Concept metadata group itself are excluded so manual dates stick).
+function stampSel(){
+  if(!selected) return; const c=model.concepts[selected]; if(!c) return;
+  const d=todayISO(); if(!d || c.modified===d) return;
+  c.modified=d; const el=document.getElementById('fldConceptModified'); if(el && el.value!==d) el.value=d;
+}
+function ensureStampListener(){
+  const ed=document.getElementById('editor'); if(!ed || ed._stampWired) return; ed._stampWired=true;
+  const h=(e)=>{ const t=e.target; if(!t||!t.closest) return; const grp=t.closest('.grp'); const lbl=grp&&grp.querySelector('.lbl');
+    if(lbl && /^Concept metadata/.test(lbl.textContent)) return; stampSel(); };
+  ed.addEventListener('input', h, true);
+  ed.addEventListener('change', h, true);
 }
 const ARTIFACT_TYPES=[
   {v:"document",label:"Document",icon:"📄"},{v:"image",label:"Image",icon:"🖼️"},
@@ -5865,7 +5883,7 @@ function graphRemoveEdge(e){
 }
 
 // ---- create / rename / delete nodes ----
-function graphAddConcept(){ const id=genConceptId("New concept"); const c=Core.emptyConcept(id); c.pref=[{lang:model.defaultLang,val:"New concept"}]; c.top=true; seedHistory(c,"Created in graph"); model.concepts[id]=c; model.order.push(id);
+function graphAddConcept(){ const id=genConceptId("New concept"); const c=Core.emptyConcept(id); c.pref=[{lang:model.defaultLang,val:"New concept"}]; c.top=true; c.created=c.modified=todayISO(); seedHistory(c,"Created in graph"); model.concepts[id]=c; model.order.push(id);
   const ctr=graphLocal(($('#gsvg').getBoundingClientRect().width)/2+ $('#gsvg').getBoundingClientRect().left, ($('#gsvg').getBoundingClientRect().height)/2+$('#gsvg').getBoundingClientRect().top);
   model.graph.pos["c:"+id]={x:ctr.x,y:ctr.y,pinned:true}; save(); renderTree(); graphRender(); const n=G.byKey["c:"+id]; if(n){ graphSelect(n); setTimeout(()=>{const i=$('#giName'); if(i){i.focus();i.select();}},20);} graphReheat(0.6); }
 function graphAddClass(){ const id=uniqueOntoId("NewClass"); model.onto.classes[id]={id,label:"New class",comment:"",sub:[],equiv:[],disjoint:[]}; model.onto.order.classes.push(id);
@@ -6639,6 +6657,7 @@ function promoteInto(m, t, parentId){
   const cid=uniqueLocalIn(m.concepts, base);
   const parent=(parentId && m.concepts[parentId])?parentId:null;
   const c=Core.emptyConcept(cid); c.pref=[{lang:m.defaultLang||"en",val:t.term}]; if(t.note) c.definition=[{lang:m.defaultLang||"en",val:t.note}];
+  c.created=c.modified=todayISO();
   if(parent){ c.broader=[parent]; c.top=false; } else { c.top=true; }
   m.concepts[cid]=c; m.order.push(cid); t.conceptId=cid;
   return {cid, parent};
