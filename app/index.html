@@ -3249,6 +3249,21 @@ function flashSaved(){ const c=document.getElementById('savedChip'); if(!c) retu
 // dcterms:modified reflects the last real edit. Stamp it (date granularity) whenever
 // the vocabulary or its metadata changes; leave dcterms:created untouched.
 function touchModified(){ if(SHARED) return; if(!model||!model.scheme) return; const d=todayISO(); if(!d||model.scheme.modified===d) return; model.scheme.modified=d; const el=document.getElementById('fldModified'); if(el&&el.value!==d) el.value=d; }
+// Give every concept in the bundled example per-concept Dublin Core metadata, so the
+// example demonstrates it (created/issued/modified from the scheme's date, creator from
+// the scheme's creator). Only fills empties, so a real import is never overwritten.
+function enrichExampleMeta(m){
+  if(!m || !m.concepts) return m;
+  const created = (m.scheme && (m.scheme.created || m.scheme.issued)) || "2026-01-13";
+  const creator = (m.scheme && m.scheme.creator) || "AI Assistant";
+  for(const id in m.concepts){ const c=m.concepts[id];
+    if(!c.created) c.created=created;
+    if(!c.issued) c.issued=created;
+    if(!c.modified) c.modified=created;
+    if(!c.creator) c.creator=creator;
+  }
+  return m;
+}
 
 function uid(base){ base = base || "Concept"; let n=1, id=base; while(model.concepts[id]){ id = base+(++n); } return id; }
 function addConcept(parentId){
@@ -6197,8 +6212,8 @@ $('#projSaveAs').onclick=saveAsProject;
 $('#projExample').onclick=()=>{
   const projs=loadProjects();
   const existing=Object.keys(projs).find(k=>projs[k].example || projs[k].name==="Software company (example)");
-  if(existing){ switchTo(existing); $('#projectsModal').classList.remove('show'); toast("Opened the example"); return; }
-  const m=Core.parseTurtle(EXAMPLE_TTL); if(m.scheme&&!m.scheme.rights) m.scheme.rights=LICENSE_NOTICE;
+  if(existing){ switchTo(existing); enrichExampleMeta(model); save(); renderEditor(); $('#projectsModal').classList.remove('show'); toast("Opened the example"); return; }
+  const m=Core.parseTurtle(EXAMPLE_TTL); if(m.scheme&&!m.scheme.rights) m.scheme.rights=LICENSE_NOTICE; enrichExampleMeta(m);
   createProject("Software company (example)", m);
   const ps=loadProjects(); if(ps[currentPid]){ ps[currentPid].example=true; saveProjects(ps); }
   $('#projectsModal').classList.remove('show'); toast("Loaded example");
@@ -6292,7 +6307,7 @@ function initProjects(){
   }
   // Guarantee the built-in example always exists (it can never be deleted).
   if(Object.keys(projs).length && !Object.values(projs).some(isExampleProject)){
-    const pid=newPid(); const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE;
+    const pid=newPid(); const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; enrichExampleMeta(em);
     projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em,example:true}; saveProjects(projs);
   }
   if(Object.keys(projs).length===0){
@@ -6300,7 +6315,7 @@ function initProjects(){
     let migrated=null; try{ const old=localStorage.getItem(OLDKEY); if(old) migrated=JSON.parse(old); }catch(e){}
     const pid=newPid();
     if(migrated&&migrated.concepts){ projs[pid]={id:pid,name:(migrated.scheme&&migrated.scheme.title)||"My taxonomy",created:nowTs(),updated:nowTs(),model:migrated}; }
-    else { const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em,example:true}; }
+    else { const em=Core.parseTurtle(EXAMPLE_TTL); if(em.scheme && !em.scheme.rights) em.scheme.rights=LICENSE_NOTICE; enrichExampleMeta(em); projs[pid]={id:pid,name:"Software company (example)",created:nowTs(),updated:nowTs(),model:em,example:true}; }
     saveProjects(projs); currentPid=pid;
   } else {
     currentPid=localStorage.getItem(CKEY); if(!currentPid||!projs[currentPid]) currentPid=Object.keys(projs)[0];
