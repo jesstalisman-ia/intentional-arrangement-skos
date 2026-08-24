@@ -6300,7 +6300,16 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{}; if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); initTreeOpts(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill(); if(typeof updateSrcPill==="function") updateSrcPill();
+function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{};
+  // Ensure every concept carries Dublin Core (existing projects that predate the fields):
+  // fill created/issued/modified with the scheme's date (or today, as the ingest proxy)
+  // and creator with the vocabulary's creator. Fills empties only.
+  (function(){ if(SHARED) return; const d=(model.scheme&&(model.scheme.created||model.scheme.issued))||todayISO(); const who=(model.scheme&&model.scheme.creator)||""; let ch=false;
+    for(const id in model.concepts){ const c=model.concepts[id];
+      if(!c.created){ c.created=d; ch=true; } if(!c.issued){ c.issued=d; ch=true; } if(!c.modified){ c.modified=d; ch=true; } if(!c.creator&&who){ c.creator=who; ch=true; } }
+    if(ch) save();
+  })();
+  if(model.xlLabels) ensureXlUris(); ontoInit(); model.graph=model.graph||{pos:{}}; shaclInit(); histBaseId=null; histBaseline=null; setProjectChip(); renderScheme(); initTreeOpts(); renderTree(); renderEditor(); updateProposalPill(); if(typeof renderCollections==="function") updateCollPill(); if(typeof updateSrcPill==="function") updateSrcPill();
   browseSel=null; browseFilter=""; if($('#browseSearch')) $('#browseSearch').value="";
   if(valAuto) runValidation(); else updateBadgeQuick();
   if($('.panel[data-panel=export]').classList.contains('active')) renderExport();
