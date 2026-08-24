@@ -3271,6 +3271,12 @@ function enrichExampleMeta(m){
 function markIngested(m){
   if(!m || !m.concepts) return m;
   const d = todayISO();
+  // stamp the concept scheme's own Dublin Core dates on ingest (fills empties)
+  if(m.scheme){
+    if(!m.scheme.created) m.scheme.created = d;
+    if(!m.scheme.issued) m.scheme.issued = d;
+    if(!m.scheme.modified) m.scheme.modified = d;
+  }
   const who = (m.scheme && m.scheme.creator) || (model && model.scheme && model.scheme.creator) || "";
   for(const id in m.concepts){ const c=m.concepts[id];
     if(!c.created) c.created = d;
@@ -6305,6 +6311,7 @@ function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyl
   // fill created/issued/modified with the scheme's date (or today, as the ingest proxy)
   // and creator with the vocabulary's creator. Fills empties only.
   (function(){ if(SHARED) return; const d=(model.scheme&&(model.scheme.created||model.scheme.issued))||todayISO(); const who=(model.scheme&&model.scheme.creator)||""; let ch=false;
+    if(model.scheme){ if(!model.scheme.created){ model.scheme.created=d; ch=true; } if(!model.scheme.issued){ model.scheme.issued=d; ch=true; } if(!model.scheme.modified){ model.scheme.modified=d; ch=true; } }
     for(const id in model.concepts){ const c=model.concepts[id];
       if(!c.created){ c.created=d; ch=true; } if(!c.issued){ c.issued=d; ch=true; } if(!c.modified){ c.modified=d; ch=true; } if(!c.creator&&who){ c.creator=who; ch=true; } }
     if(ch) save();
