@@ -2,7 +2,7 @@
 
 A walk through the editor, tab by tab, from a blank project to a taxonomy you can hand off. If you haven't opened the tool yet, start with the [install guide](install.md); for the login, projects, and autosave, see [your workspace](workspace.md).
 
-The app has eight tabs, each with its own accent color: **Glossary**, **Build**, **Business view**, **Proposals**, **Graph**, **Validate**, **SPARQL**, and **Export**. You collect raw terms in Glossary, author in Build, gather suggestions in Proposals, check your work in Validate, read it in Business view, see its shape in Graph, query it in SPARQL, and take it out in Export.
+The app has eleven tabs, each with its own accent color: **Glossary**, **Build**, **Collections**, **Sources**, **Crosswalk**, **Business view**, **Proposals**, **Graph**, **Validate**, **SPARQL**, and **Export**. You collect raw terms in Glossary, author in Build, group in Collections, cite documents and agents in Sources, federate taxonomies in Crosswalk, gather suggestions in Proposals, check your work in Validate, read it in Business view, see its shape in Graph, query it in SPARQL, and take it out in Export.
 
 ## Start a project
 
