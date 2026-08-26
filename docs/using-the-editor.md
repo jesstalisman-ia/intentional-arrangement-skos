@@ -95,6 +95,8 @@ Everything round-trips: documents, agents, `dct:source`, and the attribution ref
 
 The **Crosswalk** tab aligns two taxonomies from your workspace using the five SKOS mapping relations — `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`. Pick a **source** and a **target** taxonomy, then either run **Auto-match by label** (identical labels are proposed as `exactMatch`, near labels as `closeMatch`; tick the ones you accept) or link by hand in the **visual view**: click a source concept on the left, then a target concept on the right, with whichever relation is selected; click a line to remove it. A **table view**, a filter box, and an *only unmapped* toggle help on larger vocabularies.
 
+**Only have one taxonomy?** A crosswalk needs two — the empty state offers **Load sample taxonomies to try it**, which adds four small schemes (Media types, Content formats, Subjects, Grocery aisles) with deliberately overlapping labels so you can experiment immediately. When your workspace has exactly two taxonomies, the target is picked automatically.
+
 Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples (`crosswalk.ttl`) or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file. Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
 
 ## Proposals — suggest and review terms

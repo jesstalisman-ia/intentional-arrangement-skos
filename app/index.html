@@ -916,6 +916,8 @@
           <div class="disc-badge">Align · map · federate</div>
           <h2>Crosswalk taxonomies into a thesaurus</h2>
           <p>Pick a second taxonomy (another project in your workspace) and align its concepts with this one using the five SKOS mapping relations — <code>exactMatch</code>, <code>closeMatch</code>, <code>broadMatch</code>, <code>narrowMatch</code>, <code>relatedMatch</code>. Auto-match seeds the alignment from matching labels; you confirm and refine. Export the crosswalk on its own, or the whole federated thesaurus (both schemes + the mappings) as one interoperable RDF file.</p>
+          <p class="subtle" style="margin-top:8px">A crosswalk needs <b>two</b> taxonomies. Only have one? Import another, or</p>
+          <button class="btn primary" id="xwSamples" style="margin-top:6px">Load sample taxonomies to try it</button>
         </div>
       </div>
     </div>
@@ -4189,6 +4191,8 @@ function renderCrosswalk(){
   if(!xwSourcePid && projs[currentPid]) xwLoadSource(currentPid);       // default source = current project
   if(xwSourcePid && projs[xwSourcePid]) ss.value=xwSourcePid;
   if(xwTargetPid && projs[xwTargetPid]) ts.value=xwTargetPid;
+  // exactly two taxonomies and no target chosen: pick the other one automatically
+  if(!xwTargetPid && xwSourcePid && ids.length===2){ const other=ids.find(pp=>pp!==xwSourcePid); if(other){ ts.value=other; xwLoadTargetProj(other); } }
   xwMaybeStart();
 }
 function xwMaybeStart(){
@@ -4358,6 +4362,15 @@ if($('#xwTarget')){
   if($('#xwViewTable')) $('#xwViewTable').onclick=()=>xwSetView('table');
   let _xwRz; window.addEventListener('resize',()=>{ clearTimeout(_xwRz); _xwRz=setTimeout(()=>{ if(xwView==='visual'&&xwTargetModel&&($('.panel[data-panel=crosswalk]')||{classList:{contains:()=>false}}).classList.contains('active')) renderXwVisual(); },200); });
   if($('#xwExportMap')) $('#xwExportMap').onclick=()=>{ if(!xwTargetModel||!xwSourceModel)return; const {ttl,n}=xwMappingTurtle(); if(!n){ toast("No mappings yet"); return; } xwDownload("crosswalk.ttl",ttl); toast(`Exported ${n} mapping triples`); };
+  if($('#xwSamples')) $('#xwSamples').onclick=async()=>{
+    if(!await askConfirm("Add "+SAMPLE_TAXONOMIES.length+" sample SKOS taxonomies (Media types, Content formats, Subjects, Grocery aisles) as new projects? They have overlapping labels so you can crosswalk between them.","Add samples")) return;
+    const prev=currentPid;
+    for(const [title,base,rows] of SAMPLE_TAXONOMIES){ const smp=buildSampleTax(title,base,rows); createProject(smp.title,smp.model); }
+    if(prev && loadProjects()[prev]) switchTo(prev);
+    switchTab('crosswalk');
+    toast("Added "+SAMPLE_TAXONOMIES.length+" sample taxonomies — pick one as the target");
+    xwSourcePid=null; xwSourceModel=null; renderCrosswalk();
+  };
   if($('#xwExportThes')) $('#xwExportThes').onclick=()=>{ if(!xwTargetModel||!xwSourceModel)return;
     // give each scheme a distinct, base-derived URI so the two schemes don't collide in the merged file
     const withSchemeUri=(m,uri)=>{ const orig=m.scheme.uri; m.scheme.uri=uri; const ttl=Core.toTurtle(m,{}); m.scheme.uri=orig; return ttl; };
