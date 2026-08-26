@@ -27,7 +27,7 @@
     --ok:#0a8f74; --ok-soft:#daf8f1;
     /* per-section accents — Intentional Arrangement palette (white-text-safe; glossary is the one light fill, handled below) */
     --c-glossary:#fec701; --c-build:#0e0d6a; --c-browse:#0192ef; --c-proposals:#52452a;
-    --c-graph:#fe4f51; --c-validate:#0a8f74; --c-sparql:#67708f; --c-export:#af8501; --c-sources:#7c5cbf;
+    --c-graph:#fe4f51; --c-validate:#0a8f74; --c-sparql:#67708f; --c-export:#af8501; --c-sources:#7c5cbf; --c-xwalk:#d4537e;
     --c-glossary-soft:#fff4d3; --c-browse-soft:#e2f0fd; --c-proposals-soft:#eceae4;
     --c-graph-soft:#ffe6e6; --c-sparql-soft:#e9ebf1; --c-export-soft:#f6efda;
     --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
@@ -100,7 +100,7 @@
   #tabs .tab[data-tab=browse]{--c:var(--c-browse)} #tabs .tab[data-tab=proposals]{--c:var(--c-proposals)}
   #tabs .tab[data-tab=graph]{--c:var(--c-graph)} #tabs .tab[data-tab=validate]{--c:var(--c-validate)}
   #tabs .tab[data-tab=sparql]{--c:var(--c-sparql)} #tabs .tab[data-tab=export]{--c:var(--c-export)}
-  #tabs .tab[data-tab=collections]{--c:var(--c-validate)} #tabs .tab[data-tab=sources]{--c:var(--c-sources)}
+  #tabs .tab[data-tab=collections]{--c:var(--c-validate)} #tabs .tab[data-tab=sources]{--c:var(--c-sources)} #tabs .tab[data-tab=crosswalk]{--c:var(--c-xwalk)}
   #tabs .tab{border-bottom-color:color-mix(in srgb,var(--c) 35%,transparent)}
   #tabs .tab:hover{border-bottom-color:var(--c)}
   #tabs .tab .pill{color:var(--c)}
@@ -400,6 +400,7 @@
     <button class="tab active" data-tab="build"><span>Build</span> <span class="pill" id="pillCount">0</span></button>
     <button class="tab" data-tab="collections"><span>Collections</span> <span class="pill" id="pillColl">0</span></button>
     <button class="tab" data-tab="sources"><span>Sources</span> <span class="pill" id="pillSrc">0</span></button>
+    <button class="tab" data-tab="crosswalk"><span>Crosswalk</span> <span class="pill" id="pillXwalk">thesaurus</span></button>
     <button class="tab" data-tab="browse"><span>Business view</span></button>
     <button class="tab" data-tab="proposals"><span>Proposals</span> <span class="pill" id="pillProp">0</span></button>
     <button class="tab" data-tab="graph"><span>Graph</span></button>
@@ -866,6 +867,57 @@
         <span class="subtle" style="margin-left:8px;font-size:12px;flex:1;min-width:0">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dct:source</code> in the concept editor.</span>
       </div>
       <div id="sourcesBody"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-panel="crosswalk">
+    <div class="xw-wrap">
+      <div class="card xw-controls">
+        <div class="xw-row">
+          <label>Source taxonomy <select id="xwSource"><option value="">Choose a taxonomy…</option></select></label>
+          <span class="xw-arrow">⇄</span>
+          <label>Target taxonomy <select id="xwTarget"><option value="">Choose a taxonomy…</option></select></label>
+          <label class="subtle">relation <select id="xwType">
+            <option value="exactMatch">exactMatch</option><option value="closeMatch">closeMatch</option>
+            <option value="broadMatch">broadMatch</option><option value="narrowMatch">narrowMatch</option><option value="relatedMatch">relatedMatch</option>
+          </select></label>
+          <span class="sp" style="margin-left:auto"></span>
+          <button class="btn sm" id="xwAuto">Auto-match by label</button>
+        </div>
+        <div class="xw-hint subtle">Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-status subtle" id="xwStatus"></div>
+      </div>
+
+      <div class="card xw-suggest" id="xwSuggest" style="display:none">
+        <div class="xw-res-h"><h2>Suggested matches <span class="subtle" id="xwSuggestMeta"></span></h2>
+          <div><button class="btn sm" id="xwSugAll">Check all</button><button class="btn sm" id="xwSugNone">Clear</button>
+          <button class="btn sm primary" id="xwSugApply">Add checked</button></div>
+        </div>
+        <div class="xw-suggestlist" id="xwSuggestList"></div>
+      </div>
+
+      <div class="card xw-workspace" id="xwWorkspace" style="display:none">
+        <div class="xw-ws-h">
+          <div class="seg xw-viewseg"><button data-v="visual" class="on" id="xwViewVisual">Visual</button><button data-v="table" id="xwViewTable">Table</button></div>
+          <input type="search" id="xwFilter" placeholder="filter source concepts…" style="width:160px">
+          <label class="toggle"><input type="checkbox" id="xwOnlyUnmapped"> only unmapped</label>
+          <span class="sp" style="margin-left:auto"></span>
+          <span class="subtle" id="xwCount"></span>
+          <button class="btn sm" id="xwExportMap">Export crosswalk</button>
+          <button class="btn sm primary" id="xwExportThes">Export thesaurus</button>
+        </div>
+        <div class="xw-vishint subtle" id="xwVisHint">Click a <b>source</b> concept (left), then a <b>target</b> concept (right) to link them with the selected relation. Click a line to remove it.</div>
+        <div class="xw-vis" id="xwVisual"></div>
+        <div class="xw-tablewrap" id="xwTableWrap" style="display:none"><table class="xw-table" id="xwTable"></table></div>
+      </div>
+
+      <div class="xw-empty" id="xwEmpty">
+        <div class="xw-empty-inner">
+          <div class="disc-badge">Align · map · federate</div>
+          <h2>Crosswalk taxonomies into a thesaurus</h2>
+          <p>Pick a second taxonomy (another project in your workspace) and align its concepts with this one using the five SKOS mapping relations — <code>exactMatch</code>, <code>closeMatch</code>, <code>broadMatch</code>, <code>narrowMatch</code>, <code>relatedMatch</code>. Auto-match seeds the alignment from matching labels; you confirm and refine. Export the crosswalk on its own, or the whole federated thesaurus (both schemes + the mappings) as one interoperable RDF file.</p>
+        </div>
+      </div>
     </div>
   </section>
 

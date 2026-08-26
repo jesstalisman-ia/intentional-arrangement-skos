@@ -91,6 +91,12 @@ The **Sources** tab holds reusable records that concepts and the scheme can poin
 
 Everything round-trips: documents, agents, `dct:source`, and the attribution references all export to RDF and read back on import.
 
+## Crosswalk — federate taxonomies into a thesaurus
+
+The **Crosswalk** tab aligns two taxonomies from your workspace using the five SKOS mapping relations — `exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`. Pick a **source** and a **target** taxonomy, then either run **Auto-match by label** (identical labels are proposed as `exactMatch`, near labels as `closeMatch`; tick the ones you accept) or link by hand in the **visual view**: click a source concept on the left, then a target concept on the right, with whichever relation is selected; click a line to remove it. A **table view**, a filter box, and an *only unmapped* toggle help on larger vocabularies.
+
+Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples (`crosswalk.ttl`) or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file. Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
+
 ## Proposals — suggest and review terms
 
 Not everyone who has an idea for a term should edit the vocabulary directly. In the **Proposals** tab, contributors *propose* a new term — with a definition, a suggested parent, synonyms, a scope note, a rationale, and links — and a taxonomist reviews each one. The reviewer sets the proposed concept's parent (or makes it a top concept) and **approves** it into the taxonomy, or **rejects** it with a reason. Every decision is recorded, and the whole log downloads as CSV or a readable report.
