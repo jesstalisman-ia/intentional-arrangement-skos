@@ -903,6 +903,9 @@
           <label class="toggle"><input type="checkbox" id="xwOnlyUnmapped"> only unmapped</label>
           <span class="sp" style="margin-left:auto"></span>
           <span class="subtle" id="xwCount"></span>
+          <select id="xwFmt" title="Export format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
+            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
+          </select>
           <button class="btn sm" id="xwExportMap">Export crosswalk</button>
           <button class="btn sm primary" id="xwExportThes">Export thesaurus</button>
         </div>
@@ -1681,7 +1684,7 @@ function termTurtle(model, o){
   return s;
 }
 function toTurtle(model, opts){
-  const { triples } = buildTriples(model, opts);
+  const { triples } = (opts && opts._triples) ? { triples: opts._triples } : buildTriples(model, opts);
   // group by subject preserving first-seen order
   const order = [], groups = new Map();
   for (const t of triples){
@@ -1720,7 +1723,7 @@ function toTurtle(model, opts){
 // ============================================================================
 function xmlEsc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function toRdfXml(model, opts){
-  const { triples } = buildTriples(model, opts);
+  const { triples } = (opts && opts._triples) ? { triples: opts._triples } : buildTriples(model, opts);
   const order = [], groups = new Map();
   for (const t of triples){
     const k = termId(t.s);
@@ -1760,7 +1763,7 @@ function toRdfXml(model, opts){
 // JSON-LD serialization
 // ============================================================================
 function toJsonLd(model, opts){
-  const { triples } = buildTriples(model, opts);
+  const { triples } = (opts && opts._triples) ? { triples: opts._triples } : buildTriples(model, opts);
   const ctx = {}; for (const p of ["skos", "skosxl", "rdf", "rdfs", "dcterms", "xsd"]) ctx[p] = NS[p];
   if (model.prefix) ctx[model.prefix] = model.base;
   const order = [], groups = new Map();
@@ -4361,7 +4364,37 @@ if($('#xwTarget')){
   if($('#xwViewVisual')) $('#xwViewVisual').onclick=()=>xwSetView('visual');
   if($('#xwViewTable')) $('#xwViewTable').onclick=()=>xwSetView('table');
   let _xwRz; window.addEventListener('resize',()=>{ clearTimeout(_xwRz); _xwRz=setTimeout(()=>{ if(xwView==='visual'&&xwTargetModel&&($('.panel[data-panel=crosswalk]')||{classList:{contains:()=>false}}).classList.contains('active')) renderXwVisual(); },200); });
-  if($('#xwExportMap')) $('#xwExportMap').onclick=()=>{ if(!xwTargetModel||!xwSourceModel)return; const {ttl,n}=xwMappingTurtle(); if(!n){ toast("No mappings yet"); return; } xwDownload("crosswalk.ttl",ttl); toast(`Exported ${n} mapping triples`); };
+  function xwFmtInfo(){ const f=($('#xwFmt')||{}).value||'ttl';
+    return f==='rdf' ? {f,ext:'rdf',mime:'application/rdf+xml'} : f==='jsonld' ? {f,ext:'jsonld',mime:'application/ld+json'} : {f:'ttl',ext:'ttl',mime:'text/turtle'}; }
+  function xwSerialize(triples, fmt){
+    if(fmt==='rdf') return Core.toRdfXml(xwSourceModel,{_triples:triples});
+    if(fmt==='jsonld') return JSON.stringify(Core.toJsonLd(xwSourceModel,{_triples:triples}),null,2);
+    return Core.toTurtle(xwSourceModel,{_triples:triples});
+  }
+  function xwCombinedTriples(mapOnly){
+    const a=Core.buildTriples(xwSourceModel,{dc:true}).triples;
+    if(mapOnly){
+      const MAPP=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].map(m=>"http://www.w3.org/2004/02/skos/core#"+m);
+      return a.filter(t=>t.p&&MAPP.includes(t.p.v));
+    }
+    const b=Core.buildTriples(xwTargetModel,{dc:true}).triples;
+    return a.concat(b);
+  }
+  if($('#xwExportMap')) $('#xwExportMap').onclick=()=>{
+    if(!xwTargetModel||!xwSourceModel)return;
+    const tr=xwCombinedTriples(true);
+    if(!tr.length){ toast("No mappings yet"); return; }
+    const {f,ext,mime}=xwFmtInfo();
+    xwDownload("crosswalk."+ext, xwSerialize(tr,f), mime);
+    toast(`Exported ${tr.length} mapping triples (${ext})`);
+  };
+  if($('#xwExportThes')) $('#xwExportThes').onclick=()=>{
+    if(!xwTargetModel||!xwSourceModel)return;
+    const tr=xwCombinedTriples(false);
+    const {f,ext,mime}=xwFmtInfo();
+    xwDownload("thesaurus."+ext, xwSerialize(tr,f), mime);
+    toast(`Exported federated thesaurus (${ext})`);
+  };
   if($('#xwSamples')) $('#xwSamples').onclick=async()=>{
     if(!await askConfirm("Add "+SAMPLE_TAXONOMIES.length+" sample SKOS taxonomies (Media types, Content formats, Subjects, Grocery aisles) as new projects? They have overlapping labels so you can crosswalk between them.","Add samples")) return;
     const prev=currentPid;
@@ -4371,12 +4404,6 @@ if($('#xwTarget')){
     toast("Added "+SAMPLE_TAXONOMIES.length+" sample taxonomies — pick one as the target");
     xwSourcePid=null; xwSourceModel=null; renderCrosswalk();
   };
-  if($('#xwExportThes')) $('#xwExportThes').onclick=()=>{ if(!xwTargetModel||!xwSourceModel)return;
-    // give each scheme a distinct, base-derived URI so the two schemes don't collide in the merged file
-    const withSchemeUri=(m,uri)=>{ const orig=m.scheme.uri; m.scheme.uri=uri; const ttl=Core.toTurtle(m,{}); m.scheme.uri=orig; return ttl; };
-    const a=withSchemeUri(xwSourceModel, xwSourceModel.base.replace(/[#/]+$/,"")), b=withSchemeUri(xwTargetModel, xwTargetModel.base.replace(/[#/]+$/,""));
-    const ttl=`# Federated thesaurus — ${xwProjName(xwSourcePid)} + ${xwProjName(xwTargetPid)}\n# Two SKOS concept schemes crosswalked via SKOS mapping properties.\n\n${a}\n\n# ---- second scheme ----\n${b}`;
-    xwDownload("thesaurus.ttl",ttl); toast("Exported federated thesaurus (both schemes + mappings)"); };
 }
 
 function switchTab(name){

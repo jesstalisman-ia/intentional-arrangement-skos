@@ -97,7 +97,7 @@ The **Crosswalk** tab aligns two taxonomies from your workspace using the five S
 
 **Only have one taxonomy?** A crosswalk needs two — the empty state offers **Load sample taxonomies to try it**, which adds four small schemes (Media types, Content formats, Subjects, Grocery aisles) with deliberately overlapping labels so you can experiment immediately. When your workspace has exactly two taxonomies, the target is picked automatically.
 
-Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples (`crosswalk.ttl`) or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file. Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
+Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file — in **Turtle, RDF/XML, or JSON-LD** (format picker beside the export buttons). Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
 
 ## Proposals — suggest and review terms
 
