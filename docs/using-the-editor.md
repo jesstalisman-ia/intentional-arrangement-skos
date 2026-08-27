@@ -93,6 +93,8 @@ The **Sources** tab holds reusable records that concepts and the scheme can poin
 
 Agents work the same way: the identifier derives from the name ("Doug Warren" → `Doug-Warren`, editable to any form you prefer), and an optional **Identity URI** — an ORCID, ROR, or homepage URI — is used as the agent's URI on export, so the scheme's `dcterms:creator` can point at a real identity instead of a minted local name. The agent is still typed `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` and described with `foaf:name` / `foaf:homepage`.
 
+Every URI field in the editor (linked artifacts, document page/URI, agent homepage/identity URI) guards its input: strings that don't parse as URLs are flagged, a vocabulary term typed as a CURIE (`skos:Concept`, `dcterms:title`) expands to its full canonical URI, and a lookalike host such as `skos.org` prompts with the real W3C namespace. All checks are offline — the editor never makes a network call.
+
 Identifiers follow ISO 25964's persistence rule: they derive once, then stay put — renaming a document, agent, or collection never silently changes its URI. Changing an identifier explicitly cascades through every reference (concept citations, scheme attribution, collection membership), and uniqueness is checked across concepts, collections, documents, and agents, which all share the vocabulary's namespace.
 
 Everything round-trips: documents, agents, external identity URIs, `dcterms:source`, and the attribution references all export to RDF and read back on import.

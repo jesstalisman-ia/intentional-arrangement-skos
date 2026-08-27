@@ -905,7 +905,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.11.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.11.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -3792,7 +3792,7 @@ function artifactGroup(c){
     const sel=document.createElement("select"); sel.innerHTML=ARTIFACT_TYPES.map(t=>`<option value="${t.v}" ${t.v===a.type?"selected":""}>${t.icon} ${t.label}</option>`).join("");
     sel.onchange=()=>{ a.type=sel.value; save(); };
     const title=document.createElement("input"); title.placeholder="title"; title.value=a.title||""; title.oninput=()=>{ a.title=title.value; save(); };
-    const url=document.createElement("input"); url.placeholder="https://…"; url.value=a.url||""; url.oninput=()=>{ a.url=url.value.trim(); save(); };
+    const url=document.createElement("input"); url.placeholder="https://… or skos:Concept"; url.value=a.url||""; url.oninput=()=>{ a.url=url.value.trim(); save(); }; attachUriGuard(url,v=>{ a.url=v; save(); });
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕"; rm.onclick=()=>{ c.artifacts.splice(i,1); renderEditor(); save(); };
     row.append(sel,title,url,rm); g.appendChild(row);
   });
@@ -4991,9 +4991,9 @@ function renderSources(){ updateSrcPill(); const body=document.getElementById("s
     const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the document's local name in your namespace"; idin.placeholder="identifier"; idin.value=d.id;
     idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=d.id; return; } if(nid!==d.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and agents"); idin.value=d.id; return; } renameDocument(d.id,nid); renderSources(); };
     const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from title"; sy.title="Derive the identifier from the title"; sy.onclick=()=>{ const nid=slugLocalId(docTitle(d),d.id); if(nid){ renameDocument(d.id,nid); renderSources(); } };
-    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="URI (optional — DOI / w3id; overrides the local name on export)"; uin.value=d.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) d.uri=v; else delete d.uri; save(); };
+    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="URI (optional — DOI / w3id; overrides the local name on export)"; uin.value=d.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) d.uri=v; else delete d.uri; save(); }; attachUriGuard(uin,v=>{ if(v) d.uri=v; else delete d.uri; save(); });
     ir.append(idin,sy,uin); card.appendChild(ir);
-    const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; card.appendChild(pg);
+    const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; attachUriGuard(pg,v=>{ d.page[0]=v; save(); }); card.appendChild(pg);
     const cm=document.createElement("textarea"); cm.rows=2; cm.style.cssText=_srcInput+";width:100%;resize:vertical"; cm.placeholder="Comment (rdfs:comment, optional)"; cm.value=(d.comment[0]&&d.comment[0].val)||""; cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; card.appendChild(cm);
     body.appendChild(card);
   }
@@ -5020,14 +5020,14 @@ function renderAgentsSection(body){
     const kind=document.createElement("select"); kind.style.cssText=_srcInput; kind.innerHTML=AGENT_KINDS.map(k=>`<option value="${k.v}" ${k.v===a.kind?"selected":""}>${k.label}</option>`).join(""); kind.onchange=()=>{ a.kind=kind.value; save(); };
     const nm=document.createElement("input"); nm.style.cssText=_srcInput+";flex:1;min-width:150px"; nm.placeholder="Name (foaf:name)"; nm.value=a.name||""; nm.oninput=()=>{ a.name=nm.value; save(); };
     nm.onchange=()=>{ if(isAutoId(a.id,"agent")&&nm.value.trim()){ const nid=slugLocalId(nm.value,a.id); if(nid&&nid!==a.id){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } } };
-    const hp=document.createElement("input"); hp.style.cssText=_srcInput+";flex:1;min-width:150px"; hp.placeholder="Homepage (foaf:homepage) — https://…"; hp.value=a.homepage||""; hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); };
+    const hp=document.createElement("input"); hp.style.cssText=_srcInput+";flex:1;min-width:150px"; hp.placeholder="Homepage (foaf:homepage) — https://…"; hp.value=a.homepage||""; hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); }; attachUriGuard(hp,v=>{ a.homepage=v; save(); });
     const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete agent"; del.onclick=()=>deleteAgent(id);
     r1.append(kind,nm,hp,del); card.appendChild(r1);
     const r2=document.createElement("div"); r2.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
     const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the agent's local name in your namespace"; idin.placeholder="identifier"; idin.value=a.id;
     idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=a.id; return; } if(nid!==a.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and documents"); idin.value=a.id; return; } renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); };
     const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from name"; sy.title="Derive the identifier from the name"; sy.onclick=()=>{ const nid=slugLocalId(a.name||"",a.id); if(nid){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } };
-    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="Identity URI (optional — ORCID / ROR / homepage; used as the agent's URI on export)"; uin.value=a.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) a.uri=v; else delete a.uri; save(); };
+    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="Identity URI (optional — ORCID / ROR / homepage; used as the agent's URI on export)"; uin.value=a.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) a.uri=v; else delete a.uri; save(); }; attachUriGuard(uin,v=>{ if(v) a.uri=v; else delete a.uri; save(); });
     r2.append(idin,sy,uin); card.appendChild(r2);
     body.appendChild(card);
   }
@@ -5052,6 +5052,38 @@ function renameAgent(old,nid){ const al=provAgents(); if(!nid||old===nid||!al[ol
   al[nid]=al[old]; al[nid].id=nid; delete al[old];
   const sc=model.scheme||{}; ["creatorAgent","contributorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===old) sc[k]=nid; });
   save(); return nid; }
+// ---------- URI input guard (#39): parse check, CURIE expansion, lookalike hint ----------
+// Everything stays offline — syntactic checks only, no network.
+const CANON_NS={skos:"http://www.w3.org/2004/02/skos/core#",rdf:"http://www.w3.org/1999/02/22-rdf-syntax-ns#",rdfs:"http://www.w3.org/2000/01/rdf-schema#",owl:"http://www.w3.org/2002/07/owl#",dcterms:"http://purl.org/dc/terms/",dct:"http://purl.org/dc/terms/",dc:"http://purl.org/dc/elements/1.1/",dcat:"http://www.w3.org/ns/dcat#",foaf:"http://xmlns.com/foaf/0.1/",prov:"http://www.w3.org/ns/prov#",xsd:"http://www.w3.org/2001/XMLSchema#",skosxl:"http://www.w3.org/2008/05/skos-xl#","iso-thes":"http://purl.org/iso25964/skos-thes#"};
+function uriGuard(raw){
+  const v=String(raw||"").trim();
+  if(!v) return {ok:true,value:""};
+  const m=v.match(/^([A-Za-z][\w-]*):([A-Za-z_][\w.-]*)$/);           // a CURIE like skos:Concept
+  if(m&&CANON_NS[m[1].toLowerCase()]){ const full=CANON_NS[m[1].toLowerCase()]+m[2];
+    return {ok:true,value:full,expanded:true,note:"Expanded "+v+" → "+full}; }
+  let u; try{ u=new URL(v); }catch(e){
+    return {ok:false,value:v,note:"“"+v+"” doesn't parse as a URL — check for a stray “:” or spaces. Tip: you can also type a vocabulary term like skos:Concept and it will expand to the full URI."}; }
+  if(!/^https?:$/.test(u.protocol)) return {ok:true,value:v};          // urn:, doi:, mailto: — leave alone
+  const host=(u.hostname||"").toLowerCase().replace(/^www\./,"");
+  const lk=host.match(/^([a-z-]+)\.(org|com|net)$/);
+  if(lk&&CANON_NS[lk[1]]&&CANON_NS[lk[1]].indexOf("//"+host)<0){
+    const local=u.hash?u.hash.slice(1):(u.pathname||"").split("/").filter(Boolean).pop()||"";
+    const guess=CANON_NS[lk[1]]+local;
+    return {ok:true,value:v,warn:true,suggest:guess,
+      note:"“"+host+"” looks like the "+lk[1]+": vocabulary, but its real namespace is "+CANON_NS[lk[1]]}; }
+  return {ok:true,value:v};
+}
+function attachUriGuard(el,setter){
+  el.addEventListener('change',()=>{
+    const r=uriGuard(el.value);
+    el.style.borderColor=""; el.title=r.note||"";
+    if(!r.ok){ el.style.borderColor="var(--err)"; toast(r.note); return; }
+    if(r.expanded){ el.value=r.value; setter(r.value); toast(r.note);
+      el.style.borderColor="var(--ok)"; setTimeout(()=>{el.style.borderColor="";},1400); return; }
+    if(r.warn){ if(window.confirm(r.note+".\n\nReplace with:\n"+r.suggest+" ?")){ el.value=r.suggest; setter(r.suggest); }
+      else el.style.borderColor="var(--warn)"; }
+  });
+}
 function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) el.textContent=Object.keys(colls()).length; }
 function collMemberOf(id){ const cs=colls(); return Object.keys(cs).filter(k=>(cs[k].members||[]).indexOf(id)>=0); }
 function topCollections(){ const cs=colls(); return Object.keys(cs).filter(id=>collMemberOf(id).length===0); }
@@ -5268,7 +5300,7 @@ function addArtifactRow(container,a){
   const row=document.createElement("div"); row.className="artrow";
   const sel=document.createElement("select"); sel.innerHTML=ARTIFACT_TYPES.map(t=>`<option value="${t.v}" ${t.v===a.type?"selected":""}>${t.icon} ${t.label}</option>`).join(""); sel.onchange=()=>a.type=sel.value;
   const title=document.createElement("input"); title.placeholder="title (e.g. Onboarding Runbook)"; title.value=a.title||""; title.oninput=()=>a.title=title.value;
-  const url=document.createElement("input"); url.placeholder="https://… document, image, sheet or wiki"; url.value=a.url||""; url.oninput=()=>a.url=url.value.trim();
+  const url=document.createElement("input"); url.placeholder="https://… document, image, sheet or wiki"; url.value=a.url||""; url.oninput=()=>a.url=url.value.trim(); attachUriGuard(url,v=>{ a.url=v; });
   const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕"; rm.onclick=()=>{ const i=proposeArts.indexOf(a); if(i>=0)proposeArts.splice(i,1); row.remove(); };
   row.append(sel,title,url,rm); container.appendChild(row); return a;
 }
