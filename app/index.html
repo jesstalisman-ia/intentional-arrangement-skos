@@ -1021,6 +1021,19 @@
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px">
+          <div style="font-weight:700">Federation — all crosswalked taxonomies</div>
+          <div class="subtle" style="font-size:12px;margin-top:2px">One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all concepts, all SKOS mapping triples.</div>
+        </div>
+        <div style="display:flex;gap:6px;white-space:nowrap">
+          <button class="btn sm primary" onclick="federationExport('ttl')">Turtle</button>
+          <button class="btn sm" onclick="federationExport('rdf')">RDF/XML</button>
+          <button class="btn sm" onclick="federationExport('jsonld')">JSON-LD</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
           <div style="font-weight:700">Share a read-only link</div>
           <div class="subtle" style="font-size:12px;margin-top:2px">Copy a link that opens this taxonomy in a read-only <b>Business view</b> — the taxonomy travels inside the link, so there's no server or account. Anyone with the link can browse it.</div>
         </div>
@@ -4353,6 +4366,29 @@ function xwMappingTurtle(){
   return {ttl:out,n};
 }
 function xwDownload(name,text,mime){ const u=URL.createObjectURL(new Blob([text],{type:mime||"text/turtle"})); const a=document.createElement("a"); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
+function federationExport(fmt){
+  fmt = fmt || 'ttl';
+  const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
+  const projs=loadProjects(); const entries=Object.entries(projs);
+  const withMaps=new Set(), targets=[];
+  for(const [pid,pr] of entries){ const m=pr.model||{};
+    for(const id in (m.concepts||{})){ const c=m.concepts[id];
+      for(const f of MAPF) for(const t of (c[f]||[])){ withMaps.add(pid); targets.push(t); } } }
+  if(!withMaps.size){ toast("No crosswalk mappings anywhere in this workspace yet — build a crosswalk first"); return; }
+  const participating=new Set(withMaps);
+  for(const [pid,pr] of entries){ const m=pr.model||{}; const base=(m.base||"").replace(/[#/]+$/,"");
+    if(base && targets.some(t=>String(t).startsWith(base))) participating.add(pid); }
+  let all=[]; const names=[];
+  for(const pid of participating){ const pr=projs[pid]; names.push(pr.name);
+    all=all.concat(Core.buildTriples(pr.model,{dc:true}).triples); }
+  const ctxModel=projs[[...participating][0]].model;
+  const info = fmt==='rdf' ? {ext:'rdf',mime:'application/rdf+xml'} : fmt==='jsonld' ? {ext:'jsonld',mime:'application/ld+json'} : {ext:'ttl',mime:'text/turtle'};
+  const ser=(fmt==='rdf')?Core.toRdfXml(ctxModel,{_triples:all})
+         :(fmt==='jsonld')?JSON.stringify(Core.toJsonLd(ctxModel,{_triples:all}),null,2)
+         :Core.toTurtle(ctxModel,{_triples:all});
+  xwDownload("federation."+info.ext, ser, info.mime);
+  toast(`Exported ${participating.size} crosswalked taxonomies (${names.join(", ")})`);
+}
 if($('#xwTarget')){
   if($('#xwSource')) $('#xwSource').onchange=()=>{ const p=$('#xwSource').value; if(p) xwLoadSource(p); else { xwSourceModel=null; xwSourcePid=null; } xwVisSel=null; xwMaybeStart(); };
   if($('#xwTarget')) $('#xwTarget').onchange=()=>{ const p=$('#xwTarget').value; if(p) xwLoadTargetProj(p); else { xwTargetModel=null; xwTargetPid=null; } xwVisSel=null; xwMaybeStart(); };
@@ -4396,31 +4432,7 @@ if($('#xwTarget')){
     xwDownload("thesaurus."+ext, xwSerialize(tr,f), mime);
     toast(`Exported federated thesaurus (${ext})`);
   };
-  if($('#xwExportAll')) $('#xwExportAll').onclick=()=>{
-    const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
-    const projs=loadProjects(); const entries=Object.entries(projs);
-    // 1) which projects assert mappings, and what target IRIs do they point at?
-    const withMaps=new Set(), targets=[];
-    for(const [pid,pr] of entries){ const m=pr.model||{};
-      for(const id in (m.concepts||{})){ const c=m.concepts[id];
-        for(const f of MAPF) for(const t of (c[f]||[])){ withMaps.add(pid); targets.push(t); } } }
-    if(!withMaps.size){ toast("No crosswalk mappings anywhere in this workspace yet"); return; }
-    // 2) a project participates if it asserts mappings, or a mapping points into its namespace
-    const participating=new Set(withMaps);
-    for(const [pid,pr] of entries){ const m=pr.model||{}; const base=(m.base||"").replace(/[#/]+$/,"");
-      if(base && targets.some(t=>String(t).startsWith(base))) participating.add(pid); }
-    // 3) combine every participating project's triples (mappings ride with their source scheme)
-    let all=[]; const names=[];
-    for(const pid of participating){ const pr=projs[pid]; names.push(pr.name);
-      all=all.concat(Core.buildTriples(pr.model,{dc:true}).triples); }
-    const {f,ext,mime}=xwFmtInfo();
-    const ctxModel=xwSourceModel||projs[[...participating][0]].model;
-    const ser=(f==='rdf')?Core.toRdfXml(ctxModel,{_triples:all})
-           :(f==='jsonld')?JSON.stringify(Core.toJsonLd(ctxModel,{_triples:all}),null,2)
-           :Core.toTurtle(ctxModel,{_triples:all});
-    xwDownload("federation."+ext, ser, mime);
-    toast(`Exported ${participating.size} crosswalked taxonomies (${names.join(", ")})`);
-  };
+  if($('#xwExportAll')) $('#xwExportAll').onclick=()=>federationExport(($('#xwFmt')||{}).value||'ttl');
   if($('#xwSamples')) $('#xwSamples').onclick=async()=>{
     if(!await askConfirm("Add "+SAMPLE_TAXONOMIES.length+" sample SKOS taxonomies (Media types, Content formats, Subjects, Grocery aisles) as new projects? They have overlapping labels so you can crosswalk between them.","Add samples")) return;
     const prev=currentPid;
