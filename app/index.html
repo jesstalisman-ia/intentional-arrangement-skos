@@ -882,9 +882,13 @@
             <option value="broadMatch">broadMatch</option><option value="narrowMatch">narrowMatch</option><option value="relatedMatch">relatedMatch</option>
           </select></label>
           <span class="sp" style="margin-left:auto"></span>
+          <select id="xwFmt" title="Export format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
+            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
+          </select>
+          <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle">Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.9.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -903,12 +907,8 @@
           <label class="toggle"><input type="checkbox" id="xwOnlyUnmapped"> only unmapped</label>
           <span class="sp" style="margin-left:auto"></span>
           <span class="subtle" id="xwCount"></span>
-          <select id="xwFmt" title="Export format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
-            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
-          </select>
           <button class="btn sm" id="xwExportMap">Export crosswalk</button>
           <button class="btn sm primary" id="xwExportThes">Export thesaurus</button>
-          <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
         </div>
         <div class="xw-vishint subtle" id="xwVisHint">Click a <b>source</b> concept (left), then a <b>target</b> concept (right) to link them with the selected relation. Click a line to remove it.</div>
         <div class="xw-vis" id="xwVisual"></div>
