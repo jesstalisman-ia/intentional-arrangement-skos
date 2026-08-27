@@ -52,7 +52,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
   
 - **Import / export.** Out to Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV, Excel `.xlsx`, and Markdown. In from any of those RDF syntaxes — **Turtle, RDF/XML, JSON-LD, RDF/JSON** — or a spreadsheet; the import reads the file's own default language (its `dcterms:language`, else the dominant label language) so new edits aren't mistagged, and you can still override per import, row, or cell. Excel is zipped and unzipped in the browser, no library and no upload. When a file has no SKOS concepts, the tool says why instead of failing silently.
   
-- **Visualize.** A force-directed picture of the scheme, synced to the editor.
+- **Visualize.** A force-directed picture of the scheme, synced to the editor — and not just concepts: toggles add the **concept scheme** as a hub (click it for its Dublin Core metadata), **sources and agents** (`dcterms:source` citations, creator/contributor/publisher attributions), and **crosswalk mappings**, with concepts mapped from other taxonomies in your workspace drawn as labelled external bubbles. The federation you build in Crosswalk is visible as one network.
   
 - **Scheme metadata.** Dublin Core for the concept scheme. `dcterms:created`/`issued`/`modified` fill themselves in, `dcterms:modified` updates on every change, and `dcterms:language` is written out and read back on import.
   

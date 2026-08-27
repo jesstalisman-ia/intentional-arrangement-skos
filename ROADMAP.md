@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Graph shows the whole project — scheme, sources, crosswalk (v0.10.0)
+- The Graph tab now draws more than concepts. Three new toggles add: the **concept scheme** as a gold hub linked to its top concepts — click it to read the scheme's full Dublin Core metadata in the inspector; **sources and agents** — `foaf:Document` records cited via `dcterms:source` and the `prov:Agent` creator/contributor/publisher attributions, with labelled edges; and **crosswalk mappings** — all five SKOS mapping relations in pink, with concepts mapped from *other* taxonomies in the workspace drawn as dashed external bubbles carrying their own preferred label and home taxonomy. Selecting a mapping edge shows the relation and can remove it; every new bubble's inspector links to the tab that manages it. The legend covers all seven bubble types.
+
 ### Crosswalk — federate taxonomies into a thesaurus (v0.9.0–v0.9.1)
 - A new **Crosswalk** tab aligns two taxonomies from your workspace with the five SKOS mapping relations (`exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`). **Auto-match by label** proposes links (identical labels → `exactMatch`, near labels → `closeMatch`); confirm the ones you want or draw your own in the visual view (click source, click target). Mappings are stored on the source concepts, so they flow into every normal RDF export — and you can export the **crosswalk alone** (mapping triples), the **federated thesaurus** (the current pair + mappings), or — v0.9.1 — **the whole federation**: every taxonomy in the workspace networked by mappings, in one file. All three exports come in **Turtle, RDF/XML, or JSON-LD** via a format picker. First-run niceties: the empty state seeds four sample taxonomies to try, and with exactly two taxonomies the target auto-selects.
 

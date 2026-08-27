@@ -135,6 +135,14 @@ The Business view is a read-friendly browse of the vocabulary — breadcrumb, de
 
 Past a certain size, the value of a taxonomy lives in the network between terms, not in any single one. The Graph tab draws that network as a force-directed view, synced to the editor.
 
+Beyond concepts and their `broader`/`related` links, the graph can show the rest of what your project asserts, each behind its own toggle in the toolbar:
+
+- **Scheme** — the concept scheme itself as a gold hub, linked to its top concepts by `skos:hasTopConcept`. Click it to read the scheme's Dublin Core metadata (title, creator, publisher, created / published / modified, language, rights, description) in the inspector, with a shortcut to edit it in the Build tab.
+- **Sources** — the `foaf:Document` records your concepts cite via `dcterms:source` (brown, dashed edges), and the `prov:Agent` records credited as the scheme's creator, contributor, or publisher (green, labelled `dct:creator` and so on). Click one for its details and a jump to the Sources tab.
+- **Crosswalk** — the five SKOS mapping relations (`exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`) drawn in pink. A mapping that points into another taxonomy in your workspace appears as a dashed pink bubble labelled with that concept's preferred label and, in the inspector, the taxonomy it comes from — so a federated thesaurus is visible as one network, not just an export file. Edge styling distinguishes the relations (exact is heaviest; close is dashed; broad/narrow carry arrows; related is dotted). Selecting a mapping edge lets you remove it; add and manage mappings in the Crosswalk tab.
+
+The legend at bottom right names every bubble type. Alt labels remain available as an optional satellite layer.
+
 ## Export — take it out without loss
 
 Export from the **Export** tab (it's the last tab — it does more than RDF, so it's labelled just "Export"). The RDF forms are lossless; the flat forms are for people and other tools.

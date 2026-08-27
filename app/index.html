@@ -814,11 +814,28 @@
   .gnode.gn-ext .gnlabel{fill:var(--muted);font-style:italic;font-weight:500}
   .gnode.gn-alt circle{fill:#e4f4f6;stroke:#3aa6b5;stroke-width:1.5}
   .gnode.gn-alt .gnlabel{fill:#22808d;font-size:9px;font-weight:500;font-style:normal}
+  .gnode.gn-scheme circle{fill:#f9efd3;stroke:#af8501;stroke-width:2.2}
+  .gnode.gn-scheme .gnlabel{font-weight:700}
+  .gnode.gn-doc circle{fill:#f2ebe0;stroke:#8a6a45}
+  .gnode.gn-doc .gnlabel{fill:#6d5436;font-size:9.5px;font-weight:500}
+  .gnode.gn-agent circle{fill:#def0ea;stroke:#0a8f74}
+  .gnode.gn-agent .gnlabel{fill:#0a7660;font-size:9.5px;font-weight:500}
+  .gnode.gn-xc circle{fill:#fbe6ee;stroke:#d4537e;stroke-dasharray:4 2}
+  .gnode.gn-xc .gnlabel{fill:#a83a60;font-size:10px;font-style:italic;font-weight:500}
+  .gedge.ge-hasTopConcept{stroke:#af8501;stroke-width:1.3;opacity:.65}
+  .gedge.ge-source{stroke:#8a6a45;stroke-width:1.3;stroke-dasharray:3 3}
+  .gedge.ge-attrib{stroke:#0a8f74;stroke-width:1.3;stroke-dasharray:3 3}
+  .gedge.ge-exactMatch{stroke:#d4537e;stroke-width:2.4}
+  .gedge.ge-closeMatch{stroke:#d4537e;stroke-width:1.7;stroke-dasharray:6 3}
+  .gedge.ge-broadMatch{stroke:#d4537e;stroke-width:1.7}
+  .gedge.ge-narrowMatch{stroke:#d4537e;stroke-width:1.7}
+  .gedge.ge-relatedMatch{stroke:#d4537e;stroke-width:1.4;stroke-dasharray:2 4}
   .graph-hint{position:absolute;left:12px;bottom:10px;font-size:11px;color:var(--faint);background:var(--surface);border:1px solid var(--border-soft);border-radius:7px;padding:4px 9px;pointer-events:none}
   .graph-legend{position:absolute;right:12px;bottom:10px;display:flex;gap:12px;font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border-soft);border-radius:7px;padding:5px 10px}
   .graph-legend .lg{display:inline-flex;align-items:center;gap:5px}
   .graph-legend .sw{width:11px;height:11px;border-radius:50%;border:1.5px solid}
   .lg.concept .sw{background:var(--teal-soft);border-color:var(--teal)} .lg.klass .sw{background:var(--accent-soft);border-color:var(--accent)} .lg.ext .sw{background:var(--surface-2);border-color:var(--faint)}
+  .lg.scheme .sw{background:#f9efd3;border-color:#af8501} .lg.doc .sw{background:#f2ebe0;border-color:#8a6a45} .lg.agent .sw{background:#def0ea;border-color:#0a8f74} .lg.xc .sw{background:#fbe6ee;border-color:#d4537e}
   .graph-inspector{position:absolute;top:12px;right:12px;width:240px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:12px;font-size:12.5px;display:none}
   .graph-inspector.show{display:block}
   .graph-inspector h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
@@ -888,7 +905,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.9.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.10.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -940,6 +957,9 @@
         <label class="gtog"><input type="checkbox" id="gShowClasses" checked> Classes</label>
         <label class="gtog"><input type="checkbox" id="gShowProps" checked> Relations</label>
         <label class="gtog"><input type="checkbox" id="gShowExternal" checked> Vocabulary</label>
+        <label class="gtog"><input type="checkbox" id="gShowScheme" checked> Scheme</label>
+        <label class="gtog"><input type="checkbox" id="gShowSources" checked> Sources</label>
+        <label class="gtog"><input type="checkbox" id="gShowXwalk" checked> Crosswalk</label>
         <span class="sp" style="margin-left:auto"></span>
         <button class="btn sm" id="gRelayout">Re-layout</button>
         <button class="btn sm" id="gFit">Fit</button>
@@ -959,6 +979,10 @@
           <span class="lg concept"><span class="sw"></span>concept</span>
           <span class="lg klass"><span class="sw"></span>class</span>
           <span class="lg ext"><span class="sw"></span>vocabulary</span>
+          <span class="lg scheme"><span class="sw"></span>scheme</span>
+          <span class="lg doc"><span class="sw"></span>source</span>
+          <span class="lg agent"><span class="sw"></span>agent</span>
+          <span class="lg xc"><span class="sw"></span>mapped</span>
         </div>
       </div>
     </div>
@@ -5890,6 +5914,7 @@ const G={ nodes:[], edges:[], byKey:{}, sel:null, mode:"select", from:null, alph
 function gDescCount(id,seen){ seen=seen||new Set(); let n=0; for(const k of model.order){ if((model.concepts[k].broader||[]).includes(id)&&!seen.has(k)){ seen.add(k); n+=1+gDescCount(k,seen);} } return n; }
 function graphBuild(){
   const showC=$('#gShowConcepts').checked, showK=$('#gShowClasses').checked, showP=$('#gShowProps').checked, showX=$('#gShowExternal').checked;
+  const showS=$('#gShowScheme')&&$('#gShowScheme').checked, showSrc=$('#gShowSources')&&$('#gShowSources').checked, showXw=$('#gShowXwalk')&&$('#gShowXwalk').checked;
   const pos=(model.graph&&model.graph.pos)||{}; const nodes=[], edges=[], byKey={};
   const add=(key,kind,label,refId,refUri)=>{ if(byKey[key]) return byKey[key];
     const old=G.byKey[key], p=pos[key]||{};
@@ -5902,7 +5927,31 @@ function graphBuild(){
       (c.broader||[]).forEach(b=>{ if(model.concepts[b]) edges.push({s:"c:"+id,t:"c:"+b,rel:"broader"}); });
       (c.related||[]).forEach(r=>{ if(model.concepts[r]&&id<r) edges.push({s:"c:"+id,t:"c:"+r,rel:"related"}); }); }
     if($('#gShowAlt')&&$('#gShowAlt').checked){ for(const id of model.order){ const c=model.concepts[id];
-      (c.alt||[]).forEach((L,i)=>{ if(L&&L.val){ const k="a:"+id+":"+i; add(k,"alt",L.val,null); edges.push({s:"c:"+id,t:k,rel:"altLabel"}); } }); } } }
+      (c.alt||[]).forEach((L,i)=>{ if(L&&L.val){ const k="a:"+id+":"+i; add(k,"alt",L.val,null); edges.push({s:"c:"+id,t:k,rel:"altLabel"}); } }); } }
+    // concept scheme hub + Dublin Core metadata (inspector) + agent attributions
+    if(showS){
+      add("s:scheme","scheme",model.scheme.title||"Concept scheme",null,model.scheme.uri||model.base);
+      for(const id of model.order){ const c=model.concepts[id]; if(c.top||!(c.broader||[]).some(b=>model.concepts[b])) edges.push({s:"s:scheme",t:"c:"+id,rel:"hasTopConcept"}); }
+      if(showSrc) [["creatorAgent","dct:creator"],["contributorAgent","dct:contributor"],["publisherAgent","dct:publisher"]].forEach(([f,lbl])=>{
+        const aid=model.scheme[f]; if(aid&&model.agents&&model.agents[aid]){ const k="ag:"+aid; add(k,"agent",model.agents[aid].name||aid,aid); edges.push({s:"s:scheme",t:k,rel:"attrib",label:lbl}); } });
+    }
+    // sources: foaf:Document records cited via dct:source
+    if(showSrc){
+      for(const id of model.order){ const c=model.concepts[id];
+        (c.source||[]).forEach(did=>{ if(model.documents&&model.documents[did]){ const k="d:"+did; add(k,"doc",model.documents[did].title||did,did); edges.push({s:"c:"+id,t:k,rel:"source"}); } }); }
+    }
+    // crosswalk: SKOS mapping relations, targets resolved across the workspace's other projects
+    if(showXw){
+      const GMAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
+      const projs=(typeof loadProjects==="function")?loadProjects():{}; const rix={};
+      for(const pid in projs){ if(pid===currentPid) continue; const m=(projs[pid]||{}).model||{}; if(!m.base) continue;
+        for(const cid in (m.concepts||{})) rix[m.base+cid]={label:xwPlabelOf(m,cid), proj:(projs[pid].name||pid)}; }
+      for(const id of model.order){ const c=model.concepts[id];
+        for(const f of GMAPF)(c[f]||[]).forEach(u=>{ if(!u) return; let t;
+          if(u.indexOf(model.base)===0&&model.concepts[u.slice(model.base.length)]){ t="c:"+u.slice(model.base.length); }
+          else { const k="m:"+u, r=rix[u]; const n=add(k,"xc",r?r.label:String(u).split(/[#/]/).pop(),null,u); n.proj=r?r.proj:null; t=k; }
+          if(t!=="c:"+id) edges.push({s:"c:"+id,t,rel:f}); }); }
+    } }
   if(showK){ const o=model.onto;
     for(const id of o.order.classes) add("C:"+id,"class",o.classes[id].label||id,id);
     const resolve=uri=>{ if(uri.startsWith(ontoBase())){ const lid=uri.slice(ontoBase().length); if(o.classes[lid]) return "C:"+lid; } if(showX){ add("x:"+uri,"ext",ontoQname(uri),null,uri); return "x:"+uri; } return null; };
@@ -5915,7 +5964,8 @@ function graphBuild(){
   // radius + degree
   const deg={}; edges.forEach(e=>{ deg[e.s]=(deg[e.s]||0)+1; deg[e.t]=(deg[e.t]||0)+1; });
   nodes.forEach(n=>{ n.r = n.kind==="concept"?Math.min(28,11+Math.sqrt(gDescCount(n.refId))*3.2)
-    : n.kind==="class"?Math.min(28,12+(deg[n.key]||0)*1.1) : n.kind==="alt"?5 : 8; });
+    : n.kind==="class"?Math.min(28,12+(deg[n.key]||0)*1.1) : n.kind==="alt"?5
+    : n.kind==="scheme"?Math.min(34,18+(deg[n.key]||0)*0.8) : n.kind==="doc"||n.kind==="agent"?9 : n.kind==="xc"?10 : 8; });
   G.nodes=nodes; G.edges=edges.filter(e=>byKey[e.s]&&byKey[e.t]); G.byKey=byKey;
   if(G.sel&&!byKey[G.sel.key]&&G.sel.kind!=="edge") G.sel=null;
 }
@@ -5927,7 +5977,7 @@ function graphRender(){
   $('#gEmpty').style.display = G.nodes.length?"none":"";
   G.edges.forEach((e,i)=>{
     const hit=document.createElementNS(SVGNS,"line"); hit.setAttribute("class","gedge hit"); hit.addEventListener("pointerdown",ev=>{ev.stopPropagation(); graphSelectEdge(e);}); e.hit=hit; eg.appendChild(hit);
-    const ln=document.createElementNS(SVGNS,"line"); ln.setAttribute("class","gedge ge-"+e.rel+(G.sel&&G.sel.kind==="edge"&&G.sel.e===e?" sel":"")); if(e.rel!=="related"&&e.rel!=="disjointWith") ln.setAttribute("marker-end","url(#garrow)"); e.el=ln; eg.appendChild(ln);
+    const ln=document.createElementNS(SVGNS,"line"); ln.setAttribute("class","gedge ge-"+e.rel+(G.sel&&G.sel.kind==="edge"&&G.sel.e===e?" sel":"")); if(!["related","disjointWith","exactMatch","closeMatch","relatedMatch","attrib","source"].includes(e.rel)) ln.setAttribute("marker-end","url(#garrow)"); e.el=ln; eg.appendChild(ln);
     if(e.label){ const tx=document.createElementNS(SVGNS,"text"); tx.setAttribute("class","gedgelabel"); tx.textContent=e.label; e.lbl=tx; elg.appendChild(tx); }
   });
   G.nodes.forEach(n=>{
@@ -5955,7 +6005,7 @@ function graphTick(){
   for(let i=0;i<N.length;i++){ const a=N[i]; for(let j=i+1;j<N.length;j++){ const b=N[j];
     let dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy; if(d2<1) d2=1; const d=Math.sqrt(d2), f=kRep/d2, fx=dx/d*f, fy=dy/d*f;
     a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; } }
-  for(const e of G.edges){ const a=G.byKey[e.s], b=G.byKey[e.t]; const ld=e.rel==="altLabel"?34:linkDist, kl=e.rel==="altLabel"?0.06:kLink; let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, f=(d-ld)*kl, fx=dx/d*f, fy=dy/d*f; a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; }
+  for(const e of G.edges){ const a=G.byKey[e.s], b=G.byKey[e.t]; const ld=e.rel==="altLabel"?34:(e.rel==="source"||e.rel==="attrib")?62:linkDist, kl=e.rel==="altLabel"?0.06:(e.rel==="source"||e.rel==="attrib")?0.05:kLink; let dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1, f=(d-ld)*kl, fx=dx/d*f, fy=dy/d*f; a.vx+=fx; a.vy+=fy; b.vx-=fx; b.vy-=fy; }
   const cx=G.W/2, cy=G.H/2;
   for(const n of N){ n.vx+=(cx-n.x)*cen; n.vy+=(cy-n.y)*cen;
     if((G.drag&&G.drag.node===n)) continue; if(n.pinned){ n.vx=0; n.vy=0; continue; }
@@ -5988,11 +6038,31 @@ function graphRefreshSel(){ $$('#gNodes .gnode').forEach(el=>el.classList.remove
   if(G.sel&&G.sel.kind==="edge"&&G.sel.e&&G.sel.e.el) G.sel.e.el.classList.add('sel'); }
 function graphInspector(){
   const ins=$('#gInspector'); if(!G.sel){ ins.classList.remove('show'); return; } ins.classList.add('show');
-  if(G.sel.kind==="edge"){ const e=G.sel.e; const relTxt={broader:"skos:broader",related:"skos:related",subClassOf:"rdfs:subClassOf",equivalentClass:"owl:equivalentClass",disjointWith:"owl:disjointWith",objprop:(e.label||"object property")};
-    ins.innerHTML=`<h4>Relationship</h4><div class="gi-meta">${escapeHtml(G.byKey[e.s].label)} <b>— ${escapeHtml(relTxt[e.rel])} →</b> ${escapeHtml(G.byKey[e.t].label)}</div><div class="gi-acts"><button class="btn sm" id="giDelEdge">Remove relationship</button></div>`;
-    $('#giDelEdge').onclick=()=>graphRemoveEdge(e); return; }
-  const n=G.sel.node; const kindLbl=n.kind==="concept"?"SKOS concept":n.kind==="class"?"OWL class":"Vocabulary term (external)";
+  if(G.sel.kind==="edge"){ const e=G.sel.e; const relTxt={broader:"skos:broader",related:"skos:related",subClassOf:"rdfs:subClassOf",equivalentClass:"owl:equivalentClass",disjointWith:"owl:disjointWith",hasTopConcept:"skos:hasTopConcept",source:"dcterms:source",attrib:(e.label||"attribution"),exactMatch:"skos:exactMatch",closeMatch:"skos:closeMatch",broadMatch:"skos:broadMatch",narrowMatch:"skos:narrowMatch",relatedMatch:"skos:relatedMatch",objprop:(e.label||"object property")};
+    const removable=!["hasTopConcept","attrib"].includes(e.rel);
+    ins.innerHTML=`<h4>Relationship</h4><div class="gi-meta">${escapeHtml(G.byKey[e.s].label)} <b>— ${escapeHtml(relTxt[e.rel])} →</b> ${escapeHtml(G.byKey[e.t].label)}</div>`+(removable?`<div class="gi-acts"><button class="btn sm" id="giDelEdge">Remove relationship</button></div>`:`<div class="gi-meta">Derived from the scheme — edit it in the Build tab.</div>`);
+    const de=$('#giDelEdge'); if(de) de.onclick=()=>graphRemoveEdge(e); return; }
+  const n=G.sel.node; const kindLbl=n.kind==="concept"?"SKOS concept":n.kind==="class"?"OWL class":n.kind==="scheme"?"Concept scheme":n.kind==="doc"?"Source · foaf:Document":n.kind==="agent"?"Agent · prov:Agent":n.kind==="xc"?"Mapped concept (external)":"Vocabulary term (external)";
   let h=`<h4>${kindLbl}</h4>`;
+  const mrow=(k,v)=>v?`<b>${escapeHtml(k)}</b> ${escapeHtml(String(v))}<br>`:"";
+  if(n.kind==="scheme"){ const sc=model.scheme;
+    h+=`<div class="gi-meta"><b>${escapeHtml(sc.title||"Untitled scheme")}</b><br>${escapeHtml(sc.uri||model.base)}</div>`;
+    h+=`<div class="gi-meta">${mrow("Creator",sc.creator||(sc.creatorAgent&&model.agents&&model.agents[sc.creatorAgent]?model.agents[sc.creatorAgent].name:""))}${mrow("Publisher",sc.publisher||(sc.publisherAgent&&model.agents&&model.agents[sc.publisherAgent]?model.agents[sc.publisherAgent].name:""))}${mrow("Created",sc.created)}${mrow("Published",sc.issued)}${mrow("Modified",sc.modified)}${mrow("Language",sc.lang)}${mrow("Rights",sc.rights)}</div>`;
+    if(sc.description) h+=`<div class="gi-meta">${escapeHtml(sc.description.slice(0,160))}${sc.description.length>160?"…":""}</div>`;
+    h+=`<div class="gi-acts"><button class="btn sm" id="giGoScheme">Edit in Build tab</button></div>`; ins.innerHTML=h;
+    const b=$('#giGoScheme'); if(b) b.onclick=()=>{ switchTab("build"); const d=document.querySelector('details.scheme'); if(d) d.open=true; }; return; }
+  if(n.kind==="doc"){ const d=(model.documents||{})[n.refId]||{};
+    h+=`<div class="gi-meta"><b>${escapeHtml(d.title||n.refId)}</b>${d.page?`<br><a href="${escapeHtml(d.page)}" target="_blank" rel="noopener">${escapeHtml(d.page)}</a>`:""}</div>`;
+    if(d.comment) h+=`<div class="gi-meta">${escapeHtml(d.comment.slice(0,160))}</div>`;
+    h+=`<div class="gi-acts"><button class="btn sm" id="giGoSrc">Open Sources tab</button></div>`; ins.innerHTML=h;
+    const b=$('#giGoSrc'); if(b) b.onclick=()=>switchTab("sources"); return; }
+  if(n.kind==="agent"){ const a=(model.agents||{})[n.refId]||{};
+    h+=`<div class="gi-meta"><b>${escapeHtml(a.name||n.refId)}</b>${a.type?`<br>prov:${escapeHtml(a.type)}`:""}${a.homepage?`<br><a href="${escapeHtml(a.homepage)}" target="_blank" rel="noopener">${escapeHtml(a.homepage)}</a>`:""}</div>`;
+    h+=`<div class="gi-acts"><button class="btn sm" id="giGoSrc">Open Sources tab</button></div>`; ins.innerHTML=h;
+    const b=$('#giGoSrc'); if(b) b.onclick=()=>switchTab("sources"); return; }
+  if(n.kind==="xc"){
+    h+=`<div class="gi-meta"><b>${escapeHtml(n.label)}</b>${n.proj?`<br>from “${escapeHtml(n.proj)}”`:""}<br>${escapeHtml(n.refUri)}</div><div class="gi-meta">Linked by a SKOS mapping — manage it in the Crosswalk tab.</div><div class="gi-acts"><button class="btn sm" id="giGoXw">Open Crosswalk tab</button></div>`; ins.innerHTML=h;
+    const b=$('#giGoXw'); if(b) b.onclick=()=>switchTab("crosswalk"); return; }
   if(n.kind==="ext"){ h+=`<div class="gi-meta">${escapeHtml(ontoQname(n.refUri))}<br>${escapeHtml(n.refUri)}</div><div class="gi-acts"><button class="btn sm" id="giConn">Connect from here</button></div>`; ins.innerHTML=h; }
   else { h+=`<input id="giName" value="${escapeHtml(n.label||'')}" placeholder="name"><div class="gi-meta">${escapeHtml(n.kind==="concept"?("skos:Concept · "+n.refId):("owl:Class · "+ontoQname(ownUri(n.refId))))}</div><div class="gi-acts"><button class="btn sm" id="giConn">Connect from here</button><button class="btn sm" id="giDel">Delete</button><button class="btn sm" id="giGo">Open in builder</button></div>`; ins.innerHTML=h;
     $('#giName').onchange=()=>graphRename(n,$('#giName').value);
@@ -6004,7 +6074,7 @@ function graphInspector(){
 
 // ---- pointer: node drag / connect ----
 function graphNodeDown(ev,n){ ev.stopPropagation(); ev.preventDefault(); $('#gMenu').style.display="none";
-  if(G.mode==="connect"){ if(n.kind!=="alt") graphConnectPick(n); return; }
+  if(G.mode==="connect"){ if(!["alt","scheme","doc","agent","xc"].includes(n.kind)) graphConnectPick(n); return; }
   if(n.kind!=="alt") graphSelect(n);  // alt-label satellites are visual: draggable but not selectable
   const p=graphLocal(ev.clientX,ev.clientY); G.drag={node:n,dx:n.x-p.x,dy:n.y-p.y,moved:false}; n.pinned=true;
   window.addEventListener("pointermove",graphDragMove); window.addEventListener("pointerup",graphDragUp,{once:true});
@@ -6048,6 +6118,11 @@ function graphRemoveEdge(e){
   if(e.rel==="broader"){ const c=model.concepts[G.byKey[e.s].refId]; c.broader=(c.broader||[]).filter(x=>x!==G.byKey[e.t].refId); }
   else if(e.rel==="related"){ const s=G.byKey[e.s].refId,t=G.byKey[e.t].refId; [s,t].forEach(x=>{ const c=model.concepts[x]; if(c) c.related=(c.related||[]).filter(y=>y!==(x===s?t:s)); }); }
   else if(e.rel==="objprop"){ if(e.pid){ delete model.onto.props[e.pid]; model.onto.order.props=model.onto.order.props.filter(x=>x!==e.pid); } }
+  else if(["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].includes(e.rel)){
+    const c=model.concepts[G.byKey[e.s].refId]; const t=G.byKey[e.t];
+    const uri=t.kind==="xc"?t.refUri:Core.conceptUri(model,t.refId);
+    if(c) c[e.rel]=(c[e.rel]||[]).filter(x=>x!==uri); }
+  else if(e.rel==="source"){ const c=model.concepts[G.byKey[e.s].refId]; if(c) c.source=(c.source||[]).filter(x=>x!==G.byKey[e.t].refId); }
   else { const c=model.onto.classes[G.byKey[e.s].refId]; const key=e.rel==="subClassOf"?"sub":e.rel==="equivalentClass"?"equiv":"disjoint"; const u=G.byKey[e.t].refUri||ownUri(G.byKey[e.t].refId); if(c) c[key]=(c[key]||[]).filter(x=>x!==u); }
   G.sel=null; save(); graphRender(); toast("Relationship removed");
 }
@@ -6083,10 +6158,10 @@ if(document.querySelector('[data-panel=graph]')){
   $('#gAddConcept').onclick=graphAddConcept;
   $('#gAddClass').onclick=graphAddClass;
   $('#gConnect').onclick=()=>graphSetMode(G.mode==="connect"?"select":"connect");
-  $('#gDelete').onclick=()=>{ if(!G.sel)return; if(G.sel.kind==="edge") graphRemoveEdge(G.sel.e); else if(G.sel.node&&G.sel.node.kind!=="ext") graphDeleteNode(G.sel.node); };
+  $('#gDelete').onclick=()=>{ if(!G.sel)return; if(G.sel.kind==="edge") graphRemoveEdge(G.sel.e); else if(G.sel.node&&!["ext","scheme","doc","agent","xc"].includes(G.sel.node.kind)) graphDeleteNode(G.sel.node); };
   $('#gRelayout').onclick=()=>{ for(const n of G.nodes){ n.pinned=false; } graphReheat(1); };
   $('#gFit').onclick=graphFit;
-  ["gShowConcepts","gShowClasses","gShowProps","gShowExternal","gShowAlt"].forEach(id=>{ const el=$('#'+id); if(el) el.onchange=()=>{ graphRender(); graphReheat(0.4); }; });
+  ["gShowConcepts","gShowClasses","gShowProps","gShowExternal","gShowAlt","gShowScheme","gShowSources","gShowXwalk"].forEach(id=>{ const el=$('#'+id); if(el) el.onchange=()=>{ graphRender(); graphReheat(0.4); }; });
   $('#gsvg').addEventListener("pointerdown",graphCanvasDown);
   $('#gsvg').addEventListener("wheel",graphWheel,{passive:false});
   window.addEventListener("keydown",ev=>{ if((ev.key==="Delete"||ev.key==="Backspace")&&G.sel&&$('.panel[data-panel=graph]').classList.contains('active')&&document.activeElement.tagName!=="INPUT"){ ev.preventDefault(); $('#gDelete').onclick(); } });
