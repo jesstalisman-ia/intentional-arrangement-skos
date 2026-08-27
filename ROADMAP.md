@@ -8,6 +8,11 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Readable, stable identifiers for collections, documents & agents — and real identity URIs (v0.11.0, #35 #37)
+- **No more `collection2` / `agent1` / `doc3` URIs.** Collections, source documents, and agents now get **label-derived identifiers**: name a new collection "Day Collection" and its URI local name derives automatically; same for a document's title and an agent's name. Each also has an editable **Identifier** field with a "↦ from name/title" sync — so you can choose your own form (e.g. `DayCollection`). Following ISO 25964's identifier-persistence rule, identifiers derive once and then stay stable: relabeling never silently changes a URI, and an explicit identifier change cascades through every reference (collection membership, concept `dcterms:source` citations, and the scheme's creator/contributor/publisher).
+- **Agents and documents can carry real URIs.** An optional **Identity URI** on each agent (ORCID, ROR, a homepage URI) is used as the agent's subject on export — so `dcterms:creator <https://orcid.org/…>` instead of a minted local name — still typed `prov:Person`/`Organization`/`SoftwareAgent` with `foaf:name`. Documents get the same (a DOI or w3id as the document's URI, used in `dcterms:source` citations). External URIs round-trip on import.
+- Uniqueness is now checked across the whole namespace (concepts, collections, documents, agents share it), closing a latent URI-collision gap.
+
 ### Fix: UI said `dct:source`, exports say `dcterms:source` (v0.10.1, #36)
 - The Sources tab, the concept editor's Sources group label, the empty state, and the guided tour all referred to Dublin Core Terms with the informal `dct:` abbreviation, while every export declares (and has always used) the `dcterms:` prefix. All user-facing text — app, README, and docs — now says `dcterms:source` / `dcterms:title`, matching the declared prefix. Cosmetic only; no serialization changed.
 

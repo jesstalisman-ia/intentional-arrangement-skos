@@ -905,7 +905,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.10.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.11.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1544,11 +1544,12 @@ function buildTriples(model, opts){
     if (model.scheme.description) add(s, dct("description"), lit(model.scheme.description, L));
     // creator / publisher / contributor — an agent reference (prov:Agent) if set, else the plain literal
     const _ag = model.agents || {};
-    if (model.scheme.creatorAgent && _ag[model.scheme.creatorAgent]) add(s, dct("creator"), iri(conceptUri(model, model.scheme.creatorAgent)));
+    const _resUri = (rec, id) => (rec && rec.uri && /^https?:\/\//i.test(rec.uri)) ? rec.uri : conceptUri(model, id);
+    if (model.scheme.creatorAgent && _ag[model.scheme.creatorAgent]) add(s, dct("creator"), iri(_resUri(_ag[model.scheme.creatorAgent], model.scheme.creatorAgent)));
     else if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
-    if (model.scheme.publisherAgent && _ag[model.scheme.publisherAgent]) add(s, dct("publisher"), iri(conceptUri(model, model.scheme.publisherAgent)));
+    if (model.scheme.publisherAgent && _ag[model.scheme.publisherAgent]) add(s, dct("publisher"), iri(_resUri(_ag[model.scheme.publisherAgent], model.scheme.publisherAgent)));
     else if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
-    if (model.scheme.contributorAgent && _ag[model.scheme.contributorAgent]) add(s, dct("contributor"), iri(conceptUri(model, model.scheme.contributorAgent)));
+    if (model.scheme.contributorAgent && _ag[model.scheme.contributorAgent]) add(s, dct("contributor"), iri(_resUri(_ag[model.scheme.contributorAgent], model.scheme.contributorAgent)));
     if (model.scheme.created) add(s, dct("created"), lit(model.scheme.created, "", NS.xsd + "date"));
     if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
@@ -1594,7 +1595,7 @@ function buildTriples(model, opts){
     (c.rdfsLabel || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
     // dct:source -> foaf:Document
-    (c.source || []).forEach(did => { if (model.documents && model.documents[did]) add(s, iri(NS.dcterms + "source"), iri(conceptUri(model, did))); });
+    (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri((_d.uri && /^https?:\/\//i.test(_d.uri)) ? _d.uri : conceptUri(model, did))); });
     // per-concept Dublin Core metadata (editable fields)
     if (c.creator) add(s, iri(NS.dcterms + "creator"), lit(c.creator, ""));
     if (c.created) add(s, iri(NS.dcterms + "created"), lit(c.created, "", NS.xsd + "date"));
@@ -1677,7 +1678,7 @@ function buildTriples(model, opts){
   }
   // foaf:Document sources
   for (const did in (model.documents || {})){
-    const d = model.documents[did]; const du = iri(conceptUri(model, did));
+    const d = model.documents[did]; const du = iri((d.uri && /^https?:\/\//i.test(d.uri)) ? d.uri : conceptUri(model, did));
     add(du, A, iri(NS.foaf + "Document"));
     (d.title || []).forEach(L => { if (L.val) add(du, iri(NS.dcterms + "title"), lit(L.val, L.lang)); });
     (d.page || []).forEach(u => { if (u) add(du, iri(NS.foaf + "page"), iri(u)); });
@@ -1686,7 +1687,7 @@ function buildTriples(model, opts){
   // prov:Agent — Person / Organization / SoftwareAgent
   const _agentCls = { person: "Person", organization: "Organization", software: "SoftwareAgent" };
   for (const aid in (model.agents || {})){
-    const a = model.agents[aid]; const au = iri(conceptUri(model, aid));
+    const a = model.agents[aid]; const au = iri((a.uri && /^https?:\/\//i.test(a.uri)) ? a.uri : conceptUri(model, aid));
     add(au, A, iri(NS.prov + (_agentCls[a.kind] || "Person")));
     if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name));
     if (a.homepage) add(au, iri(NS.foaf + "homepage"), iri(a.homepage));
@@ -2838,6 +2839,7 @@ function triplesToModel(triples, prefixes){
   if (Object.keys(docSubs).length){
     model.documents = model.documents || {};
     for (const uri in docSubs){ const id=localOf(uri); const d={ id, title:[], page:[], comment:[] };
+      if (model.base && uri.indexOf(model.base)!==0) d.uri=uri;   // external subject URI — keep it for lossless re-export
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
         if (t.p.v===NS.dcterms+"title" && t.o.t==="lit") d.title.push({ lang:t.o.lang||"", val:t.o.v });
         else if (t.p.v===NS.foaf+"page" && t.o.t==="iri") d.page.push(t.o.v);
@@ -2854,6 +2856,7 @@ function triplesToModel(triples, prefixes){
   if (Object.keys(agentSubs).length){
     model.agents = model.agents || {};
     for (const uri in agentSubs){ const id=localOf(uri); const a={ id, kind:agentSubs[uri], name:"", homepage:"" };
+      if (model.base && uri.indexOf(model.base)!==0) a.uri=uri;   // external identity URI (e.g. ORCID) — keep it
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
         if (t.p.v===NS.foaf+"name" && t.o.t==="lit") a.name=t.o.v;
         else if (t.p.v===NS.foaf+"homepage" && t.o.t==="iri") a.homepage=t.o.v;
@@ -4962,7 +4965,7 @@ function colls(){ return model.collections=model.collections||{}; }
 function docs(){ return model.documents=model.documents||{}; }
 function provAgents(){ return model.agents=model.agents||{}; }
 function updateSrcPill(){ const el=document.getElementById('pillSrc'); if(el) el.textContent=Object.keys(docs()).length+Object.keys(provAgents()).length; }
-function newDocId(){ let n=1,id; do{ id="doc"+n++; }while(docs()[id]); return id; }
+function newDocId(){ let n=1,id; do{ id="doc"+n++; }while(localNameTaken(id)); return id; }
 function docTitle(d){ const t=(d&&d.title||[]).find(x=>x.val); return t?t.val:(d&&d.id||"(untitled document)"); }
 function createDocument(){ const d=docs(); const id=newDocId(); d[id]={id,title:[{lang:model.defaultLang,val:""}],page:[""],comment:[]}; save(); renderSources(); }
 function deleteDocument(id){ if(!confirm("Delete this document? Concepts that reference it keep the link until you remove it.")) return; delete docs()[id];
@@ -4981,8 +4984,15 @@ function renderSources(){ updateSrcPill(); const body=document.getElementById("s
     const tr=document.createElement("div"); tr.style.cssText="display:flex;gap:6px;align-items:center";
     const tl=document.createElement("input"); tl.style.cssText=_srcInput+";width:56px"; tl.placeholder="lang"; tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
     const tv=document.createElement("input"); tv.style.cssText=_srcInput+";flex:1"; tv.placeholder="Title (dcterms:title)"; tv.value=d.title[0].val||""; tv.oninput=()=>{ d.title[0].val=tv.value; save(); updateSrcPill(); };
+    tv.onchange=()=>{ if(isAutoId(d.id,"doc")&&tv.value.trim()){ const nid=slugLocalId(tv.value,d.id); if(nid&&nid!==d.id){ renameDocument(d.id,nid); renderSources(); } } };
     const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete document"; del.onclick=()=>deleteDocument(id);
     tr.append(tl,tv,del); card.appendChild(tr);
+    const ir=document.createElement("div"); ir.style.cssText="display:flex;gap:6px;align-items:center";
+    const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the document's local name in your namespace"; idin.placeholder="identifier"; idin.value=d.id;
+    idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=d.id; return; } if(nid!==d.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and agents"); idin.value=d.id; return; } renameDocument(d.id,nid); renderSources(); };
+    const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from title"; sy.title="Derive the identifier from the title"; sy.onclick=()=>{ const nid=slugLocalId(docTitle(d),d.id); if(nid){ renameDocument(d.id,nid); renderSources(); } };
+    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="URI (optional — DOI / w3id; overrides the local name on export)"; uin.value=d.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) d.uri=v; else delete d.uri; save(); };
+    ir.append(idin,sy,uin); card.appendChild(ir);
     const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; card.appendChild(pg);
     const cm=document.createElement("textarea"); cm.rows=2; cm.style.cssText=_srcInput+";width:100%;resize:vertical"; cm.placeholder="Comment (rdfs:comment, optional)"; cm.value=(d.comment[0]&&d.comment[0].val)||""; cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; card.appendChild(cm);
     body.appendChild(card);
@@ -4992,7 +5002,7 @@ function renderSources(){ updateSrcPill(); const body=document.getElementById("s
 }
 const AGENT_KINDS=[{v:"person",label:"Person",cls:"Person"},{v:"organization",label:"Organization",cls:"Organization"},{v:"software",label:"Software agent",cls:"SoftwareAgent"}];
 function agentClass(kind){ const k=AGENT_KINDS.find(x=>x.v===kind); return (k?k.cls:"Person"); }
-function newAgentId(){ let n=1,id; do{ id="agent"+n++; }while(provAgents()[id]); return id; }
+function newAgentId(){ let n=1,id; do{ id="agent"+n++; }while(localNameTaken(id)); return id; }
 function agentName(a){ return (a&&a.name)||(a&&a.id)||"(unnamed agent)"; }
 function createAgent(){ const a=provAgents(); const id=newAgentId(); a[id]={id,kind:"person",name:"",homepage:""}; save(); renderSources(); }
 function deleteAgent(id){ if(!confirm("Delete this agent?")) return; delete provAgents()[id];
@@ -5005,16 +5015,43 @@ function renderAgentsSection(body){
   const al=provAgents();
   if(!Object.keys(al).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 6px"; e.textContent="No agents yet. Add people, organizations, or software agents to credit as creator / contributor / publisher (set that in the scheme metadata)."; body.appendChild(e); }
   for(const id in al){ const a=al[id];
-    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:grid;gap:7px";
+    const r1=document.createElement("div"); r1.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
     const kind=document.createElement("select"); kind.style.cssText=_srcInput; kind.innerHTML=AGENT_KINDS.map(k=>`<option value="${k.v}" ${k.v===a.kind?"selected":""}>${k.label}</option>`).join(""); kind.onchange=()=>{ a.kind=kind.value; save(); };
     const nm=document.createElement("input"); nm.style.cssText=_srcInput+";flex:1;min-width:150px"; nm.placeholder="Name (foaf:name)"; nm.value=a.name||""; nm.oninput=()=>{ a.name=nm.value; save(); };
+    nm.onchange=()=>{ if(isAutoId(a.id,"agent")&&nm.value.trim()){ const nid=slugLocalId(nm.value,a.id); if(nid&&nid!==a.id){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } } };
     const hp=document.createElement("input"); hp.style.cssText=_srcInput+";flex:1;min-width:150px"; hp.placeholder="Homepage (foaf:homepage) — https://…"; hp.value=a.homepage||""; hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); };
     const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete agent"; del.onclick=()=>deleteAgent(id);
-    card.append(kind,nm,hp,del); body.appendChild(card);
+    r1.append(kind,nm,hp,del); card.appendChild(r1);
+    const r2=document.createElement("div"); r2.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the agent's local name in your namespace"; idin.placeholder="identifier"; idin.value=a.id;
+    idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=a.id; return; } if(nid!==a.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and documents"); idin.value=a.id; return; } renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); };
+    const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from name"; sy.title="Derive the identifier from the name"; sy.onclick=()=>{ const nid=slugLocalId(a.name||"",a.id); if(nid){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } };
+    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="Identity URI (optional — ORCID / ROR / homepage; used as the agent's URI on export)"; uin.value=a.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) a.uri=v; else delete a.uri; save(); };
+    r2.append(idin,sy,uin); card.appendChild(r2);
+    body.appendChild(card);
   }
 }
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
-function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(colls()[id]); return id; }
+function newCollId(){ let n=1,id; do{ id="collection"+(n>1?n:""); n++; }while(localNameTaken(id)); return id; }
+// ---------- readable, stable identifiers for collections / documents / agents (#35, #37) ----------
+// Local names share one URI namespace with concepts, so uniqueness spans all four maps.
+function localNameTaken(id){ return !!(model.concepts[id]||(model.collections||{})[id]||(model.documents||{})[id]||(model.agents||{})[id]); }
+function slugLocalId(text,cur){ const base=Core.safeLocal(text||"")||""; if(!base||base==="x") return null; let id=base,n=1; while(id!==cur&&localNameTaken(id)) id=base+(++n); return id; }
+function isAutoId(id,prefix){ return new RegExp("^"+prefix+"\\d*$").test(String(id||"")); }
+function renameCollection(old,nid){ const cs=colls(); if(!nid||old===nid||!cs[old]||localNameTaken(nid)) return old;
+  cs[nid]=cs[old]; cs[nid].id=nid; delete cs[old];
+  for(const k in cs) if(cs[k].members) cs[k].members=cs[k].members.map(m=>m===old?nid:m);
+  if(collSel===old) collSel=nid; if(collapsedColls.has(old)){ collapsedColls.delete(old); collapsedColls.add(nid); }
+  save(); return nid; }
+function renameDocument(old,nid){ const dl=docs(); if(!nid||old===nid||!dl[old]||localNameTaken(nid)) return old;
+  dl[nid]=dl[old]; dl[nid].id=nid; delete dl[old];
+  for(const cid in model.concepts){ const c=model.concepts[cid]; if(c.source) c.source=c.source.map(x=>x===old?nid:x); }
+  save(); return nid; }
+function renameAgent(old,nid){ const al=provAgents(); if(!nid||old===nid||!al[old]||localNameTaken(nid)) return old;
+  al[nid]=al[old]; al[nid].id=nid; delete al[old];
+  const sc=model.scheme||{}; ["creatorAgent","contributorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===old) sc[k]=nid; });
+  save(); return nid; }
 function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) el.textContent=Object.keys(colls()).length; }
 function collMemberOf(id){ const cs=colls(); return Object.keys(cs).filter(k=>(cs[k].members||[]).indexOf(id)>=0); }
 function topCollections(){ const cs=colls(); return Object.keys(cs).filter(id=>collMemberOf(id).length===0); }
@@ -5103,7 +5140,16 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const col=cs[collSel]; ed.innerHTML="";
   const wrap=el2=>{ const d=document.createElement('div'); d.style.cssText="margin-bottom:14px"; return d; };
   // name
-  const nameW=wrap(); const nlab=document.createElement('label'); nlab.textContent="Name (rdfs:label)"; nlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nin=document.createElement('input'); nin.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=collLabel(col); nin.oninput=()=>{ col.label=[{lang:model.defaultLang,val:nin.value}]; save(); updateCollPill(); const r=document.getElementById('collList'); /*live*/ }; nin.onchange=()=>renderCollections(); nameW.append(nlab,nin); ed.appendChild(nameW);
+  const nameW=wrap(); const nlab=document.createElement('label'); nlab.textContent="Name (rdfs:label)"; nlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nin=document.createElement('input'); nin.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=collLabel(col); nin.oninput=()=>{ col.label=[{lang:model.defaultLang,val:nin.value}]; save(); updateCollPill(); const r=document.getElementById('collList'); /*live*/ };
+  nin.onchange=()=>{ const v=nin.value.trim(); if(isAutoId(col.id,"collection")&&v&&!/^New (ordered )?collection$/i.test(v)){ const nid=slugLocalId(v,col.id); if(nid&&nid!==col.id) renameCollection(col.id,nid); } renderCollections(); }; nameW.append(nlab,nin); ed.appendChild(nameW);
+  // identifier (URI local name) — readable, stable, editable (#37)
+  const idW=wrap(); const idlab=document.createElement('label'); idlab.textContent="Identifier (URI local name)"; idlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px";
+  const idrow=document.createElement('div'); idrow.style.cssText="display:flex;gap:6px;align-items:center";
+  const idin=document.createElement('input'); idin.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px"; idin.value=col.id;
+  idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=col.id; return; } if(nid!==col.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, documents, and agents"); idin.value=col.id; return; } renameCollection(col.id,nid); renderCollections(); };
+  const sy=document.createElement('button'); sy.className="btn sm"; sy.textContent="↦ from name"; sy.title="Derive the identifier from the collection name"; sy.onclick=()=>{ const nid=slugLocalId(collLabel(col),col.id); if(nid){ renameCollection(col.id,nid); renderCollections(); } };
+  const hint=document.createElement('div'); hint.className="subtle"; hint.style.cssText="font-size:11px;margin-top:4px"; hint.textContent="Becomes the collection's URI ("+(model.prefix?model.prefix+":":"")+col.id+"). Stable once set — renaming the collection doesn't change it.";
+  idrow.append(idin,sy); idW.append(idlab,idrow,hint); ed.appendChild(idW);
   // type toggle + delete
   const tW=document.createElement('div'); tW.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap";
   const ol=document.createElement('label'); ol.style.cssText="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"; const ocb=document.createElement('input'); ocb.type="checkbox"; ocb.checked=!!col.ordered; ocb.onchange=()=>{ col.ordered=ocb.checked; save(); renderCollections(); }; ol.append(ocb, document.createTextNode("Ordered collection (preserves member order via skos:memberList)"));
@@ -6057,7 +6103,7 @@ function graphInspector(){
     h+=`<div class="gi-acts"><button class="btn sm" id="giGoSrc">Open Sources tab</button></div>`; ins.innerHTML=h;
     const b=$('#giGoSrc'); if(b) b.onclick=()=>switchTab("sources"); return; }
   if(n.kind==="agent"){ const a=(model.agents||{})[n.refId]||{};
-    h+=`<div class="gi-meta"><b>${escapeHtml(a.name||n.refId)}</b>${a.type?`<br>prov:${escapeHtml(a.type)}`:""}${a.homepage?`<br><a href="${escapeHtml(a.homepage)}" target="_blank" rel="noopener">${escapeHtml(a.homepage)}</a>`:""}</div>`;
+    h+=`<div class="gi-meta"><b>${escapeHtml(a.name||n.refId)}</b>${a.type?`<br>prov:${escapeHtml(a.type)}`:""}${a.uri?`<br>${escapeHtml(a.uri)}`:""}${a.homepage?`<br><a href="${escapeHtml(a.homepage)}" target="_blank" rel="noopener">${escapeHtml(a.homepage)}</a>`:""}</div>`;
     h+=`<div class="gi-acts"><button class="btn sm" id="giGoSrc">Open Sources tab</button></div>`; ins.innerHTML=h;
     const b=$('#giGoSrc'); if(b) b.onclick=()=>switchTab("sources"); return; }
   if(n.kind==="xc"){

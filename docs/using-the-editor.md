@@ -82,14 +82,20 @@ The **Collections** tab groups concepts into a `skos:Collection`, or an ordered 
 
 Each node has a **green ● circle** marking a collection; an ordered one also carries an **ordered** badge. Click the large **▶ / ▼ caret** to collapse or expand a node — the tree is expanded by default. Inside a collection, concept members arrange by their own broader/narrower (an ordered collection keeps its `skos:memberList` sequence instead). The **filter box** narrows the tree to matching collections and members and highlights the hits. Select a collection to edit its name, note, type, and members in the panel on the right.
 
+A collection's **Identifier** — its URI local name — derives from the name the first time you set one ("Day Collection" → `Day-Collection`), and is editable to any form you prefer (`DayCollection`), with a "↦ from name" button to re-derive on demand. Once set it stays stable through renames, per ISO 25964's identifier-persistence rule; changing it explicitly updates every membership reference, and uniqueness is checked against concepts, documents, and agents, which share the same namespace.
+
 ## Sources — documents & agents
 
 The **Sources** tab holds reusable records that concepts and the scheme can point at.
 
-- **Documents** (`foaf:Document`) — a source document with a title (`dcterms:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dcterms:source`).
+- **Documents** (`foaf:Document`) — a source document with a title (`dcterms:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dcterms:source`). Each document has an **identifier** (its URI local name) that derives from the title when you first set it, stays stable afterwards, and can be edited — plus an optional **URI** (a DOI or w3id) that becomes the document's subject URI on export, so citations point at the real resource.
 - **Agents** (`prov:Agent`) — a **Person**, **Organization**, or **Software agent** (`prov:Person` / `prov:Organization` / `prov:SoftwareAgent`) with a name (`foaf:name`) and optional homepage (`foaf:homepage`). In the concept-scheme panel, link an agent as the scheme's **creator**, **contributor**, or **publisher** — the agent reference is exported in place of the plain-text field.
 
-Everything round-trips: documents, agents, `dcterms:source`, and the attribution references all export to RDF and read back on import.
+Agents work the same way: the identifier derives from the name ("Doug Warren" → `Doug-Warren`, editable to any form you prefer), and an optional **Identity URI** — an ORCID, ROR, or homepage URI — is used as the agent's URI on export, so the scheme's `dcterms:creator` can point at a real identity instead of a minted local name. The agent is still typed `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` and described with `foaf:name` / `foaf:homepage`.
+
+Identifiers follow ISO 25964's persistence rule: they derive once, then stay put — renaming a document, agent, or collection never silently changes its URI. Changing an identifier explicitly cascades through every reference (concept citations, scheme attribution, collection membership), and uniqueness is checked across concepts, collections, documents, and agents, which all share the vocabulary's namespace.
+
+Everything round-trips: documents, agents, external identity URIs, `dcterms:source`, and the attribution references all export to RDF and read back on import.
 
 ## Crosswalk — federate taxonomies into a thesaurus
 
