@@ -86,10 +86,10 @@ Each node has a **green ● circle** marking a collection; an ordered one also c
 
 The **Sources** tab holds reusable records that concepts and the scheme can point at.
 
-- **Documents** (`foaf:Document`) — a source document with a title (`dct:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dct:source`).
+- **Documents** (`foaf:Document`) — a source document with a title (`dcterms:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dcterms:source`).
 - **Agents** (`prov:Agent`) — a **Person**, **Organization**, or **Software agent** (`prov:Person` / `prov:Organization` / `prov:SoftwareAgent`) with a name (`foaf:name`) and optional homepage (`foaf:homepage`). In the concept-scheme panel, link an agent as the scheme's **creator**, **contributor**, or **publisher** — the agent reference is exported in place of the plain-text field.
 
-Everything round-trips: documents, agents, `dct:source`, and the attribution references all export to RDF and read back on import.
+Everything round-trips: documents, agents, `dcterms:source`, and the attribution references all export to RDF and read back on import.
 
 ## Crosswalk — federate taxonomies into a thesaurus
 

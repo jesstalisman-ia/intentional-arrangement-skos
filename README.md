@@ -37,7 +37,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 
 - **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. Generic and instantial also assert their `skos:broader` super-property, so plain-SKOS tools still read the hierarchy.
 
-- **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dct:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dct:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
+- **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dcterms:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dcterms:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
 
 - **Crosswalk (thesaurus building).** Align taxonomies from your workspace with the five SKOS mapping relations. Auto-match proposes links from identical/near labels; confirm or draw your own in a visual side-by-side view. Three exports, each in **Turtle, RDF/XML, or JSON-LD**: the crosswalk alone (mapping triples), the federated thesaurus (the current pair + mappings), or **the whole federation** — every taxonomy networked by mappings, in one file (available from the Crosswalk tab and from a dedicated card in the Export tab; step-by-step instructions in [Using the editor](docs/using-the-editor.md#exporting-the-federated-structure-step-by-step)). Mappings also ride along in normal exports.
 - **Display & filter.** Show the concept tree by **label** (with a language picker when the vocabulary is multilingual), **qualified name**, or **full IRI**, in document order or A–Z / Z–A. The filter box highlights matches (and matches by whatever form you're showing). Both apply to the relationship pickers as well.
@@ -102,7 +102,7 @@ This repo is meant to be read and rebuilt, not just run. The essays in [`docs/`]
 - **W3C SKOS** — the RDF vocabulary for concept schemes.
 - **ANSI/NISO Z39.19-2005** — controlled-vocabulary construction (term form, USE/UF, BT/NT/RT, scope notes).
 - **ISO 25964-1/-2** — thesauri and interoperability; the `iso-thes` generic/partitive/instantial relations are available in ISO 25964 mode.
-- **DCMI / Dublin Core** — concept-scheme metadata, `dct:source`, and attribution.
+- **DCMI / Dublin Core** — concept-scheme metadata, `dcterms:source`, and attribution.
 - **FOAF** (`foaf:Document`, `foaf:page`, `foaf:name`) and **PROV-O** (`prov:Person`/`Organization`/`SoftwareAgent`) — documents and agents in the Sources tab.
 - Validation shapes: [`api/skos-shapes.ttl`](api/skos-shapes.ttl) (SHACL).
 

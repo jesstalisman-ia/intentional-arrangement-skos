@@ -105,11 +105,11 @@ function toTurtle(model) {
   const B = model.base, S = model.base + model.scheme.id;
   let out =
 `@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix dcterms:  <http://purl.org/dc/terms/> .
 @prefix ex:   <${B}> .
 
 <${S}> a skos:ConceptScheme ;
-  dct:title ${lit(model.scheme.title, model.scheme.lang)} .
+  dcterms:title ${lit(model.scheme.title, model.scheme.lang)} .
 
 `;
   for (const id of model.order) {
@@ -137,11 +137,11 @@ Run it on a two-concept model and you get exactly what a librarian or an ontolog
 
 ```turtle
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix dct:  <http://purl.org/dc/terms/> .
+@prefix dcterms:  <http://purl.org/dc/terms/> .
 @prefix ex:   <https://example.org/scheme/> .
 
 <https://example.org/scheme/scheme> a skos:ConceptScheme ;
-  dct:title "My Taxonomy"@en .
+  dcterms:title "My Taxonomy"@en .
 
 ex:animals
   a skos:Concept ;
@@ -167,7 +167,7 @@ function toJsonLd(model) {
   const S = model.base + model.scheme.id;
   const context = {
     skos: "http://www.w3.org/2004/02/skos/core#",
-    dct:  "http://purl.org/dc/terms/",
+    dcterms: "http://purl.org/dc/terms/",
     "@base": model.base,
     prefLabel:  { "@id": "skos:prefLabel", "@container": "@language" },
     altLabel:   { "@id": "skos:altLabel",  "@container": "@language" },
@@ -182,7 +182,7 @@ function toJsonLd(model) {
 
   const graph = [{
     "@id": S, "@type": "skos:ConceptScheme",
-    "dct:title": { "@value": model.scheme.title, "@language": model.scheme.lang }  // language-tagged, to match the Turtle
+    "dcterms:title": { "@value": model.scheme.title, "@language": model.scheme.lang }  // language-tagged, to match the Turtle
   }];
   for (const id of model.order) {
     const c = model.concepts[id];

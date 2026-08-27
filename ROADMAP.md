@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: UI said `dct:source`, exports say `dcterms:source` (v0.10.1, #36)
+- The Sources tab, the concept editor's Sources group label, the empty state, and the guided tour all referred to Dublin Core Terms with the informal `dct:` abbreviation, while every export declares (and has always used) the `dcterms:` prefix. All user-facing text — app, README, and docs — now says `dcterms:source` / `dcterms:title`, matching the declared prefix. Cosmetic only; no serialization changed.
+
 ### Graph shows the whole project — scheme, sources, crosswalk (v0.10.0)
 - The Graph tab now draws more than concepts. Three new toggles add: the **concept scheme** as a gold hub linked to its top concepts — click it to read the scheme's full Dublin Core metadata in the inspector; **sources and agents** — `foaf:Document` records cited via `dcterms:source` and the `prov:Agent` creator/contributor/publisher attributions, with labelled edges; and **crosswalk mappings** — all five SKOS mapping relations in pink, with concepts mapped from *other* taxonomies in the workspace drawn as dashed external bubbles carrying their own preferred label and home taxonomy. Selecting a mapping edge shows the relation and can remove it; every new bubble's inspector links to the tab that manages it. The legend covers all seven bubble types.
 
@@ -29,7 +32,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 ### ISO 25964 relations, rdfs:label/comment, and a Sources tab (#25)
 - **ISO 25964 thesaurus relations** (opt-in): `iso-thes:broaderGeneric` / `broaderPartitive` / `broaderInstantial` (+ narrower inverses), toggled per taxonomy; generic & instantial also assert `skos:broader`.
 - **`rdfs:label`** (alternate name) and **`rdfs:comment`** on concepts.
-- **Sources tab** — reusable `foaf:Document` records (`dct:title`, `foaf:page`, `rdfs:comment`) cited by concepts via `dct:source`, and `prov:Agent` records (`prov:Person`/`Organization`/`SoftwareAgent` with `foaf:name`/`foaf:homepage`) creditable as the scheme's creator / contributor / publisher.
+- **Sources tab** — reusable `foaf:Document` records (`dcterms:title`, `foaf:page`, `rdfs:comment`) cited by concepts via `dcterms:source`, and `prov:Agent` records (`prov:Person`/`Organization`/`SoftwareAgent` with `foaf:name`/`foaf:homepage`) creditable as the scheme's creator / contributor / publisher.
 - All of it round-trips in Turtle, RDF/XML, and JSON-LD. (International standards only — no country-specific profile.)
 
 ### Collections tree UX (#24)

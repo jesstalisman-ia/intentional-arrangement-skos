@@ -881,7 +881,7 @@
   <section class="panel" data-panel="sources">
     <div class="card">
       <div class="card-h"><h2 style="flex:0 0 auto;white-space:nowrap">Sources</h2>
-        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1;min-width:0">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dct:source</code> in the concept editor.</span>
+        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1;min-width:0">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dcterms:source</code> in the concept editor.</span>
       </div>
       <div id="sourcesBody"></div>
     </div>
@@ -905,7 +905,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.10.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.10.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -3870,7 +3870,7 @@ function noteGroup(title, c, field){
 function sourceGroup(c){
   c.source=c.source||[];
   const g=document.createElement("div"); g.className="grp";
-  const l=document.createElement("div"); l.className="lbl"; l.textContent="Sources (dct:source → documents)"; g.appendChild(l);
+  const l=document.createElement("div"); l.className="lbl"; l.textContent="Sources (dcterms:source → documents)"; g.appendChild(l);
   const chips=document.createElement("div"); chips.className="chips";
   (c.source||[]).forEach((did,i)=>{ const chip=document.createElement("span"); chip.className="chip"; const d=(model.documents||{})[did];
     chip.appendChild(document.createTextNode(d?docTitle(d):did+" (missing)"));
@@ -4975,12 +4975,12 @@ function renderSources(){ updateSrcPill(); const body=document.getElementById("s
   dh.innerHTML='<h3 style="margin:0;font-size:14px">Documents <span class="subtle" style="font-weight:400;font-size:12px;font-family:var(--mono)">foaf:Document</span></h3>';
   const addD=document.createElement("button"); addD.className="btn sm primary"; addD.textContent="＋ Document"; addD.onclick=createDocument; dh.appendChild(addD); body.appendChild(dh);
   const dl=docs();
-  if(!Object.keys(dl).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 14px"; e.textContent="No documents yet. Add one, then reference it from a concept with dct:source in the concept editor."; body.appendChild(e); }
+  if(!Object.keys(dl).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 14px"; e.textContent="No documents yet. Add one, then reference it from a concept with dcterms:source in the concept editor."; body.appendChild(e); }
   for(const id in dl){ const d=dl[id]; d.title=d.title&&d.title.length?d.title:[{lang:model.defaultLang,val:""}]; d.page=d.page&&d.page.length?d.page:[""]; d.comment=d.comment||[];
     const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:grid;gap:7px";
     const tr=document.createElement("div"); tr.style.cssText="display:flex;gap:6px;align-items:center";
     const tl=document.createElement("input"); tl.style.cssText=_srcInput+";width:56px"; tl.placeholder="lang"; tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
-    const tv=document.createElement("input"); tv.style.cssText=_srcInput+";flex:1"; tv.placeholder="Title (dct:title)"; tv.value=d.title[0].val||""; tv.oninput=()=>{ d.title[0].val=tv.value; save(); updateSrcPill(); };
+    const tv=document.createElement("input"); tv.style.cssText=_srcInput+";flex:1"; tv.placeholder="Title (dcterms:title)"; tv.value=d.title[0].val||""; tv.oninput=()=>{ d.title[0].val=tv.value; save(); updateSrcPill(); };
     const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete document"; del.onclick=()=>deleteDocument(id);
     tr.append(tl,tv,del); card.appendChild(tr);
     const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; card.appendChild(pg);
@@ -5932,7 +5932,7 @@ function graphBuild(){
     if(showS){
       add("s:scheme","scheme",model.scheme.title||"Concept scheme",null,model.scheme.uri||model.base);
       for(const id of model.order){ const c=model.concepts[id]; if(c.top||!(c.broader||[]).some(b=>model.concepts[b])) edges.push({s:"s:scheme",t:"c:"+id,rel:"hasTopConcept"}); }
-      if(showSrc) [["creatorAgent","dct:creator"],["contributorAgent","dct:contributor"],["publisherAgent","dct:publisher"]].forEach(([f,lbl])=>{
+      if(showSrc) [["creatorAgent","dcterms:creator"],["contributorAgent","dcterms:contributor"],["publisherAgent","dcterms:publisher"]].forEach(([f,lbl])=>{
         const aid=model.scheme[f]; if(aid&&model.agents&&model.agents[aid]){ const k="ag:"+aid; add(k,"agent",model.agents[aid].name||aid,aid); edges.push({s:"s:scheme",t:k,rel:"attrib",label:lbl}); } });
     }
     // sources: foaf:Document records cited via dct:source
@@ -6678,7 +6678,7 @@ const TOUR_STEPS = [
   { title:"UUIDs for every concept — in one click", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#btnAssignUuids'), body:"A hidden gem in that same section: click <b>Assign UUIDs to all terms</b> to switch <i>every</i> concept to a stable, opaque UUID at once. UUIDs never collide and never need renaming — ideal before you publish or hand the vocabulary off." },
   { title:"Plain SKOS or SKOS-XL labels", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#labelStyleBox'), body:"Also here: <b>Label style</b>. Keep <b>plain SKOS</b> labels, or switch to <b>SKOS-XL</b> — which turns each label into its own resource with a URI, so you can record a <b>source / provenance</b> for individual labels. Turn it on and a small <b>SKOS-XL</b> badge appears in the header; exports then include the reified labels." },
   { title:"ISO 25964 relations (optional)", tab:"build", pre:()=>{ const sb=$('#schemeBox'); if(sb && !sb.open){ sb.open=true; renderScheme(); } }, target:()=>$('#isoThesBox'), body:"For thesaurus work, turn on <b>ISO 25964 relations</b> to add specialised broader pickers — <b>generic</b> (is-a), <b>partitive</b> (part-of), <b>instantial</b> (instance-of) — alongside plain <code>skos:broader</code>. Leave it off and the editor stays plain SKOS." },
-  { title:"Sources — documents & agents", target:()=>document.querySelector('.tab[data-tab=sources]'), body:"The <b>Sources</b> tab holds reusable <b>documents</b> (<code>foaf:Document</code>) that concepts cite with <code>dct:source</code>, and <b>agents</b> (<code>prov:Person</code>/<code>Organization</code>/<code>SoftwareAgent</code>) you can credit as the scheme's creator, contributor, or publisher." },
+  { title:"Sources — documents & agents", target:()=>document.querySelector('.tab[data-tab=sources]'), body:"The <b>Sources</b> tab holds reusable <b>documents</b> (<code>foaf:Document</code>) that concepts cite with <code>dcterms:source</code>, and <b>agents</b> (<code>prov:Person</code>/<code>Organization</code>/<code>SoftwareAgent</code>) you can credit as the scheme's creator, contributor, or publisher." },
   { title:"Proposals — suggest & review terms", target:()=>document.querySelector('.tab[data-tab=proposals]'), body:"Not everyone edits directly. In <b>Proposals</b>, people suggest new terms; a reviewer sets each one's parent (or makes it a <b>top concept</b>) and <b>approves</b> it into the taxonomy, or <b>rejects</b> it with a reason. Every decision is recorded, and the whole log downloads as CSV or a report." },
   { title:"Validate and export", target:()=>document.querySelector('.tab[data-tab=validate]'), body:"Check quality against qSKOS in <b>Validate</b>, then take your taxonomy out — Turtle, RDF/XML, JSON-LD, CSV, Excel — in <b>Export</b>." },
   { title:"You're set", center:true, body:"That's the essentials. Build away — and reopen this tour anytime from the <b>☰</b> menu (Help → Take a quick tour)." },
