@@ -97,7 +97,19 @@ The **Crosswalk** tab aligns two taxonomies from your workspace using the five S
 
 **Only have one taxonomy?** A crosswalk needs two — the empty state offers **Load sample taxonomies to try it**, which adds four small schemes (Media types, Content formats, Subjects, Grocery aisles) with deliberately overlapping labels so you can experiment immediately. When your workspace has exactly two taxonomies, the target is picked automatically.
 
-Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file — in **Turtle, RDF/XML, or JSON-LD** (format picker beside the export buttons). **Export federation (all)** goes further: one file containing *every* taxonomy in your workspace that participates in a crosswalk — however many schemes are networked by mappings — with all the mapping triples. Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
+Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file — in **Turtle, RDF/XML, or JSON-LD** (format picker beside the export buttons). **Export federation (all)** goes further: one file containing *every* taxonomy in your workspace that participates in a crosswalk — however many schemes are networked by mappings — with all the mapping triples.
+
+### Exporting the federated structure, step by step
+
+1. **Build the mappings.** In the **Crosswalk** tab, pick a source and a target taxonomy, run **Auto-match by label** (tick the proposals you accept) or link concepts by hand in the visual view. Repeat with other pairs if you're networking more than two taxonomies — every mapping is saved onto its source concept as you go.
+2. **Choose a format.** The format picker (Turtle · RDF/XML · JSON-LD) sits in the Crosswalk's top card, next to *Export federation (all)*.
+3. **Export.** Two places, same result:
+   - **Crosswalk tab** → **Export federation (all)** — always visible in the top card, no pair needs to be selected;
+   - **Export tab** → the **"Federation — all crosswalked taxonomies"** card at the top, with one button per format.
+4. **What you get:** a single file (`federation.ttl` / `.rdf` / `.jsonld`) holding every taxonomy that participates in the crosswalk network — all concept schemes, all concepts with their labels and metadata, and all SKOS mapping triples. The toast names exactly which taxonomies were bundled.
+5. **Where it goes next:** upload it into **Semantic Lair** (Taxonomies → *Upload from the SKOS editor*) to tag documents against the whole federation, or load it into any RDF tool — it's plain standards-conformant SKOS.
+
+If the button reports *"No crosswalk mappings anywhere in this workspace yet"*, no taxonomy pair has confirmed mappings — step 1 hasn't happened in this browser's workspace. Reserve `exactMatch` for concepts that are genuinely interchangeable across the two vocabularies.
 
 ## Proposals — suggest and review terms
 
