@@ -908,6 +908,7 @@
           </select>
           <button class="btn sm" id="xwExportMap">Export crosswalk</button>
           <button class="btn sm primary" id="xwExportThes">Export thesaurus</button>
+          <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
         </div>
         <div class="xw-vishint subtle" id="xwVisHint">Click a <b>source</b> concept (left), then a <b>target</b> concept (right) to link them with the selected relation. Click a line to remove it.</div>
         <div class="xw-vis" id="xwVisual"></div>
@@ -4394,6 +4395,31 @@ if($('#xwTarget')){
     const {f,ext,mime}=xwFmtInfo();
     xwDownload("thesaurus."+ext, xwSerialize(tr,f), mime);
     toast(`Exported federated thesaurus (${ext})`);
+  };
+  if($('#xwExportAll')) $('#xwExportAll').onclick=()=>{
+    const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
+    const projs=loadProjects(); const entries=Object.entries(projs);
+    // 1) which projects assert mappings, and what target IRIs do they point at?
+    const withMaps=new Set(), targets=[];
+    for(const [pid,pr] of entries){ const m=pr.model||{};
+      for(const id in (m.concepts||{})){ const c=m.concepts[id];
+        for(const f of MAPF) for(const t of (c[f]||[])){ withMaps.add(pid); targets.push(t); } } }
+    if(!withMaps.size){ toast("No crosswalk mappings anywhere in this workspace yet"); return; }
+    // 2) a project participates if it asserts mappings, or a mapping points into its namespace
+    const participating=new Set(withMaps);
+    for(const [pid,pr] of entries){ const m=pr.model||{}; const base=(m.base||"").replace(/[#/]+$/,"");
+      if(base && targets.some(t=>String(t).startsWith(base))) participating.add(pid); }
+    // 3) combine every participating project's triples (mappings ride with their source scheme)
+    let all=[]; const names=[];
+    for(const pid of participating){ const pr=projs[pid]; names.push(pr.name);
+      all=all.concat(Core.buildTriples(pr.model,{dc:true}).triples); }
+    const {f,ext,mime}=xwFmtInfo();
+    const ctxModel=xwSourceModel||projs[[...participating][0]].model;
+    const ser=(f==='rdf')?Core.toRdfXml(ctxModel,{_triples:all})
+           :(f==='jsonld')?JSON.stringify(Core.toJsonLd(ctxModel,{_triples:all}),null,2)
+           :Core.toTurtle(ctxModel,{_triples:all});
+    xwDownload("federation."+ext, ser, mime);
+    toast(`Exported ${participating.size} crosswalked taxonomies (${names.join(", ")})`);
   };
   if($('#xwSamples')) $('#xwSamples').onclick=async()=>{
     if(!await askConfirm("Add "+SAMPLE_TAXONOMIES.length+" sample SKOS taxonomies (Media types, Content formats, Subjects, Grocery aisles) as new projects? They have overlapping labels so you can crosswalk between them.","Add samples")) return;
