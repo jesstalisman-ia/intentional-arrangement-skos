@@ -8,6 +8,13 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Editor ergonomics & workspace safety (v0.12.0, #40 #41 #42 #43 #44)
+- **Search in the relationship pickers** (#40) — every Broader/Related picker (ISO 25964 variants included) has a type-to-filter box; Enter takes the first match. The tree's "Document" sort is now labelled **Document order** with an explanation, and the Notation field says what it's for (`skos:notation`, an optional classification code).
+- **Workspace safety** (#41) — the ☰ menu gains a **Your data** section: one-click **workspace backup** (every project and glossary in one JSON file) and **restore** (adds what's missing, never overwrites — a project that's newer in the backup restores beside yours). The editor asks the browser for **persistent storage** so an update is less likely to evict your work, warns when it's open in **two tabs**, detects when *another* tab saved and offers reload-instead-of-overwrite, and nudges after 60+ changes in a session.
+- **Expand / collapse all** (#42) — two buttons on the tree options row: see the whole hierarchy, or fold back to top concepts.
+- **External-vocabulary mappings, findable and guarded** (#43) — the concept editor's *External mappings* group (for `pkmv:Concept → skos:Concept`-style mappings) now takes CURIEs (`skos:Concept` expands) with full URI validation, and the Crosswalk tab points to it.
+- **Concept identifiers derive from the label by default** (#44) — while an identifier still looks auto-generated (`NewConcept…`, or a `…Copy2` from Duplicate) it re-derives from the first preferred label; once you set one by hand it never moves (ISO 25964 persistence). Identifier renames now cascade *everywhere* — ISO 25964 broader variants, collection membership, graph positions, and glossary promotions included, closing a long-standing gap.
+
 ### URI input protection — parse check, CURIE expansion, lookalike hints (v0.11.1, #39)
 - Every field that takes a raw URI (linked artifacts on concepts and proposals, document page URL and URI, agent homepage and identity URI) now guards its input — all offline, no network calls. Three layers: a **parse check** flags strings that aren't URLs at all (`https://skos:org#Concept`); **CURIE expansion** lets you type a vocabulary term like `skos:Concept` or `dcterms:title` and expands it to the full canonical URI from the editor's namespace table; and a **lookalike hint** catches plausible-but-wrong vocabulary hosts (`https://skos.org#Concept`) and offers the real namespace (`http://www.w3.org/2004/02/skos/core#Concept`) with one click. Warnings never block or discard what you typed — the editor protects, the taxonomist decides.
 

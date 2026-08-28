@@ -421,7 +421,9 @@
         <div class="treeopts" id="treeOpts">
           <label>Show <select id="tvRender" title="How concept nodes are labelled in the tree and pickers"><option value="pref">Label</option><option value="qname">Qualified name</option><option value="iri">Full IRI</option></select></label>
           <label id="tvLangWrap" style="display:none">Lang <select id="tvLang" title="Preferred label language for display"></select></label>
-          <label>Sort <select id="tvSort" title="Order concepts in the tree"><option value="doc">Document</option><option value="az">A–Z</option><option value="za">Z–A</option></select></label>
+          <label>Sort <select id="tvSort" title="Order concepts in the tree — Document order is the order they were authored or imported (the order they appear in your file)"><option value="doc" title="The order concepts were authored or imported">Document order</option><option value="az">A–Z</option><option value="za">Z–A</option></select></label>
+          <button class="btn sm" id="tvExpand" title="Expand the whole concept tree">⊞ Expand all</button>
+          <button class="btn sm" id="tvCollapse" title="Collapse to top concepts only">⊟ Collapse all</button>
         </div>
         <div class="bulkbar" id="bulkBar" style="display:none">
           <span id="bulkCount">0 selected</span>
@@ -905,7 +907,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.11.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export.</div>
+        <div class="xw-hint subtle"><b>v0.12.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -3334,9 +3336,47 @@ function newPid(){ return "p"+nowTs().toString(36)+Math.random().toString(36).sl
 function isExampleProject(p){ return !!(p && (p.example===true || (p.name||"")==="Software company (example)")); }
 function loadProjects(){ try{ return JSON.parse(localStorage.getItem(PKEY))||{}; }catch(e){ return {}; } }
 function saveProjects(p){ try{ localStorage.setItem(PKEY, JSON.stringify(p)); }catch(e){ toast("Storage full — export to a file"); } }
+// ---------- workspace safety (#41): backup / restore, change nudge, cross-tab guard ----------
+function workspaceBackup(){
+  const data={ app:"intentional-arrangement-skos", kind:"workspace-backup", version:1,
+    exported:new Date().toISOString(), projects:loadProjects(), glossaries:(typeof loadGloss==="function")?loadGloss():{} };
+  downloadFile("iaskos-workspace-backup-"+todayISO()+".json", JSON.stringify(data), "application/json");
+  toast("Workspace backup downloaded — every project and glossary, one file");
+}
+function workspaceRestore(file){
+  const rd=new FileReader();
+  rd.onload=()=>{ try{
+    const j=JSON.parse(rd.result);
+    if(!j||j.kind!=="workspace-backup"||!j.projects) throw new Error("that isn't a workspace backup file");
+    const projs=loadProjects(); let added=0;
+    for(const pid in j.projects){ const pr=j.projects[pid]; if(!pr||!pr.model) continue;
+      let np=pid;
+      if(projs[np]){ if((projs[np].updated||0)>=(pr.updated||0)) continue;    // we already have this version or newer
+        np=newPid(); pr.id=np; pr.name=(pr.name||"Untitled")+" (restored)"; } // older here than in the backup — restore beside, never overwrite
+      projs[np]=pr; added++; }
+    saveProjects(projs);
+    if(j.glossaries&&typeof loadGloss==="function"){ const g=loadGloss(); let gs=false;
+      for(const k in j.glossaries){ if(!g[k]){ g[k]=j.glossaries[k]; gs=true; } } if(gs) saveGloss(g); }
+    toast(added?("Restored "+added+" project"+(added===1?"":"s")+" — reloading"):"Nothing to restore — this workspace already has everything in that backup");
+    if(added) setTimeout(()=>location.reload(),1000);
+  }catch(e){ toast("Restore failed: "+(e.message||e)); } };
+  rd.readAsText(file);
+}
+let _changeCount=0, _staleTab=false;
+try{ const _bc=new BroadcastChannel("iaskos.tabs");
+  _bc.onmessage=e=>{ if(e.data==="hello") _bc.postMessage("here");
+    else if(e.data==="here"&&!window._tabWarned){ window._tabWarned=true;
+      setTimeout(()=>toast("⚠ The editor is open in another tab — stick to one tab, the last save wins"),800); } };
+  _bc.postMessage("hello"); }catch(e){}
+window.addEventListener("storage", e=>{ if(e.key===PKEY) _staleTab=true; });
 // autosave the working model into the current project
 function save(){
   if(SHARED) return;   // read-only shared view — never persist to the viewer's workspace
+  if(_staleTab){ _staleTab=false;
+    if(!window.confirm("Another tab saved changes to this workspace. Keep THIS tab's version (OK), or reload to pick up the other tab's work (Cancel)?")){ location.reload(); return; } }
+  _changeCount++;
+  if(_changeCount===60||(_changeCount>60&&_changeCount%250===0))
+    setTimeout(()=>toast("💾 "+_changeCount+" changes this session — a backup takes one click: ☰ menu → Your data"),400);
   const projs = loadProjects();
   if(!currentPid || !projs[currentPid]){ currentPid = currentPid || newPid(); projs[currentPid] = { id:currentPid, name:(model.scheme.title||"Untitled"), created:nowTs() }; }
   projs[currentPid].model = model; projs[currentPid].updated = nowTs();
@@ -3432,8 +3472,13 @@ function doRename(oldId, newId){
   const c=model.concepts[oldId]; c.id=newId; model.concepts[newId]=c; delete model.concepts[oldId];
   model.order=model.order.map(x=>x===oldId?newId:x);
   for(const x of model.order){ const o=model.concepts[x];
-    o.broader=(o.broader||[]).map(b=>b===oldId?newId:b); o.related=(o.related||[]).map(r=>r===oldId?newId:r); }
+    o.broader=(o.broader||[]).map(b=>b===oldId?newId:b); o.related=(o.related||[]).map(r=>r===oldId?newId:r);
+    ["broaderGeneric","broaderPartitive","broaderInstantial"].forEach(f=>{ if(o[f]&&o[f].length) o[f]=o[f].map(b=>b===oldId?newId:b); }); }
   (model.proposals||[]).forEach(p=>{ if(p.parentId===oldId)p.parentId=newId; if(p.approvedId===oldId)p.approvedId=newId; });
+  for(const k in (model.collections||{})){ const col=model.collections[k]; if(col&&col.members) col.members=col.members.map(m=>m===oldId?newId:m); }
+  if(model.graph&&model.graph.pos&&model.graph.pos["c:"+oldId]){ model.graph.pos["c:"+newId]=model.graph.pos["c:"+oldId]; delete model.graph.pos["c:"+oldId]; }
+  try{ const g=loadGloss(); let ch=false; for(const gk in g){ const b=g[gk]; if(!b||!b.terms||b.projectId!==currentPid) continue;
+    for(const t of b.terms){ if(t.conceptId===oldId){ t.conceptId=newId; ch=true; } } } if(ch) saveGloss(g); }catch(e){}
   if(selected===oldId) selected=newId; if(histBaseId===oldId) histBaseId=newId;
   return newId;
 }
@@ -3485,6 +3530,9 @@ function initTreeOpts(){
   rSel.onchange=()=>{ treeView.render=rSel.value; saveTreeView(); showLang(); reflow(); if(selected)renderEditor(); };
   lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); reflow(); if(selected)renderEditor(); };
   sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); reflow(); };
+  const ex=$('#tvExpand'), co=$('#tvCollapse');
+  if(ex) ex.onclick=()=>{ for(const x of model.order)(model.concepts[x].broader||[]).forEach(b=>{ if(model.concepts[b]) openIds.add(b); }); renderTree(); };
+  if(co) co.onclick=()=>{ openIds.clear(); renderTree(); };
 }
 
 // ---------- tree ----------
@@ -3704,7 +3752,7 @@ function renderEditor(){
     if(base===selected){ toast("The identifier already matches the label"); return; }
     const nid=uniqueLocalExcept(base, selected); const nn=renameConcept(selected, nid); renderEditor(); toast("Identifier set to “"+nn+"”"); };
   idrow.appendChild(syncBtn);
-  idrow.appendChild(fldInput("Notation", c.notation||"", v=>{ c.notation=v; save(); }));
+  idrow.appendChild(fldInput("Notation — optional code (skos:notation), e.g. 612.8", c.notation||"", v=>{ c.notation=v; save(); }));
   const topWrap=document.createElement("label"); topWrap.className="toggle"; topWrap.style.paddingBottom="6px";
   const topCb=document.createElement("input"); topCb.type="checkbox"; topCb.checked=!!c.top;
   topCb.onchange=()=>{ c.top=topCb.checked; save(); renderTree(); afterChange(); };
@@ -3840,7 +3888,14 @@ function labelGroup(title, c, field, isPref){
     const val=document.createElement("input"); val.className="val"; val.value=L.val||""; val.placeholder=isPref?"preferred label":"label"; val.dataset.field=field;
     val.oninput=()=>{ L.val=val.value; save(); updateTreeLabel(); scheduleAuto(); };
     // Trim on blur so a whitespace-only label doesn't silently persist as an empty literal.
-    val.onchange=()=>{ const t=val.value.trim(); if(t!==val.value){ val.value=t; L.val=t; save(); updateTreeLabel(); } afterChange(); };
+    val.onchange=()=>{ const t=val.value.trim(); if(t!==val.value){ val.value=t; L.val=t; save(); updateTreeLabel(); }
+      // #44: while the identifier still looks auto-generated (NewConcept…, a Copy of
+      // another id), keep it derived from the first preferred label. Once the user
+      // sets an identifier by hand it stays put (ISO 25964 identifier persistence).
+      if(isPref&&i===0&&t&&(model.idStyle||"text")!=="uuid"&&/^(NewConcept|New-concept)\d*$|Copy\d*$/.test(selected)){
+        const base=slugId(t); if(base&&base!==selected){ const nid=uniqueLocalExcept(base,selected);
+          if(nid!==selected){ renameConcept(selected,nid); renderEditor(); toast("Identifier set to “"+nid+"” (from label)"); return; } } }
+      afterChange(); };
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
     rm.onclick=()=>{ c[field].splice(i,1); renderEditor(); save(); afterChange(); };
     row.append(lang,val,rm); g.appendChild(row);
@@ -3905,15 +3960,22 @@ function relGroup(title, c, field){
   });
   g.appendChild(chips);
   const add=document.createElement("div"); add.className="reladd";
+  // #40: type-to-search — the filter narrows the picker; Enter takes the first match
+  const flt=document.createElement("input"); flt.placeholder="🔍 search…"; flt.title="Type to filter the picker; press Enter to take the first match"; flt.style.cssText="flex:0 1 130px;min-width:90px;border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:12px;background:var(--surface-2)";
   const sel=document.createElement("select");
-  sel.innerHTML='<option value="">add '+(/^broader/.test(field)?"parent":"related")+'…</option>'+
-    model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>nodeText(a).toLowerCase().localeCompare(nodeText(b).toLowerCase()))
-      .map(x=>`<option value="${x}">${escapeHtml(nodeText(x))}</option>`).join("");
-  sel.onchange=()=>{ if(sel.value){ c[field]=c[field]||[]; if(!c[field].includes(sel.value)) c[field].push(sel.value);
+  const candidates=()=>model.order.filter(x=>x!==selected&&!(c[field]||[]).includes(x)).sort((a,b)=>nodeText(a).toLowerCase().localeCompare(nodeText(b).toLowerCase()));
+  const build=q=>{ q=(q||"").toLowerCase(); const list=candidates().filter(x=>!q||nodeText(x).toLowerCase().includes(q));
+    sel.innerHTML='<option value="">'+(q?(list.length?list.length+" match"+(list.length===1?"":"es")+"…":"no matches"):'add '+(/^broader/.test(field)?"parent":"related")+'…')+'</option>'+
+      list.map(x=>`<option value="${x}">${escapeHtml(nodeText(x))}</option>`).join(""); };
+  build("");
+  const apply=v=>{ if(!v) return; c[field]=c[field]||[]; if(!c[field].includes(v)) c[field].push(v);
     // skos:related is symmetric — assert the inverse on the other concept so it holds both ways (and shows in the graph)
-    if(field==="related"){ const o=model.concepts[sel.value]; if(o){ o.related=o.related||[]; if(!o.related.includes(selected)) o.related.push(selected); } }
-    renderEditor(); save(); renderTree(); afterChange(); } };
-  add.appendChild(sel); g.appendChild(add);
+    if(field==="related"){ const o=model.concepts[v]; if(o){ o.related=o.related||[]; if(!o.related.includes(selected)) o.related.push(selected); } }
+    renderEditor(); save(); renderTree(); afterChange(); };
+  flt.oninput=()=>build(flt.value);
+  flt.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); const first=sel.querySelector('option:nth-child(2)'); if(first&&first.value) apply(first.value); } };
+  sel.onchange=()=>apply(sel.value);
+  add.appendChild(flt); add.appendChild(sel); g.appendChild(add);
   return g;
 }
 const MAP_TYPES=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
@@ -3926,8 +3988,9 @@ function mapGroup(c){
     const sel=document.createElement("select"); sel.className="val";
     sel.innerHTML=MAP_TYPES.map(t=>`<option ${t===mt?"selected":""}>${t}</option>`).join("");
     sel.onchange=()=>{ const val=c[mt][i]; c[mt].splice(i,1); const nt=sel.value; c[nt]=c[nt]||[]; c[nt].push(val); renderEditor(); save(); scheduleAuto(); };
-    const inp=document.createElement("input"); inp.className="val"; inp.value=u; inp.placeholder="http://…  target IRI";
+    const inp=document.createElement("input"); inp.className="val"; inp.value=u; inp.placeholder="http://… target IRI, or a term like skos:Concept";
     inp.oninput=()=>{ c[mt][i]=inp.value.trim(); save(); scheduleAuto(); };
+    attachUriGuard(inp,v=>{ c[mt][i]=v; save(); scheduleAuto(); });
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕";
     rm.onclick=()=>{ c[mt].splice(i,1); renderEditor(); save(); scheduleAuto(); };
     row.append(sel,inp,rm); g.appendChild(row);
@@ -6589,7 +6652,8 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
   bg.addEventListener('click',e=>{ if(e.target===bg) bg.classList.remove('show'); }); });
 
 // ---------- boot ----------
-function boot(){ model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{};
+function boot(){ try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}   // #41: ask the browser not to evict this origin's storage
+  model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{};
   // Ensure every concept carries Dublin Core (existing projects that predate the fields):
   // fill created/issued/modified with the scheme's date (or today, as the ingest proxy)
   // and creator with the vocabulary's creator. Fills empties only.
@@ -6858,7 +6922,11 @@ function buildNavContents(){
   const tabs=[...document.querySelectorAll('#tabs .tab')].map(t=>{ const c=t.cloneNode(true); c.querySelectorAll('.pill').forEach(p=>p.remove()); return {name:t.getAttribute('data-tab'), label:c.textContent.trim()}; });
   let h='<div class="nav-sec"><div class="nav-h">Go to</div>';
   tabs.forEach(t=>{ h+=`<button class="nav-item${t.name===cur?' cur':''}" data-go="${t.name}">${escHtml(t.label)}</button>`; });
-  h+='</div><div class="nav-sec"><div class="nav-h">Help</div>'+
+  h+='</div><div class="nav-sec"><div class="nav-h">Your data</div>'+
+     '<button class="nav-item" data-act="backup">Download workspace backup</button>'+
+     '<button class="nav-item" data-act="restore">Restore a backup…</button>'+
+     '<div style="padding:2px 10px 4px;font-size:11px;color:var(--faint,#9099a3);line-height:1.45">Taxonomies live only in this browser — back up before browser updates, and keep the editor to one tab.</div>'+
+     '</div><div class="nav-sec"><div class="nav-h">Help</div>'+
      '<button class="nav-item" data-act="tour">Take a quick tour</button>'+
      `<a class="nav-item" href="${REPO_URL}/tree/main/docs" target="_blank" rel="noopener">Documentation <span class="rt">↗</span></a>`+
      '</div><div class="nav-sec"><div class="nav-h">Feedback</div>'+
@@ -6872,6 +6940,10 @@ function buildNavContents(){
   m.innerHTML=h;
   m.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ switchTab(el.getAttribute('data-go')); closeNav(); });
   const tourItem=m.querySelector('[data-act=tour]'); if(tourItem) tourItem.onclick=()=>{ closeNav(); startTour(true); };
+  const bkItem=m.querySelector('[data-act=backup]'); if(bkItem) bkItem.onclick=()=>{ closeNav(); workspaceBackup(); };
+  const rsItem=m.querySelector('[data-act=restore]'); if(rsItem) rsItem.onclick=()=>{ closeNav();
+    const fi=document.createElement('input'); fi.type='file'; fi.accept='.json,application/json';
+    fi.onchange=()=>{ if(fi.files&&fi.files[0]) workspaceRestore(fi.files[0]); }; fi.click(); };
   m.querySelectorAll('a.nav-item').forEach(a=>a.addEventListener('click',closeNav));
 }
 function positionNav(){ const b=document.getElementById('navBtn'), m=document.getElementById('navMenu'); if(!b||!m) return; const r=b.getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; let left=Math.min(Math.max(8,r.left), window.innerWidth-254); m.style.left=left+'px'; }

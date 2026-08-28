@@ -139,6 +139,16 @@ The Validate tab runs qSKOS-style quality checks. A vocabulary can be valid RDF 
 
 The Business view is a read-friendly browse of the vocabulary — breadcrumb, definition, synonyms, and place in the hierarchy — for the people who use the taxonomy but never edit it.
 
+## Your data, autosave & backups
+
+Everything you build autosaves to **this browser's local storage** — nothing is uploaded, and nothing exists anywhere else. That privacy has a flip side: a browser update, a cleared profile, or site-data eviction can take your work with it. The editor protects you four ways, and you should add a fifth:
+
+- **Workspace backup** — ☰ menu → *Your data* → **Download workspace backup** writes every project and glossary into one JSON file. **Restore a backup…** reads one back: it adds what's missing and never overwrites — if a project is newer in the backup than in your browser, it restores *beside* yours as "(restored)".
+- **Persistent storage** — the editor asks the browser to mark its storage persistent, which makes eviction much less likely (browsers honor this at their discretion).
+- **One tab at a time** — all tabs share the same storage, and the last save wins. The editor warns when it's open in two tabs, and if another tab saves while you work, offers to reload instead of overwriting.
+- **A nudge** — after 60+ changes in a session, a reminder points at the backup button.
+- **Your part**: export your taxonomy (or download a workspace backup) before browser updates, and treat RDF exports as the archival copy — they're portable; local storage isn't.
+
 ## Graph — see the network
 
 Past a certain size, the value of a taxonomy lives in the network between terms, not in any single one. The Graph tab draws that network as a force-directed view, synced to the editor.
