@@ -907,7 +907,7 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.12.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.13.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1481,6 +1481,8 @@ const NS = {
   isothes: "http://purl.org/iso25964/skos-thes#",
   foaf: "http://xmlns.com/foaf/0.1/",
   prov: "http://www.w3.org/ns/prov#",
+  owl: "http://www.w3.org/2002/07/owl#",
+  vann: "http://purl.org/vocab/vann/",
 };
 
 // ---- term constructors ----
@@ -1556,6 +1558,12 @@ function buildTriples(model, opts){
     if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
     if (model.scheme.rights) add(s, dct("rights"), lit(model.scheme.rights, L));
+    // publication metadata (#45 #46 #47): license as a URI, version, and the
+    // vann namespace annotations derived from the workspace's own base + prefix
+    if (model.scheme.license && /^https?:\/\//i.test(model.scheme.license)) add(s, dct("license"), iri(model.scheme.license));
+    if (model.scheme.version) add(s, iri(NS.owl + "versionInfo"), lit(model.scheme.version));
+    if (model.prefix) add(s, iri(NS.vann + "preferredNamespacePrefix"), lit(model.prefix));
+    if (model.base) add(s, iri(NS.vann + "preferredNamespaceUri"), lit(model.base));
     // dcterms:language — the vocabulary's default language as a BCP-47 tag (plain literal)
     const lg = (model.scheme.lang || model.defaultLang || "").trim();
     if (lg) add(s, dct("language"), lit(lg));
@@ -2660,7 +2668,7 @@ function triplesToModel(triples, prefixes){
   const STD = { skos:1, skosxl:1, rdf:1, rdfs:1, dcterms:1, xsd:1 };
   if (prefixes) for (const [k, v] of Object.entries(prefixes)) if (v === base && !STD[k]){ prefix = k; break; }
   const model = { base, prefix, defaultLang: "en", idStyle: "text",
-    scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", issued: "", modified: "", rights: "", lang: "en" },
+    scheme: { uri: "", title: "", description: "", creator: "", publisher: "", created: "", issued: "", modified: "", rights: "", license: "", version: "", lang: "en" },
     concepts: {}, order: [], collections: {}, documents: {}, agents: {} };
   const localOf = u => (u.startsWith(base) ? u.slice(base.length) : u);
   // Only genuine SKOS concepts become concepts. An owl:Class/property that merely carries
@@ -2715,6 +2723,10 @@ function triplesToModel(triples, prefixes){
       else if (pv === D + "modified") model.scheme.modified = o.v;
       else if (pv === D + "language") model.scheme.language = o.v;
       else if (pv === D + "rights") model.scheme.rights = o.v;
+      else if (pv === D + "license" && o.t === "iri") model.scheme.license = o.v;
+      else if (pv === NS.owl + "versionInfo" && o.t === "lit") model.scheme.version = o.v;
+      else if (pv === NS.vann + "preferredNamespacePrefix" && o.t === "lit"){ if (!model.prefix) model.prefix = String(o.v).replace(/[^A-Za-z0-9_-]/g, ""); }
+      else if (pv === NS.vann + "preferredNamespaceUri"){ /* consumed — re-emitted from the workspace base */ }
       else if (pv === P + "hasTopConcept" && o.t === "iri"){ const c = ensure(o.v); if(c) c.top = true; }
       else { (model.scheme.extra = model.scheme.extra || []).push({ p: pv, o: { t: o.t, v: o.v, lang: o.lang || "", dt: o.dt || "" } }); }
       continue;
@@ -3299,7 +3311,7 @@ document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==="z"
 const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 Jessica Talisman is offered under a size-based source-available license: Apache License 2.0 for organizations under 75 employees; a written enterprise license is required at 75 or more employees (Hello@ontologypipeline.com). Not an OSI-approved open-source license.";
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
-    scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", lang:"en" },
+    scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", license:"", version:"", lang:"en" },
     concepts:{}, order:[], collections:{}, documents:{}, agents:{} };
 }
 // 32-char hex UUID (dashes stripped), guaranteed unique within the model
@@ -4007,6 +4019,8 @@ const SCHEME_FIELDS=[
   ["title","dcterms:title","text"],["description","dcterms:description","area"],
   ["creator","dcterms:creator","text"],["publisher","dcterms:publisher","text"],
   ["created","dcterms:created (date)","date"],["issued","dcterms:issued (date published)","date"],["modified","dcterms:modified (date)","date"],["rights","dcterms:rights","text"],
+  ["license","dcterms:license — a license URI, e.g. https://creativecommons.org/licenses/by/4.0/","text"],
+  ["version","owl:versionInfo — e.g. 1.0.0","text"],
 ];
 function renderScheme(){
   const g=$('#schemeGrid'); g.innerHTML="";
@@ -4018,6 +4032,7 @@ function renderScheme(){
     if(key==="modified") el.id="fldModified";
     el.value=getv();
     el.oninput=()=>{ let v=el.value; if(key==="base"){ model.base=v; } else if(key==="prefix"){ const s=v.replace(/[^A-Za-z0-9_-]/g,""); if(s!==v){ el.value=s; } model.prefix=s; } else if(key==="defaultLang"){ model.defaultLang=v.trim(); model.scheme.lang=v.trim(); } else model.scheme[key]=v; if(key!=="modified") touchModified(); save(); if(selected) $('#editor .uri')&&($('#editor .uri').textContent=Core.conceptUri(model,selected)); };
+    if(key==="license") attachUriGuard(el, v=>{ model.scheme.license=v; save(); });
     f.appendChild(el); g.appendChild(f);
   }
   // identifier style controls
@@ -6188,7 +6203,7 @@ function graphInspector(){
   const mrow=(k,v)=>v?`<b>${escapeHtml(k)}</b> ${escapeHtml(String(v))}<br>`:"";
   if(n.kind==="scheme"){ const sc=model.scheme;
     h+=`<div class="gi-meta"><b>${escapeHtml(sc.title||"Untitled scheme")}</b><br>${escapeHtml(sc.uri||model.base)}</div>`;
-    h+=`<div class="gi-meta">${mrow("Creator",sc.creator||(sc.creatorAgent&&model.agents&&model.agents[sc.creatorAgent]?model.agents[sc.creatorAgent].name:""))}${mrow("Publisher",sc.publisher||(sc.publisherAgent&&model.agents&&model.agents[sc.publisherAgent]?model.agents[sc.publisherAgent].name:""))}${mrow("Created",sc.created)}${mrow("Published",sc.issued)}${mrow("Modified",sc.modified)}${mrow("Language",sc.lang)}${mrow("Rights",sc.rights)}</div>`;
+    h+=`<div class="gi-meta">${mrow("Creator",sc.creator||(sc.creatorAgent&&model.agents&&model.agents[sc.creatorAgent]?model.agents[sc.creatorAgent].name:""))}${mrow("Publisher",sc.publisher||(sc.publisherAgent&&model.agents&&model.agents[sc.publisherAgent]?model.agents[sc.publisherAgent].name:""))}${mrow("Created",sc.created)}${mrow("Published",sc.issued)}${mrow("Modified",sc.modified)}${mrow("Language",sc.lang)}${mrow("Rights",sc.rights)}${mrow("License",sc.license)}${mrow("Version",sc.version)}</div>`;
     if(sc.description) h+=`<div class="gi-meta">${escapeHtml(sc.description.slice(0,160))}${sc.description.length>160?"…":""}</div>`;
     h+=`<div class="gi-acts"><button class="btn sm" id="giGoScheme">Edit in Build tab</button></div>`; ins.innerHTML=h;
     const b=$('#giGoScheme'); if(b) b.onclick=()=>{ switchTab("build"); const d=document.querySelector('details.scheme'); if(d) d.open=true; }; return; }

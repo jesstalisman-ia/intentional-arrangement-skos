@@ -8,6 +8,10 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Publication metadata on the concept scheme — license, version, vann (v0.13.0, #45 #46 #47)
+- The concept scheme's metadata panel gains **License** (`dcterms:license`, a URI — with the URI guard attached, so a lookalike or typo is caught) and **Version** (`owl:versionInfo`). Both export in every RDF serialization and read back on import, alongside the existing `dcterms:rights` text field (a rights *statement* and a license *URI* are complementary — the editor now carries both).
+- Exports now annotate the scheme with **`vann:preferredNamespacePrefix`** and **`vann:preferredNamespaceUri`**, derived automatically from the workspace's own namespace and prefix — no new fields to fill in; the editor already knew both.
+
 ### Editor ergonomics & workspace safety (v0.12.0, #40 #41 #42 #43 #44)
 - **Search in the relationship pickers** (#40) — every Broader/Related picker (ISO 25964 variants included) has a type-to-filter box; Enter takes the first match. The tree's "Document" sort is now labelled **Document order** with an explanation, and the Notation field says what it's for (`skos:notation`, an optional classification code).
 - **Workspace safety** (#41) — the ☰ menu gains a **Your data** section: one-click **workspace backup** (every project and glossary in one JSON file) and **restore** (adds what's missing, never overwrites — a project that's newer in the backup restores beside yours). The editor asks the browser for **persistent storage** so an update is less likely to evict your work, warns when it's open in **two tabs**, detects when *another* tab saved and offers reload-instead-of-overwrite, and nudges after 60+ changes in a session.

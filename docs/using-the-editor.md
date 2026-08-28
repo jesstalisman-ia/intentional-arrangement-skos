@@ -155,7 +155,7 @@ Past a certain size, the value of a taxonomy lives in the network between terms,
 
 Beyond concepts and their `broader`/`related` links, the graph can show the rest of what your project asserts, each behind its own toggle in the toolbar:
 
-- **Scheme** — the concept scheme itself as a gold hub, linked to its top concepts by `skos:hasTopConcept`. Click it to read the scheme's Dublin Core metadata (title, creator, publisher, created / published / modified, language, rights, description) in the inspector, with a shortcut to edit it in the Build tab.
+- **Scheme** — the concept scheme itself as a gold hub, linked to its top concepts by `skos:hasTopConcept`. Click it to read the scheme's Dublin Core metadata (title, creator, publisher, created / published / modified, language, rights, license, version, description) in the inspector, with a shortcut to edit it in the Build tab.
 - **Sources** — the `foaf:Document` records your concepts cite via `dcterms:source` (brown, dashed edges), and the `prov:Agent` records credited as the scheme's creator, contributor, or publisher (green, labelled `dct:creator` and so on). Click one for its details and a jump to the Sources tab.
 - **Crosswalk** — the five SKOS mapping relations (`exactMatch`, `closeMatch`, `broadMatch`, `narrowMatch`, `relatedMatch`) drawn in pink. A mapping that points into another taxonomy in your workspace appears as a dashed pink bubble labelled with that concept's preferred label and, in the inspector, the taxonomy it comes from — so a federated thesaurus is visible as one network, not just an export file. Edge styling distinguishes the relations (exact is heaviest; close is dashed; broad/narrow carry arrows; related is dotted). Selecting a mapping edge lets you remove it; add and manage mappings in the Crosswalk tab.
 
@@ -187,7 +187,7 @@ After an import, a short summary reports the concept count and top concepts, and
 
 ## Scheme metadata
 
-Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, and language, plus the base namespace and whether identifiers are readable or UUIDs. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.
+Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, a **license URI** (`dcterms:license` — e.g. a Creative Commons license; complements the free-text rights statement), a **version** (`owl:versionInfo`), and language, plus the base namespace and whether identifiers are readable or UUIDs. Exports also annotate the scheme with `vann:preferredNamespacePrefix` and `vann:preferredNamespaceUri`, taken automatically from your namespace settings. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.
 
 ## Where your work lives
 
