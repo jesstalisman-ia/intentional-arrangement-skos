@@ -901,10 +901,6 @@
             <option value="broadMatch">broadMatch</option><option value="narrowMatch">narrowMatch</option><option value="relatedMatch">relatedMatch</option>
           </select></label>
           <span class="sp" style="margin-left:auto"></span>
-          <select id="xwFmt" title="Export format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
-            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
-          </select>
-          <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
         <div class="xw-row">
@@ -912,14 +908,25 @@
           <button class="btn sm" id="xwSaveView" title="Save the current source ⇄ target pairing as a named crosswalk you can switch back to">💾 Save this crosswalk</button>
           <button class="btn sm" id="xwDelView" title="Remove the selected saved crosswalk (the mappings themselves stay on your concepts)">✕ Remove</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.14.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-row" style="border-top:1px solid var(--border-soft);padding-top:9px;margin-top:2px">
+          <b style="font-size:12.5px">Export</b>
+          <select id="xwScope" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text);max-width:340px"></select>
+          <select id="xwFmt" title="File format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
+            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
+          </select>
+          <label class="toggle" title="Emit labels as skosxl:Label resources (plus plain skos labels for compatibility)"><input type="checkbox" id="xwXl"> SKOS-XL labels</label>
+          <button class="btn sm primary" id="xwGo">⬇ Download</button>
+        </div>
+        <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
+        <div class="xw-hint subtle"><b>v0.15.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
       <div class="card xw-suggest" id="xwSuggest" style="display:none">
         <div class="xw-res-h"><h2>Suggested matches <span class="subtle" id="xwSuggestMeta"></span></h2>
-          <div><button class="btn sm" id="xwSugAll">Check all</button><button class="btn sm" id="xwSugNone">Clear</button>
-          <button class="btn sm primary" id="xwSugApply">Add checked</button></div>
+          <div><button class="btn sm" id="xwSugAll">Check all</button><button class="btn sm" id="xwSugNone">Uncheck all</button>
+          <button class="btn sm primary" id="xwSugApply">Add checked</button>
+          <button class="btn sm" id="xwSugDismiss" title="Close these suggestions without adding anything">✕ Dismiss</button></div>
         </div>
         <div class="xw-suggestlist" id="xwSuggestList"></div>
       </div>
@@ -931,8 +938,7 @@
           <label class="toggle"><input type="checkbox" id="xwOnlyUnmapped"> only unmapped</label>
           <span class="sp" style="margin-left:auto"></span>
           <span class="subtle" id="xwCount"></span>
-          <button class="btn sm" id="xwExportMap">Export crosswalk</button>
-          <button class="btn sm primary" id="xwExportThes">Export thesaurus</button>
+          <button class="btn sm" id="xwClearPair" title="Remove every mapping between this source and target (asks first)">Remove all pair mappings…</button>
         </div>
         <div class="xw-vishint subtle" id="xwVisHint">Click a <b>source</b> concept (left), then a <b>target</b> concept (right) to link them with the selected relation. Click a line to remove it.</div>
         <div class="xw-vis" id="xwVisual"></div>
@@ -1511,6 +1517,9 @@ const XL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 const SKOS_LABEL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 
 function conceptUri(model, id){ return model.base + id; }
+// A concept keeps its ORIGINAL URI when it came from another namespace (federated
+// imports): c.uri overrides the minted base+id everywhere the concept is referenced.
+function conceptRes(model, id){ const c = model.concepts && model.concepts[id]; return (c && c.uri) ? c.uri : model.base + id; }
 
 function emptyConcept(id){
   return { id, notation: "", pref: [], alt: [], hidden: [],
@@ -1579,13 +1588,15 @@ function buildTriples(model, opts){
   const ids = model.order && model.order.length ? model.order : Object.keys(model.concepts);
   for (const id of ids){
     const c = model.concepts[id]; if (!c) continue;
-    const s = iri(conceptUri(model, id));
+    const s = iri(conceptRes(model, id));
     add(s, A, iri(NS.skos + "Concept"));
-    add(s, iri(NS.skos + "inScheme"), iri(schemeUri));
-    if (c.top){
-      add(s, iri(NS.skos + "topConceptOf"), iri(schemeUri));
-      add(iri(schemeUri), iri(NS.skos + "hasTopConcept"), s);
-    }
+    // a foreign-namespace concept keeps its own scheme membership (preserved in
+    // c.extra) — never assert it into this workspace's scheme
+    if (!c.uri){ add(s, iri(NS.skos + "inScheme"), iri(schemeUri));
+      if (c.top){
+        add(s, iri(NS.skos + "topConceptOf"), iri(schemeUri));
+        add(iri(schemeUri), iri(NS.skos + "hasTopConcept"), s);
+      } }
     if (c.notation) add(s, iri(NS.skos + "notation"), lit(c.notation, "", NS.xsd + "string"));
 
     // labels
@@ -1627,12 +1638,12 @@ function buildTriples(model, opts){
     // hierarchy + associative (assert both directions for broader/narrower)
     (c.broader || []).forEach(pid => {
       if (!model.concepts[pid]) return;
-      add(s, iri(NS.skos + "broader"), iri(conceptUri(model, pid)));
-      add(iri(conceptUri(model, pid)), iri(NS.skos + "narrower"), s);
+      add(s, iri(NS.skos + "broader"), iri(conceptRes(model, pid)));
+      add(iri(conceptRes(model, pid)), iri(NS.skos + "narrower"), s);
     });
     (c.related || []).forEach(rid => {
       if (!model.concepts[rid]) return;
-      add(s, iri(NS.skos + "related"), iri(conceptUri(model, rid)));
+      add(s, iri(NS.skos + "related"), iri(conceptRes(model, rid)));
     });
     // ISO 25964 specialised hierarchy (iso-thes). Emit the specialisation + its narrower
     // inverse; generic/instantial also assert their skos:broader super-property (partitive
@@ -1640,7 +1651,7 @@ function buildTriples(model, opts){
     for (const fld of ISO_BROADER){
       (c[fld] || []).forEach(pid => {
         if (!model.concepts[pid]) return;
-        const pu = iri(conceptUri(model, pid));
+        const pu = iri(conceptRes(model, pid));
         add(s, iri(NS.isothes + fld), pu);
         add(pu, iri(NS.isothes + ISO_INVERSE[fld]), s);
         if (ISO_ENTAILS_SKOS[fld]){ add(s, iri(NS.skos + "broader"), pu); add(pu, iri(NS.skos + "narrower"), s); }
@@ -1678,12 +1689,12 @@ function buildTriples(model, opts){
     (col.label || []).forEach(L => { if (L.val) add(cs, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (col.note || []).forEach(L => { if (L.val) add(cs, iri(NS.skos + "note"), lit(L.val, L.lang)); });
     const mems = (col.members || []).filter(mid => model.concepts[mid] || (model.collections && model.collections[mid]));
-    mems.forEach(mid => add(cs, iri(NS.skos + "member"), iri(conceptUri(model, mid))));
+    mems.forEach(mid => add(cs, iri(NS.skos + "member"), iri(model.concepts[mid] ? conceptRes(model, mid) : conceptUri(model, mid))));
     if (col.ordered && mems.length){        // ordered members as an rdf:List via skos:memberList
       let head = null, prev = null;
       mems.forEach(mid => {
         const node = bnode("L" + cid.replace(/[^A-Za-z0-9]/g, "") + "_" + (++_bn));
-        add(node, iri(NS.rdf + "first"), iri(conceptUri(model, mid)));
+        add(node, iri(NS.rdf + "first"), iri(model.concepts[mid] ? conceptRes(model, mid) : conceptUri(model, mid)));
         if (prev) add(prev, iri(NS.rdf + "rest"), node); else head = node;
         prev = node;
       });
@@ -1707,6 +1718,10 @@ function buildTriples(model, opts){
     if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name));
     if (a.homepage) add(au, iri(NS.foaf + "homepage"), iri(a.homepage));
   }
+  // foreign triples — second schemes and other subjects preserved verbatim from a
+  // federated import (multi-namespace fidelity)
+  const _ft = x => x.t === "iri" ? iri(x.v) : x.t === "bnode" ? bnode(x.v) : lit(x.v, x.lang, x.dt);
+  (model.foreign || []).forEach(f => { try{ add(_ft(f.s), _ft(f.p), _ft(f.o)); }catch(e){} });
   return { triples: T, schemeUri };
 }
 
@@ -2683,7 +2698,19 @@ function triplesToModel(triples, prefixes){
   for(const t of triples){ if(t.p.t==="iri" && t.p.v===NS.rdf+"type" && t.o.t==="iri"){ if(t.o.v===NS.skos+"Concept") _typedConcept.add(t.s.v); else if(OWLT.includes(t.o.v)) _typedOnto.add(t.s.v); } }
   const _strict=_typedConcept.size>0;   // if the file declares skos:Concepts, treat ONLY those as concepts
   const isConcept = u => _typedConcept.has(u) || (!_strict && !_typedOnto.has(u));
-  const ensure = u => { if(!isConcept(u)) return null; const id = localOf(u); if (!model.concepts[id]){ model.concepts[id] = emptyConcept(id); model.order.push(id); } return model.concepts[id]; };
+  // Concepts are keyed by a URI→id map so a federated file can hold several
+  // namespaces: home-namespace concepts get their local name; foreign concepts get a
+  // unique local id AND keep their original URI (c.uri), which the exporter honors.
+  const _uriId = {}, _idUri = {}, _maybeForeign = [];
+  const ensure = u => { if(!isConcept(u)) return null;
+    let id = _uriId[u];
+    if (!id){ let bid = localOf(u); if (bid === u) bid = (u.match(/[^#/]+$/) || ["c"])[0] || "c";
+      id = bid; let n = 1; while (_idUri[id] && _idUri[id] !== u) id = bid + (++n);
+      _uriId[u] = id; _idUri[id] = u; }
+    if (!model.concepts[id]){ model.concepts[id] = emptyConcept(id); model.order.push(id);
+      if (!u.startsWith(base)) model.concepts[id].uri = u; }   // foreign namespace — preserve identity
+    return model.concepts[id]; };
+  const idOf = u => _uriId[u] || localOf(u);
 
   // collect skosxl label literalForms (+ per-label provenance)
   const xlForm = {}; // labelUri -> {v,lang,source}
@@ -2700,7 +2727,7 @@ function triplesToModel(triples, prefixes){
     if (t.p.t !== "iri") continue;
     if (t.p.v === NS.rdf + "type" && t.o.t === "iri"){
       if (t.o.v === P + "Concept") conceptUris.add(t.s.v);
-      else if (t.o.v === P + "ConceptScheme") model.scheme.uri = t.s.v;
+      else if (t.o.v === P + "ConceptScheme" && !model.scheme.uri) model.scheme.uri = t.s.v;   // first scheme is primary; later ones ride as foreign triples
     }
     if (t.p.v.startsWith(D)) dcSubjects.add(t.s.v);
   }
@@ -2713,7 +2740,7 @@ function triplesToModel(triples, prefixes){
     const pv = t.p.v, s = t.s.v, o = t.o;
     if (pv === NS.rdf + "type" && o.t === "iri"){
       if (o.v === P + "Concept") ensure(s);
-      else if (o.v === P + "ConceptScheme"){ model.scheme.uri = s; }
+      else if (o.v === P + "ConceptScheme"){ if (!model.scheme.uri) model.scheme.uri = s; else if (s !== model.scheme.uri) _maybeForeign.push(t); }
       continue;
     }
     // scheme metadata
@@ -2748,13 +2775,13 @@ function triplesToModel(triples, prefixes){
     else if (pv === P + "editorialNote") addLabel("editorialNote");
     else if (pv === P + "example") addLabel("example");
     else if (pv === P + "notation"){ const c = ensure(s); if (c) c.notation = o.v; }
-    else if (pv === P + "broader" && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const pid = localOf(o.v); if (!c.broader.includes(pid)) c.broader.push(pid); } }
-    else if (pv === P + "narrower" && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const pid = localOf(s); if (!child.broader.includes(pid)) child.broader.push(pid); } }
-    else if (pv === P + "related" && o.t === "iri"){ const c = ensure(s), rc = ensure(o.v); if (c && rc){ const rid = localOf(o.v); if (!c.related.includes(rid)) c.related.push(rid); } }
+    else if (pv === P + "broader" && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const pid = idOf(o.v); if (!c.broader.includes(pid)) c.broader.push(pid); } }
+    else if (pv === P + "narrower" && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const pid = idOf(s); if (!child.broader.includes(pid)) child.broader.push(pid); } }
+    else if (pv === P + "related" && o.t === "iri"){ const c = ensure(s), rc = ensure(o.v); if (c && rc){ const rid = idOf(o.v); if (!c.related.includes(rid)) c.related.push(rid); } }
     // ISO 25964 iso-thes specialised hierarchy (+ narrower inverses)
-    else if (ISO_BROADER.some(fl => pv === NS.isothes + fl) && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const fl = pv.slice(NS.isothes.length); const pid = localOf(o.v); (c[fl] = c[fl] || []); if (!c[fl].includes(pid)) c[fl].push(pid); } }
-    else if (Object.values(ISO_INVERSE).some(nf => pv === NS.isothes + nf) && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const nf = pv.slice(NS.isothes.length); const bf = ISO_BROADER.find(b => ISO_INVERSE[b] === nf); const pid = localOf(s); if (bf){ (child[bf] = child[bf] || []); if (!child[bf].includes(pid)) child[bf].push(pid); } } }
-    else if (pv === P + "topConceptOf"){ const c = ensure(s); if (c) c.top = true; }
+    else if (ISO_BROADER.some(fl => pv === NS.isothes + fl) && o.t === "iri"){ const c = ensure(s), pc = ensure(o.v); if (c && pc){ const fl = pv.slice(NS.isothes.length); const pid = idOf(o.v); (c[fl] = c[fl] || []); if (!c[fl].includes(pid)) c[fl].push(pid); } }
+    else if (Object.values(ISO_INVERSE).some(nf => pv === NS.isothes + nf) && o.t === "iri"){ const child = ensure(o.v), par = ensure(s); if (child && par){ const nf = pv.slice(NS.isothes.length); const bf = ISO_BROADER.find(b => ISO_INVERSE[b] === nf); const pid = idOf(s); if (bf){ (child[bf] = child[bf] || []); if (!child[bf].includes(pid)) child[bf].push(pid); } } }
+    else if (pv === P + "topConceptOf"){ const c = ensure(s); if (c){ if (!c.uri || (o.t === "iri" && o.v === model.scheme.uri)) c.top = true; else (c.extra = c.extra || []).push({ p: pv, o: { t: o.t, v: o.v, lang: "", dt: "" } }); } }
     else if (MAP_FIELDS.some(m => pv === P + m) && o.t === "iri"){ const c = ensure(s); if (c){ const m = pv.slice(P.length); c[m].push(o.v); } }
     else if (pv === NS.rdfs + "seeAlso" && o.t === "iri"){ const c = ensure(s); if (c){ c.artifacts = c.artifacts || []; c.artifacts.push({ type: "link", title: "", url: o.v }); } }
     else if (pv === NS.rdfs + "label" && o.t === "lit"){ const c = ensure(s); if (c){ (c.rdfsLabel = c.rdfsLabel || []).push({ lang: o.lang || "", val: o.v }); } }
@@ -2771,11 +2798,16 @@ function triplesToModel(triples, prefixes){
     else if (pv === NS.dcterms + "modified" && o.t === "lit"){ const c = ensure(s); if (c) c.modified = o.v; }
     // skos:inScheme is re-derived on export (single-scheme editor); consume it here so
     // the passthrough below doesn't duplicate what the exporter already emits.
-    else if (pv === P + "inScheme"){ /* consumed */ }
+    else if (pv === P + "inScheme"){ const c = ensure(s);
+      // a foreign concept's membership in ITS OWN scheme is data — preserve it;
+      // home-namespace membership is re-derived on export as before
+      if (c && c.uri && o.t === "iri" && o.v !== model.scheme.uri) (c.extra = c.extra || []).push({ p: pv, o: { t: "iri", v: o.v, lang: "", dt: "" } }); }
     // Passthrough: preserve any predicate on a concept we don't model (per-concept
     // dcterms:created/issued/modified/creator, ISO 25964, custom metadata) so it
     // survives the round-trip and is re-emitted on export.
-    else { const c = ensure(s); if (c) (c.extra = c.extra || []).push({ p: pv, o: { t: o.t, v: o.v, lang: o.lang || "", dt: o.dt || "" } }); }
+    else { const c = ensure(s);
+      if (c) (c.extra = c.extra || []).push({ p: pv, o: { t: o.t, v: o.v, lang: o.lang || "", dt: o.dt || "" } });
+      else if (t.s.t === "iri") _maybeForeign.push(t); }   // non-concept subject (e.g. a second scheme) — candidate for verbatim preservation
   }
   if (sawXl) model.xlLabels = true;
   // De-dup: a plain skos:broader that's entailed by an iso-thes field (per
@@ -2833,7 +2865,7 @@ function triplesToModel(triples, prefixes){
       if (t.p.v===NS.rdf+"first") first[termId(t.s)] = t.o;
       else if (t.p.v===NS.rdf+"rest") rest[termId(t.s)] = t.o;
     }
-    const walkList = head => { const out=[]; let cur=head, guard=0; while(cur && !(cur.t==="iri"&&cur.v===NS.rdf+"nil") && guard++<100000){ const k=termId(cur); const f=first[k]; if(f&&f.t==="iri") out.push(localOf(f.v)); cur=rest[k]; } return out; };
+    const walkList = head => { const out=[]; let cur=head, guard=0; while(cur && !(cur.t==="iri"&&cur.v===NS.rdf+"nil") && guard++<100000){ const k=termId(cur); const f=first[k]; if(f&&f.t==="iri") out.push(idOf(f.v)); cur=rest[k]; } return out; };
     const collLocals = new Set(Object.keys(collTypes).map(localOf));   // members may be sub-collections
     const isMember = m => model.concepts[m] || collLocals.has(m);
     for (const uri in collTypes){
@@ -2845,7 +2877,7 @@ function triplesToModel(triples, prefixes){
         if (t.p.v===NS.rdfs+"label" && t.o.t==="lit") col.label.push({lang:t.o.lang||"", val:t.o.v});
         else if (t.p.v===P+"prefLabel" && t.o.t==="lit" && !col.label.length) col.label.push({lang:t.o.lang||"", val:t.o.v});
         else if (t.p.v===P+"note" && t.o.t==="lit") col.note.push({lang:t.o.lang||"", val:t.o.v});
-        else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=localOf(t.o.v); if(isMember(m) && col.members.indexOf(m)<0) col.members.push(m); }
+        else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=idOf(t.o.v); if(isMember(m) && col.members.indexOf(m)<0) col.members.push(m); }
       }
       if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
       model.collections[cid] = col;
@@ -2883,6 +2915,12 @@ function triplesToModel(triples, prefixes){
       model.agents[id]=a;
     }
   }
+  // multi-namespace fidelity: triples about subjects nothing above consumed (a second
+  // ConceptScheme from a federated file, external resources) are preserved verbatim
+  // and re-emitted on export.
+  const _consumed = u => u === model.scheme.uri || _uriId[u] || xlForm[u] || docSubs[u] || agentSubs[u] || (collTypes[u] !== undefined);
+  const _mf = _maybeForeign.filter(t => t.s.t === "iri" && !_consumed(t.s.v));
+  if (_mf.length) model.foreign = _mf.map(t => ({ s:{t:"iri",v:t.s.v}, p:{t:t.p.t,v:t.p.v}, o:{t:t.o.t,v:t.o.v,lang:t.o.lang||"",dt:t.o.dt||""} }));
   return model;
 }
 function guessBase(triples){
@@ -3274,7 +3312,7 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
+root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, conceptRes, xlLabelUri, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
 
 })(typeof window !== "undefined" ? window : this);
 </script>
@@ -4285,7 +4323,7 @@ const XW_TYPES=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMat
 function xwNorm(s){ return String(s||"").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu," ").trim().replace(/\s+/g," "); }
 function xwPlabelOf(mdl,id){ const c=mdl.concepts[id]; if(!c)return id; const p=(c.pref||[]).find(l=>l.lang===mdl.defaultLang&&l.val)||(c.pref||[]).find(l=>l.val); return p?p.val:id; }
 function xwSrcLabel(id){ return xwSourceModel?xwPlabelOf(xwSourceModel,id):id; }
-function xwTargetUri(id){ return Core.conceptUri(xwTargetModel,id); }
+function xwTargetUri(id){ return Core.conceptRes(xwTargetModel,id); }
 function xwStem(n){ return n.replace(/\b(ies)\b/g,"y").replace(/(es|s)$/,""); }
 function xwProjName(pid){ return (loadProjects()[pid]||{}).name||pid||""; }
 function xwLoadSource(pid){ const projs=loadProjects(); if(!projs[pid]){ xwSourceModel=null; xwSourcePid=null; return; }
@@ -4363,8 +4401,10 @@ function xwMaybeStart(){
       if($('#xwStatus')) $('#xwStatus').textContent=`${xwProjName(xwSourcePid)} ⇄ ${xwProjName(xwTargetPid)} — pick a relation, then click a source then a target concept (or Auto-match).`;
     }
     xwVisSel=null; xwSetView(xwView);
+    if(typeof xwUpdateExportUI==="function") try{ xwUpdateExportUI(); }catch(e){}
   } else {
     $('#xwWorkspace').style.display="none"; $('#xwSuggest').style.display="none"; $('#xwEmpty').style.display="";
+    if(typeof xwUpdateExportUI==="function") try{ xwUpdateExportUI(); }catch(e){}
     if($('#xwStatus')) $('#xwStatus').innerHTML = (xwSourcePid && xwTargetPid && xwSourcePid===xwTargetPid) ? '<span class="err">Pick two <b>different</b> taxonomies.</span>' : "";
   }
 }
@@ -4435,7 +4475,7 @@ function renderXwTable(){
 }
 const XW_COLORS={exactMatch:"#2e9e5b",closeMatch:"#2f6fed",broadMatch:"#e08a2b",narrowMatch:"#c0562b",relatedMatch:"#8a8f98"};
 let xwView="visual", xwVisSel=null;
-function xwRefresh(){ if(!xwTargetModel||!xwSourceModel) return; if(xwView==="visual") renderXwVisual(); else renderXwTable(); }
+function xwRefresh(){ if(!xwTargetModel||!xwSourceModel) return; if(xwView==="visual") renderXwVisual(); else renderXwTable(); if(typeof xwUpdateExportUI==="function") try{ xwUpdateExportUI(); }catch(e){} }
 function xwSetView(v){ xwView=v; const vis=v==="visual";
   $('#xwViewVisual').classList.toggle('on',vis); $('#xwViewTable').classList.toggle('on',!vis);
   $('#xwVisual').style.display=vis?"":"none"; $('#xwVisHint').style.display=vis?"":"none"; $('#xwTableWrap').style.display=vis?"none":"";
@@ -4506,7 +4546,7 @@ function xwMappingTurtle(){
   return {ttl:out,n};
 }
 function xwDownload(name,text,mime){ const u=URL.createObjectURL(new Blob([text],{type:mime||"text/turtle"})); const a=document.createElement("a"); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
-function federationExport(fmt){
+function federationExport(fmt, xl){
   fmt = fmt || 'ttl';
   const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
   const projs=loadProjects(); const entries=Object.entries(projs);
@@ -4518,9 +4558,10 @@ function federationExport(fmt){
   const participating=new Set(withMaps);
   for(const [pid,pr] of entries){ const m=pr.model||{}; const base=(m.base||"").replace(/[#/]+$/,"");
     if(base && targets.some(t=>String(t).startsWith(base))) participating.add(pid); }
+  const useXl=(xl!==undefined)?!!xl:[...participating].some(pid=>projs[pid].model&&projs[pid].model.xlLabels);
   let all=[]; const names=[];
   for(const pid of participating){ const pr=projs[pid]; names.push(pr.name);
-    all=all.concat(Core.buildTriples(pr.model,{dc:true}).triples); }
+    all=all.concat(Core.buildTriples(pr.model,{dc:true,xl:useXl,dumbDown:useXl}).triples); }
   const ctxModel=projs[[...participating][0]].model;
   const info = fmt==='rdf' ? {ext:'rdf',mime:'application/rdf+xml'} : fmt==='jsonld' ? {ext:'jsonld',mime:'application/ld+json'} : {ext:'ttl',mime:'text/turtle'};
   const ser=(fmt==='rdf')?Core.toRdfXml(ctxModel,{_triples:all})
@@ -4554,31 +4595,74 @@ if($('#xwTarget')){
     if(fmt==='jsonld') return JSON.stringify(Core.toJsonLd(xwSourceModel,{_triples:triples}),null,2);
     return Core.toTurtle(xwSourceModel,{_triples:triples});
   }
-  function xwCombinedTriples(mapOnly){
-    const a=Core.buildTriples(xwSourceModel,{dc:true}).triples;
+  function xwCombinedTriples(mapOnly, xl){
+    const o={dc:true, xl:!!xl, dumbDown:!!xl};
+    const a=Core.buildTriples(xwSourceModel,o).triples;
     if(mapOnly){
       const MAPP=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].map(m=>"http://www.w3.org/2004/02/skos/core#"+m);
-      return a.filter(t=>t.p&&MAPP.includes(t.p.v));
+      // pair-scoped: only mappings whose target is a concept of THE chosen target
+      // taxonomy — matching what the scope picker promises (not every mapping the
+      // source holds toward other vocabularies)
+      const tset=new Set(xwTargetModel.order.map(id=>Core.conceptRes(xwTargetModel,id)));
+      return a.filter(t=>t.p&&MAPP.includes(t.p.v)&&t.o&&t.o.t==="iri"&&tset.has(t.o.v));
     }
-    const b=Core.buildTriples(xwTargetModel,{dc:true}).triples;
+    const b=Core.buildTriples(xwTargetModel,o).triples;
     return a.concat(b);
   }
-  if($('#xwExportMap')) $('#xwExportMap').onclick=()=>{
-    if(!xwTargetModel||!xwSourceModel)return;
-    const tr=xwCombinedTriples(true);
-    if(!tr.length){ toast("No mappings yet"); return; }
+  function xwPairMapCount(){ if(!xwSourceModel) return 0; let n=0; for(const id of xwSourceModel.order) n+=xwCrossMaps(xwSourceModel.concepts[id]).length; return n; }
+  function xwFedParticipants(){ const projs=loadProjects(); const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
+    const withMaps=new Set(), targets=[];
+    for(const [pid,pr] of Object.entries(projs)){ const m=pr.model||{};
+      for(const cid in (m.concepts||{})){ const c=m.concepts[cid]; for(const f of MAPF) for(const t of (c[f]||[])){ withMaps.add(pid); targets.push(t); } } }
+    for(const [pid,pr] of Object.entries(projs)){ const m=pr.model||{}; const bse=(m.base||"").replace(/[#/]+$/,"");
+      if(bse && targets.some(t=>String(t).startsWith(bse))) withMaps.add(pid); }
+    return [...withMaps].map(p=>projs[p].name||p); }
+  // ONE export control — the scope picker says exactly what goes in the file
+  function xwUpdateExportUI(){
+    const sc=$('#xwScope'), sum=$('#xwExpSummary'); if(!sc) return;
+    const pair=xwSourceModel&&xwTargetModel&&xwSourcePid!==xwTargetPid;
+    const n=pair?xwPairMapCount():0;
+    const A=pair?xwProjName(xwSourcePid):"source", B=pair?xwProjName(xwTargetPid):"target";
+    const fed=xwFedParticipants();
+    const cur=sc.value;
+    sc.innerHTML=[
+      `<option value="map" ${!pair?"disabled":""}>Mappings only — ${pair?n+" links":"pick a pair"}</option>`,
+      `<option value="pair" ${!pair?"disabled":""}>This pair as one thesaurus — ${pair?(A+" + "+B):"pick a pair"}</option>`,
+      `<option value="fed">Whole federation — ${fed.length} taxonomies</option>`].join("");
+    sc.value=cur&&[...sc.options].some(o=>o.value===cur&&!o.disabled)?cur:(pair?"pair":"fed");
+    const xl=$('#xwXl'); if(xl&&!xl.dataset.touched) xl.checked=!!((xwSourceModel&&xwSourceModel.xlLabels)||(xwTargetModel&&xwTargetModel.xlLabels));
+    const txt={
+      map: pair?`The ${n} mapping triples (skos:exactMatch/closeMatch/…) linking “${A}” to “${B}” — just the links, no concepts. Use this to hand someone the alignment alone.`:"",
+      pair: pair?`One file holding BOTH taxonomies in full — “${A}” and “${B}”, every concept, both concept schemes — plus the ${n} mappings that join them: a complete federated thesaurus.`:"",
+      fed: `One file with EVERY taxonomy in this workspace that takes part in any crosswalk (${fed.length?fed.join(", "):"none yet"}), all schemes and all mappings — the whole network.`};
+    if(sum) sum.textContent=txt[sc.value]||"";
+  }
+  if($('#xwScope')) $('#xwScope').onchange=xwUpdateExportUI;
+  if($('#xwXl')) $('#xwXl').onchange=()=>{ $('#xwXl').dataset.touched="1"; };
+  if($('#xwGo')) $('#xwGo').onclick=()=>{
+    const scope=($('#xwScope')||{}).value||"fed"; const xl=!!($('#xwXl')&&$('#xwXl').checked);
+    if(scope==="fed"){ federationExport(($('#xwFmt')||{}).value||'ttl', xl); return; }
+    if(!xwSourceModel||!xwTargetModel){ toast("Choose a source and target taxonomy first"); return; }
     const {f,ext,mime}=xwFmtInfo();
-    xwDownload("crosswalk."+ext, xwSerialize(tr,f), mime);
-    toast(`Exported ${tr.length} mapping triples (${ext})`);
+    const slug=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    if(scope==="map"){ const tr=xwCombinedTriples(true,false);
+      if(!tr.length){ toast("No mappings between this pair yet — draw some or run Auto-match"); return; }
+      xwDownload("crosswalk-"+slug(xwProjName(xwSourcePid))+"-"+slug(xwProjName(xwTargetPid))+"."+ext, xwSerialize(tr,f), mime);
+      toast(`Downloaded ${tr.length} mapping triples — links only, no concepts (${ext})`); return; }
+    const tr=xwCombinedTriples(false,xl);
+    xwDownload("thesaurus-"+slug(xwProjName(xwSourcePid))+"-"+slug(xwProjName(xwTargetPid))+"."+ext, xwSerialize(tr,f), mime);
+    toast(`Downloaded the full pair — both taxonomies + ${xwPairMapCount()} mappings${xl?", SKOS-XL labels":""} (${ext})`);
   };
-  if($('#xwExportThes')) $('#xwExportThes').onclick=()=>{
-    if(!xwTargetModel||!xwSourceModel)return;
-    const tr=xwCombinedTriples(false);
-    const {f,ext,mime}=xwFmtInfo();
-    xwDownload("thesaurus."+ext, xwSerialize(tr,f), mime);
-    toast(`Exported federated thesaurus (${ext})`);
+  if($('#xwSugDismiss')) $('#xwSugDismiss').onclick=()=>{ $('#xwSuggest').style.display="none"; xwSuggestions=[]; toast("Suggestions dismissed — nothing was added"); };
+  if($('#xwClearPair')) $('#xwClearPair').onclick=async()=>{
+    if(!xwSourceModel||!xwTargetModel) return;
+    const n=xwPairMapCount(); if(!n){ toast("No mappings between this pair"); return; }
+    if(!await askConfirm(`Remove all ${n} mappings between “${xwProjName(xwSourcePid)}” and “${xwProjName(xwTargetPid)}”? The concepts themselves are untouched.`,"Remove mappings")) return;
+    const MAPF=["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"];
+    for(const id of xwSourceModel.order){ const c=xwSourceModel.concepts[id];
+      for(const m of xwCrossMaps(c)) c[m.type]=(c[m.type]||[]).filter(u=>u!==m.uri); }
+    xwCommit(); xwRefresh(); xwUpdateExportUI(); toast(`Removed ${n} mappings`);
   };
-  if($('#xwExportAll')) $('#xwExportAll').onclick=()=>federationExport(($('#xwFmt')||{}).value||'ttl');
   if($('#xwSamples')) $('#xwSamples').onclick=async()=>{
     if(!await askConfirm("Add "+SAMPLE_TAXONOMIES.length+" sample SKOS taxonomies (Media types, Content formats, Subjects, Grocery aisles) as new projects? They have overlapping labels so you can crosswalk between them.","Add samples")) return;
     const prev=currentPid;
@@ -6143,9 +6227,11 @@ function graphBuild(){
       const projs=(typeof loadProjects==="function")?loadProjects():{}; const rix={};
       for(const pid in projs){ if(pid===currentPid) continue; const m=(projs[pid]||{}).model||{}; if(!m.base) continue;
         for(const cid in (m.concepts||{})) rix[m.base+cid]={label:xwPlabelOf(m,cid), proj:(projs[pid].name||pid)}; }
+      const own={}; for(const id of model.order){ const cu=model.concepts[id].uri; if(cu) own[cu]=id; }   // foreign-namespace concepts living in THIS project
       for(const id of model.order){ const c=model.concepts[id];
         for(const f of GMAPF)(c[f]||[]).forEach(u=>{ if(!u) return; let t;
           if(u.indexOf(model.base)===0&&model.concepts[u.slice(model.base.length)]){ t="c:"+u.slice(model.base.length); }
+          else if(own[u]){ t="c:"+own[u]; }
           else { const k="m:"+u, r=rix[u]; const n=add(k,"xc",r?r.label:String(u).split(/[#/]/).pop(),null,u); n.proj=r?r.proj:null; t=k; }
           if(t!=="c:"+id) edges.push({s:"c:"+id,t,rel:f}); }); }
     } }

@@ -8,6 +8,11 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Multi-namespace fidelity + a clear Crosswalk export (v0.15.0)
+- **Foreign URIs survive.** Importing a federated file (two or more taxonomies, several namespaces) no longer re-mints the other taxonomy's URIs under your base: concepts from another namespace keep their **original URIs** on export, their own scheme membership, and their own concept scheme (typed and titled) — verified byte-faithful across repeated round-trips, including local-name collisions across namespaces. This is the foundation for true federation work.
+- **One clear Export control on the Crosswalk tab.** The three scattered export buttons are replaced by a single row: a **scope picker** that says exactly what goes in the file with live counts — *Mappings only (N links)* · *This pair as one thesaurus (A + B)* · *Whole federation (K taxonomies)* — a format picker, a **SKOS-XL labels** option, and a plain-language summary sentence of the file's contents. Mappings-only is now strictly pair-scoped: it contains the links between the chosen pair, nothing else.
+- **Auto-match is dismissable and reversible.** The suggestions panel gains **✕ Dismiss** (close without adding anything), and the workspace gains **Remove all pair mappings…** (with confirmation) to undo a bad auto-match in one step. Download toasts state exactly what was written.
+
 ### Saved crosswalks — name a pairing, switch between them (v0.14.0)
 - The Crosswalk tab gains a **Saved crosswalks** row: save the current source ⇄ target pairing under a name, reopen it from the dropdown anytime, and remove it when done (the mappings themselves always stay on your concepts — a saved crosswalk is a view, not a copy). The last crosswalk you worked in restores automatically when you come back, and saved views whose taxonomies were deleted prune themselves.
 

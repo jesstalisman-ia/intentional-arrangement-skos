@@ -105,6 +105,12 @@ The **Crosswalk** tab aligns two taxonomies from your workspace using the five S
 
 Working across several pairings? **Save this crosswalk** stores the current source ⇄ target pairing under a name; the **Saved crosswalks** dropdown switches between them, and the last one you worked in restores automatically next time you open the tab. A saved crosswalk is a *view* — the mappings themselves always live on the source concepts, so removing a saved crosswalk never touches your data.
 
+**Exporting** is one control with three explicit scopes, each showing a live count and a plain-language summary of what the file will contain: **Mappings only** (just the `skos:*Match` links between this pair — nothing else), **This pair as one thesaurus** (both taxonomies in full plus their mappings), and **Whole federation** (every taxonomy in the workspace that takes part in any crosswalk). A **SKOS-XL labels** option emits `skosxl:Label` resources (plus plain labels for compatibility) in the pair and federation exports.
+
+Auto-match suggestions can be **dismissed** without adding anything, and **Remove all pair mappings…** undoes a whole alignment (with confirmation) if an auto-match went wrong.
+
+Federated files re-import faithfully: concepts from another namespace keep their **original URIs** and their own scheme membership through every import/export cycle — the editor never re-mints a foreign taxonomy's identity under your namespace.
+
 **Only have one taxonomy?** A crosswalk needs two — the empty state offers **Load sample taxonomies to try it**, which adds four small schemes (Media types, Content formats, Subjects, Grocery aisles) with deliberately overlapping labels so you can experiment immediately. When your workspace has exactly two taxonomies, the target is picked automatically.
 
 Mappings are stored on the **source** concepts, so they appear in every normal RDF export. From the crosswalk itself you can export just the mapping triples or the **federated thesaurus** — both concept schemes plus the mappings in one interoperable file — in **Turtle, RDF/XML, or JSON-LD** (format picker beside the export buttons). **Export federation (all)** goes further: one file containing *every* taxonomy in your workspace that participates in a crosswalk — however many schemes are networked by mappings — with all the mapping triples.
