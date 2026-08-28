@@ -126,6 +126,12 @@ All data stays in the visitor's browser, so hosting shares the tool and never an
 
 Rule of thumb: **Discussions** for how-to questions and half-formed ideas, **Issues** for concrete bugs and feature requests. Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that fits helps it rise.
 
+## Cloud workspace — paid tier in the works
+
+The editor you're using stays free and full-featured. We're gauging interest in a **low-cost paid tier** that adds the platform around it: **cloud storage and sync** (your vocabularies follow you to any machine), **a private graph database per account** (isolated, versioned, append-only history), an **AI taxonomy copilot** (propose-and-accept drafting with provenance, bring-your-own Anthropic key), **federated projects** (a crosswalk pair as one editable multi-namespace project), and a **guided workflow**. Standard RDF in and out everywhere — leaving is always one export away.
+
+**[Vote in the interest poll](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions/49)** or **join the waitlist**: email [Hello@ontologypipeline.com](mailto:Hello@ontologypipeline.com?subject=Cloud%20workspace%20waitlist) with subject "Cloud workspace waitlist" — waitlist members get the first beta invites, free during beta.
+
 ## License
 
 Intentional Arrangement SKOS Editor © 2026 Jessica Talisman, under a **size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
