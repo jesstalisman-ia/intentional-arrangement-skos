@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Saved crosswalks — name a pairing, switch between them (v0.14.0)
+- The Crosswalk tab gains a **Saved crosswalks** row: save the current source ⇄ target pairing under a name, reopen it from the dropdown anytime, and remove it when done (the mappings themselves always stay on your concepts — a saved crosswalk is a view, not a copy). The last crosswalk you worked in restores automatically when you come back, and saved views whose taxonomies were deleted prune themselves.
+
 ### Publication metadata on the concept scheme — license, version, vann (v0.13.0, #45 #46 #47)
 - The concept scheme's metadata panel gains **License** (`dcterms:license`, a URI — with the URI guard attached, so a lookalike or typo is caught) and **Version** (`owl:versionInfo`). Both export in every RDF serialization and read back on import, alongside the existing `dcterms:rights` text field (a rights *statement* and a license *URI* are complementary — the editor now carries both).
 - Exports now annotate the scheme with **`vann:preferredNamespacePrefix`** and **`vann:preferredNamespaceUri`**, derived automatically from the workspace's own namespace and prefix — no new fields to fill in; the editor already knew both.

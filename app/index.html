@@ -907,7 +907,12 @@
           <button class="btn sm" id="xwExportAll" title="One file with every taxonomy in your workspace that participates in a crosswalk — all schemes, all mappings">Export federation (all)</button>
           <button class="btn sm" id="xwAuto">Auto-match by label</button>
         </div>
-        <div class="xw-hint subtle"><b>v0.13.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-row">
+          <label class="subtle">Saved crosswalks <select id="xwViews"><option value="">Saved crosswalks…</option></select></label>
+          <button class="btn sm" id="xwSaveView" title="Save the current source ⇄ target pairing as a named crosswalk you can switch back to">💾 Save this crosswalk</button>
+          <button class="btn sm" id="xwDelView" title="Remove the selected saved crosswalk (the mappings themselves stay on your concepts)">✕ Remove</button>
+        </div>
+        <div class="xw-hint subtle"><b>v0.14.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -4306,15 +4311,45 @@ function xwCrossMaps(c){ // mappings on a source concept c that point into the t
   for(const t of XW_TYPES) for(const u of (c[t]||[])) if(u && u.startsWith(base)) out.push({type:t,uri:u,tid:u.slice(base.length),label:(xwTargetIdx.byId[u.slice(base.length)]||{}).label||u});
   return out;
 }
+// ---- saved crosswalks: named source⇄target pairings, switchable and persistent ----
+const XWVKEY="iaskos.crosswalks.v1";
+function loadXwViews(){ try{ return JSON.parse(localStorage.getItem(XWVKEY))||[]; }catch(e){ return []; } }
+function saveXwViews(v){ try{ localStorage.setItem(XWVKEY, JSON.stringify(v)); }catch(e){} }
+function renderXwViews(selId){ const el=$('#xwViews'); if(!el) return; const projs=loadProjects();
+  const vs=loadXwViews().filter(v=>projs[v.source]&&projs[v.target]);   // prune views whose projects are gone
+  saveXwViews(vs);
+  el.innerHTML='<option value="">Saved crosswalks…</option>'+vs.map(v=>`<option value="${v.id}" ${v.id===selId?"selected":""}>${escHtml(v.name)}</option>`).join("");
+}
+async function xwSaveCurrentView(){
+  if(!xwSourcePid||!xwTargetPid||xwSourcePid===xwTargetPid){ toast("Choose a source and a target taxonomy first"); return; }
+  const def=xwProjName(xwSourcePid)+" ⇄ "+xwProjName(xwTargetPid);
+  const name=await askPrompt("Name this crosswalk:", def, "Save"); if(name===null) return;
+  const vs=loadXwViews(); const id="xw"+nowTs().toString(36)+Math.random().toString(36).slice(2,5);
+  vs.push({id, name:(name.trim()||def), source:xwSourcePid, target:xwTargetPid, created:nowTs()});
+  saveXwViews(vs); try{ localStorage.setItem(XWVKEY+".last", id); }catch(e){}
+  renderXwViews(id); toast("Crosswalk saved — reopen it anytime from “Saved crosswalks”");
+}
+function xwApplyView(id){ const v=loadXwViews().find(x=>x.id===id); if(!v) return;
+  xwLoadSource(v.source); xwLoadTargetProj(v.target);
+  if($('#xwSource')) $('#xwSource').value=v.source; if($('#xwTarget')) $('#xwTarget').value=v.target;
+  try{ localStorage.setItem(XWVKEY+".last", id); }catch(e){}
+  xwVisSel=null; xwMaybeStart();
+}
 function renderCrosswalk(){
   const projs=loadProjects(); const ids=Object.keys(projs);
   const opts=()=>'<option value="">Choose a taxonomy…</option>'+ids.map(p=>`<option value="${p}">${escHtml(projs[p].name||p)} (${Object.keys(projs[p].model.concepts||{}).length})</option>`).join("");
   const ss=$('#xwSource'), ts=$('#xwTarget'); ss.innerHTML=opts(); ts.innerHTML=opts();
   if(!xwSourcePid && projs[currentPid]) xwLoadSource(currentPid);       // default source = current project
+  // restore the last active saved crosswalk (if its projects still exist)
+  let lastId=null;
+  if(!xwTargetPid){ try{ lastId=localStorage.getItem(XWVKEY+".last"); }catch(e){}
+    const v=lastId&&loadXwViews().find(x=>x.id===lastId);
+    if(v&&projs[v.source]&&projs[v.target]){ xwLoadSource(v.source); xwLoadTargetProj(v.target); } else lastId=null; }
   if(xwSourcePid && projs[xwSourcePid]) ss.value=xwSourcePid;
   if(xwTargetPid && projs[xwTargetPid]) ts.value=xwTargetPid;
   // exactly two taxonomies and no target chosen: pick the other one automatically
   if(!xwTargetPid && xwSourcePid && ids.length===2){ const other=ids.find(pp=>pp!==xwSourcePid); if(other){ ts.value=other; xwLoadTargetProj(other); } }
+  renderXwViews(lastId);
   xwMaybeStart();
 }
 function xwMaybeStart(){
@@ -4495,8 +4530,14 @@ function federationExport(fmt){
   toast(`Exported ${participating.size} crosswalked taxonomies (${names.join(", ")})`);
 }
 if($('#xwTarget')){
-  if($('#xwSource')) $('#xwSource').onchange=()=>{ const p=$('#xwSource').value; if(p) xwLoadSource(p); else { xwSourceModel=null; xwSourcePid=null; } xwVisSel=null; xwMaybeStart(); };
-  if($('#xwTarget')) $('#xwTarget').onchange=()=>{ const p=$('#xwTarget').value; if(p) xwLoadTargetProj(p); else { xwTargetModel=null; xwTargetPid=null; } xwVisSel=null; xwMaybeStart(); };
+  if($('#xwSource')) $('#xwSource').onchange=()=>{ const p=$('#xwSource').value; if(p) xwLoadSource(p); else { xwSourceModel=null; xwSourcePid=null; } if($('#xwViews')) $('#xwViews').value=""; xwVisSel=null; xwMaybeStart(); };
+  if($('#xwTarget')) $('#xwTarget').onchange=()=>{ const p=$('#xwTarget').value; if(p) xwLoadTargetProj(p); else { xwTargetModel=null; xwTargetPid=null; } if($('#xwViews')) $('#xwViews').value=""; xwVisSel=null; xwMaybeStart(); };
+  if($('#xwViews')) $('#xwViews').onchange=()=>{ const id=$('#xwViews').value; if(id) xwApplyView(id); };
+  if($('#xwSaveView')) $('#xwSaveView').onclick=xwSaveCurrentView;
+  if($('#xwDelView')) $('#xwDelView').onclick=()=>{ const id=$('#xwViews').value; if(!id){ toast("Pick a saved crosswalk to remove"); return; }
+    const vs=loadXwViews().filter(v=>v.id!==id); saveXwViews(vs);
+    try{ if(localStorage.getItem(XWVKEY+".last")===id) localStorage.removeItem(XWVKEY+".last"); }catch(e){}
+    renderXwViews(); toast("Saved crosswalk removed — the mappings themselves stay on your concepts"); };
   if($('#xwAuto')) $('#xwAuto').onclick=xwAutoMatch;
   if($('#xwSugAll')) $('#xwSugAll').onclick=()=>$('#xwSuggestList').querySelectorAll('.xw-sc').forEach(c=>c.checked=true);
   if($('#xwSugNone')) $('#xwSugNone').onclick=()=>$('#xwSuggestList').querySelectorAll('.xw-sc').forEach(c=>c.checked=false);
