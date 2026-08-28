@@ -386,10 +386,10 @@
         <div class="isb-h">Attribution — link an agent</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12.5px">
           <label style="display:inline-flex;align-items:center;gap:5px">Creator <select id="creatorAgentSel"></select></label>
-          <label style="display:inline-flex;align-items:center;gap:5px">Contributor <select id="contributorAgentSel"></select></label>
+          <label style="display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap">Contributors <span id="contribChips" style="display:inline-flex;gap:4px;flex-wrap:wrap"></span> <select id="contributorAgentSel"></select></label>
           <label style="display:inline-flex;align-items:center;gap:5px">Publisher <select id="publisherAgentSel"></select></label>
         </div>
-        <div class="subtle" style="font-size:11.5px;margin-top:4px">Point creator/contributor/publisher at an agent defined in the <b>Sources</b> tab (<code>prov:Agent</code>). An agent reference overrides the plain-text field on export.</div>
+        <div class="subtle" style="font-size:11.5px;margin-top:4px">Point creator/contributors/publisher at agents defined in the <b>Sources</b> tab (<code>prov:Agent</code>). Contributors repeat — one <code>dcterms:contributor</code> triple per agent, per DCMI practice. An agent reference overrides the plain-text field on export.</div>
       </div>
     </div>
     <div class="scheme-grid" id="schemeGrid"></div>
@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.15.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1567,7 +1567,8 @@ function buildTriples(model, opts){
     else if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
     if (model.scheme.publisherAgent && _ag[model.scheme.publisherAgent]) add(s, dct("publisher"), iri(_resUri(_ag[model.scheme.publisherAgent], model.scheme.publisherAgent)));
     else if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
-    if (model.scheme.contributorAgent && _ag[model.scheme.contributorAgent]) add(s, dct("contributor"), iri(_resUri(_ag[model.scheme.contributorAgent], model.scheme.contributorAgent)));
+    { const _cl = Array.isArray(model.scheme.contributorAgents) ? model.scheme.contributorAgents : (model.scheme.contributorAgent ? [model.scheme.contributorAgent] : []);
+      _cl.forEach(aid => { if (_ag[aid]) add(s, dct("contributor"), iri(_resUri(_ag[aid], aid))); }); }
     if (model.scheme.created) add(s, dct("created"), lit(model.scheme.created, "", NS.xsd + "date"));
     if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
     if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
@@ -2749,7 +2750,7 @@ function triplesToModel(triples, prefixes){
       else if (pv === D + "description") model.scheme.description = o.v;
       else if (pv === D + "creator"){ if (o.t === "iri") model.scheme.creatorAgent = localOf(o.v); else model.scheme.creator = o.v; }
       else if (pv === D + "publisher"){ if (o.t === "iri") model.scheme.publisherAgent = localOf(o.v); else model.scheme.publisher = o.v; }
-      else if (pv === D + "contributor" && o.t === "iri") model.scheme.contributorAgent = localOf(o.v);
+      else if (pv === D + "contributor" && o.t === "iri"){ (model.scheme.contributorAgents = model.scheme.contributorAgents || []).push(localOf(o.v)); }   // repeatable — collect ALL contributors (was last-wins)
       else if (pv === D + "created") model.scheme.created = o.v;
       else if (pv === D + "issued") model.scheme.issued = o.v;
       else if (pv === D + "modified") model.scheme.modified = o.v;
@@ -4087,10 +4088,24 @@ function renderScheme(){
   const ls=model.xlLabels?"xl":"plain";
   $$('#labelStyle input').forEach(r=>{ r.checked=r.value===ls; r.onchange=()=>{ if(r.checked){ setLabelStyle(r.value); } }; });
   const iso=$('#isoThesToggle'); if(iso){ iso.checked=!!model.isothes; iso.onchange=()=>{ model.isothes=iso.checked; save(); if(selected) renderEditor(); }; }
-  // attribution: agent pickers for creator / contributor / publisher
+  // attribution: creator/publisher are single; contributors repeat (#50 — DCMI
+  // practice is one dcterms:contributor triple per agent)
   const _ags=provAgents(); const _agOpts='<option value="">— none —</option>'+Object.keys(_ags).map(id=>`<option value="${id}">${escapeHtml(agentName(_ags[id]))}</option>`).join("");
-  [["creatorAgentSel","creatorAgent"],["contributorAgentSel","contributorAgent"],["publisherAgentSel","publisherAgent"]].forEach(([selId,field])=>{ const sel=$('#'+selId); if(!sel) return; sel.innerHTML=_agOpts; sel.value=model.scheme[field]||""; sel.onchange=()=>{ model.scheme[field]=sel.value; save(); }; });
+  [["creatorAgentSel","creatorAgent"],["publisherAgentSel","publisherAgent"]].forEach(([selId,field])=>{ const sel=$('#'+selId); if(!sel) return; sel.innerHTML=_agOpts; sel.value=model.scheme[field]||""; sel.onchange=()=>{ model.scheme[field]=sel.value; save(); }; });
+  renderContribPicker();
   updateXlUi();
+}
+// contributors as a list, migrating the pre-v0.16 single field on first touch
+function contribAgents(){ const sc=model.scheme;
+  if(!Array.isArray(sc.contributorAgents)) sc.contributorAgents = sc.contributorAgent ? [sc.contributorAgent] : [];
+  if(sc.contributorAgent!==undefined) delete sc.contributorAgent;
+  return sc.contributorAgents; }
+function renderContribPicker(){ const chips=$('#contribChips'), sel=$('#contributorAgentSel'); if(!chips||!sel) return;
+  const _ags=provAgents(); const list=contribAgents().filter(id=>_ags[id]); model.scheme.contributorAgents=list;
+  chips.innerHTML=list.map(id=>`<span class="chip" style="font-size:11.5px;padding:1px 4px 1px 8px">${escapeHtml(agentName(_ags[id]))}<button data-rm="${escAttr(id)}" title="Remove contributor" style="border:none;background:none;cursor:pointer;color:var(--faint);font-size:11px">✕</button></span>`).join("");
+  chips.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ model.scheme.contributorAgents=contribAgents().filter(x=>x!==b.dataset.rm); save(); renderContribPicker(); });
+  sel.innerHTML='<option value="">＋ add…</option>'+Object.keys(_ags).filter(id=>!list.includes(id)).map(id=>`<option value="${id}">${escapeHtml(agentName(_ags[id]))}</option>`).join("");
+  sel.onchange=()=>{ if(sel.value){ contribAgents().push(sel.value); save(); renderContribPicker(); } };
 }
 function setLabelStyle(v){
   model.xlLabels=(v==="xl"); if(model.xlLabels) ensureXlUris(); save(); updateXlUi(); renderEditor();
@@ -5209,7 +5224,9 @@ function newAgentId(){ let n=1,id; do{ id="agent"+n++; }while(localNameTaken(id)
 function agentName(a){ return (a&&a.name)||(a&&a.id)||"(unnamed agent)"; }
 function createAgent(){ const a=provAgents(); const id=newAgentId(); a[id]={id,kind:"person",name:"",homepage:""}; save(); renderSources(); }
 function deleteAgent(id){ if(!confirm("Delete this agent?")) return; delete provAgents()[id];
-  const sc=model.scheme||{}; ["creatorAgent","contributorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===id) sc[k]=""; });
+  const sc=model.scheme||{}; ["creatorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===id) sc[k]=""; });
+  if(Array.isArray(sc.contributorAgents)) sc.contributorAgents=sc.contributorAgents.filter(x=>x!==id);
+  if(sc.contributorAgent===id) sc.contributorAgent="";
   save(); renderSources(); if(typeof renderScheme==="function") renderScheme(); }
 function renderAgentsSection(body){
   const ah=document.createElement("div"); ah.style.cssText="display:flex;align-items:center;gap:10px;margin:18px 0 8px;border-top:1px solid var(--border-soft);padding-top:14px";
@@ -5253,7 +5270,9 @@ function renameDocument(old,nid){ const dl=docs(); if(!nid||old===nid||!dl[old]|
   save(); return nid; }
 function renameAgent(old,nid){ const al=provAgents(); if(!nid||old===nid||!al[old]||localNameTaken(nid)) return old;
   al[nid]=al[old]; al[nid].id=nid; delete al[old];
-  const sc=model.scheme||{}; ["creatorAgent","contributorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===old) sc[k]=nid; });
+  const sc=model.scheme||{}; ["creatorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===old) sc[k]=nid; });
+  if(Array.isArray(sc.contributorAgents)) sc.contributorAgents=sc.contributorAgents.map(x=>x===old?nid:x);
+  if(sc.contributorAgent===old) sc.contributorAgent=nid;
   save(); return nid; }
 // ---------- URI input guard (#39): parse check, CURIE expansion, lookalike hint ----------
 // Everything stays offline — syntactic checks only, no network.
@@ -6213,8 +6232,10 @@ function graphBuild(){
     if(showS){
       add("s:scheme","scheme",model.scheme.title||"Concept scheme",null,model.scheme.uri||model.base);
       for(const id of model.order){ const c=model.concepts[id]; if(c.top||!(c.broader||[]).some(b=>model.concepts[b])) edges.push({s:"s:scheme",t:"c:"+id,rel:"hasTopConcept"}); }
-      if(showSrc) [["creatorAgent","dcterms:creator"],["contributorAgent","dcterms:contributor"],["publisherAgent","dcterms:publisher"]].forEach(([f,lbl])=>{
+      if(showSrc){ [["creatorAgent","dcterms:creator"],["publisherAgent","dcterms:publisher"]].forEach(([f,lbl])=>{
         const aid=model.scheme[f]; if(aid&&model.agents&&model.agents[aid]){ const k="ag:"+aid; add(k,"agent",model.agents[aid].name||aid,aid); edges.push({s:"s:scheme",t:k,rel:"attrib",label:lbl}); } });
+        const _cl=Array.isArray(model.scheme.contributorAgents)?model.scheme.contributorAgents:(model.scheme.contributorAgent?[model.scheme.contributorAgent]:[]);
+        _cl.forEach(aid=>{ if(model.agents&&model.agents[aid]){ const k="ag:"+aid; add(k,"agent",model.agents[aid].name||aid,aid); edges.push({s:"s:scheme",t:k,rel:"attrib",label:"dcterms:contributor"}); } }); }
     }
     // sources: foaf:Document records cited via dct:source
     if(showSrc){
@@ -6330,7 +6351,7 @@ function graphInspector(){
   const mrow=(k,v)=>v?`<b>${escapeHtml(k)}</b> ${escapeHtml(String(v))}<br>`:"";
   if(n.kind==="scheme"){ const sc=model.scheme;
     h+=`<div class="gi-meta"><b>${escapeHtml(sc.title||"Untitled scheme")}</b><br>${escapeHtml(sc.uri||model.base)}</div>`;
-    h+=`<div class="gi-meta">${mrow("Creator",sc.creator||(sc.creatorAgent&&model.agents&&model.agents[sc.creatorAgent]?model.agents[sc.creatorAgent].name:""))}${mrow("Publisher",sc.publisher||(sc.publisherAgent&&model.agents&&model.agents[sc.publisherAgent]?model.agents[sc.publisherAgent].name:""))}${mrow("Created",sc.created)}${mrow("Published",sc.issued)}${mrow("Modified",sc.modified)}${mrow("Language",sc.lang)}${mrow("Rights",sc.rights)}${mrow("License",sc.license)}${mrow("Version",sc.version)}</div>`;
+    h+=`<div class="gi-meta">${mrow("Creator",sc.creator||(sc.creatorAgent&&model.agents&&model.agents[sc.creatorAgent]?model.agents[sc.creatorAgent].name:""))}${mrow("Publisher",sc.publisher||(sc.publisherAgent&&model.agents&&model.agents[sc.publisherAgent]?model.agents[sc.publisherAgent].name:""))}${mrow("Contributors",(Array.isArray(sc.contributorAgents)?sc.contributorAgents:[]).filter(a=>model.agents&&model.agents[a]).map(a=>model.agents[a].name||a).join(", "))}${mrow("Created",sc.created)}${mrow("Published",sc.issued)}${mrow("Modified",sc.modified)}${mrow("Language",sc.lang)}${mrow("Rights",sc.rights)}${mrow("License",sc.license)}${mrow("Version",sc.version)}</div>`;
     if(sc.description) h+=`<div class="gi-meta">${escapeHtml(sc.description.slice(0,160))}${sc.description.length>160?"…":""}</div>`;
     h+=`<div class="gi-acts"><button class="btn sm" id="giGoScheme">Edit in Build tab</button></div>`; ins.innerHTML=h;
     const b=$('#giGoScheme'); if(b) b.onclick=()=>{ switchTab("build"); const d=document.querySelector('details.scheme'); if(d) d.open=true; }; return; }

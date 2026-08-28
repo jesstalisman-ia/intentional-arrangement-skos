@@ -8,6 +8,10 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Multiple contributors (v0.16.0, #50)
+- Scheme attribution now takes **any number of contributors**: a chip-style picker replaces the single Contributor dropdown, and the export emits one `dcterms:contributor` triple per agent — DCMI practice, no workaround vocabulary needed (Dublin Core properties repeat freely in RDF). Identity URIs are honored, so a contributor with an ORCID exports as `dcterms:contributor <https://orcid.org/…>`. Creator and Publisher stay single-valued by convention.
+- The importer now collects **all** `dcterms:contributor` statements instead of keeping only the last one — a silent lossless-round-trip gap this ticket surfaced. Existing projects migrate their single contributor automatically; agent renames and deletions cascade through the list; the graph draws one attribution edge per contributor.
+
 ### Multi-namespace fidelity + a clear Crosswalk export (v0.15.0)
 - **Foreign URIs survive.** Importing a federated file (two or more taxonomies, several namespaces) no longer re-mints the other taxonomy's URIs under your base: concepts from another namespace keep their **original URIs** on export, their own scheme membership, and their own concept scheme (typed and titled) — verified byte-faithful across repeated round-trips, including local-name collisions across namespaces. This is the foundation for true federation work.
 - **One clear Export control on the Crosswalk tab.** The three scattered export buttons are replaced by a single row: a **scope picker** that says exactly what goes in the file with live counts — *Mappings only (N links)* · *This pair as one thesaurus (A + B)* · *Whole federation (K taxonomies)* — a format picker, a **SKOS-XL labels** option, and a plain-language summary sentence of the file's contents. Mappings-only is now strictly pair-scoped: it contains the links between the chosen pair, nothing else.
