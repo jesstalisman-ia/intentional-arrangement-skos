@@ -134,7 +134,7 @@ The editor you're using stays free and full-featured. We're gauging interest in 
 
 ## License
 
-Intentional Arrangement SKOS Editor © 2026 Jessica Talisman, under a **size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
+Intentional Arrangement SKOS Editor © 2026 Contextually LLC (d/b/a Ontology Pipeline), under a **size-based source-available license** (see [LICENSE](LICENSE) and [NOTICE](NOTICE)):
 
 - **Organizations with fewer than 75 total employees** may use, modify, and redistribute it for free under the **Apache License 2.0**, as modified by the Size-Based Licensing Notice.
 - **Organizations with 75 or more total employees** must obtain a **written enterprise license** from the Licensor (Hello@ontologypipeline.com) before any use.

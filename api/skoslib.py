@@ -1,4 +1,4 @@
-# Intentional Arrangement SKOS Editor © 2026 Jessica Talisman
+# Intentional Arrangement SKOS Editor © 2026 Contextually LLC (d/b/a Ontology Pipeline)
 # Size-based source-available license: Apache License 2.0 for organizations under 75
 # employees; a written enterprise license is required at 75+ (Hello@ontologypipeline.com).
 # Not an OSI-approved open-source license. See LICENSE / NOTICE.

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <!--
-  Intentional Arrangement SKOS Editor © 2026 Jessica Talisman
+  Intentional Arrangement SKOS Editor © 2026 Contextually LLC (d/b/a Ontology Pipeline)
   Size-based source-available license: Apache License 2.0 for organizations under
   75 employees; a written enterprise license is required at 75+ employees
   (Hello@ontologypipeline.com). Not an OSI-approved open-source license. See LICENSE.
@@ -1350,7 +1350,7 @@
 </div>
 <div class="toast" id="toast"></div>
 <footer class="app-license" style="text-align:center;font-size:12px;line-height:1.55;color:var(--faint,#8a929c);padding:18px 16px 28px;margin-top:10px;border-top:1px solid var(--line,#e7eaee)">
-  Intentional Arrangement SKOS Editor © 2026 Jessica Talisman ·
+  Intentional Arrangement SKOS Editor © 2026 Contextually LLC (d/b/a Ontology Pipeline) ·
   <a href="LICENSE" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">size-based license</a>
   (free under Apache&nbsp;2.0 for orgs under 75 employees; enterprise license at 75+).
   Taxonomies you create are your own.
@@ -3351,7 +3351,7 @@ function doUndo(){ if(!undoStack.length){ toast("Nothing to undo"); return; } co
 document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&(e.key==="z"||e.key==="Z")&&!e.shiftKey){ const t=e.target; if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return; e.preventDefault(); doUndo(); } });
 
 // ---------- model ----------
-const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 Jessica Talisman is offered under a size-based source-available license: Apache License 2.0 for organizations under 75 employees; a written enterprise license is required at 75 or more employees (Hello@ontologypipeline.com). Not an OSI-approved open-source license.";
+const LICENSE_NOTICE = "Intentional Arrangement SKOS Editor © 2026 Contextually LLC (d/b/a Ontology Pipeline) is offered under a size-based source-available license: Apache License 2.0 for organizations under 75 employees; a written enterprise license is required at 75 or more employees (Hello@ontologypipeline.com). Not an OSI-approved open-source license.";
 function newModel(){
   return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
     scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"", created:todayISO(), issued:"", modified:"", rights:"", license:"", version:"", lang:"en" },
@@ -7078,7 +7078,7 @@ function buildNavContents(){
      `<a class="nav-item" href="${REPO_URL}/discussions/49" target="_blank" rel="noopener">☁ Cloud workspace (paid tier) — vote / waitlist <span class="rt">↗</span></a>`+
      '</div><div class="nav-sec"><div class="nav-h">About</div>'+
      `<a class="nav-item" href="${REPO_URL}/blob/main/LICENSE" target="_blank" rel="noopener">License — size-based (Apache 2.0 &lt;75 staff) <span class="rt">↗</span></a>`+
-     '<div style="padding:2px 10px 4px;font-size:11.5px;color:var(--faint,#9099a3);line-height:1.5">© 2026 by Jessica Talisman</div>'+
+     '<div style="padding:2px 10px 4px;font-size:11.5px;color:var(--faint,#9099a3);line-height:1.5">© 2026 Contextually LLC (d/b/a Ontology Pipeline)</div>'+
      '</div>';
   m.innerHTML=h;
   m.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>{ switchTab(el.getAttribute('data-go')); closeNav(); });
