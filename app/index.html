@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.2</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.3</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -2179,8 +2179,9 @@ function toMarkdown(model){
   const NSP={"http://dbpedia.org/resource/":"dbr:","http://dbpedia.org/page/":"dbr:","http://www.wikidata.org/entity/":"wd:","http://www.wikidata.org/wiki/":"wd:","http://vocab.getty.edu/aat/":"aat:","http://vocab.getty.edu/tgn/":"tgn:","http://vocab.getty.edu/ulan/":"ulan:","http://id.loc.gov/authorities/subjects/":"lcsh:","http://www.w3.org/2004/02/skos/core#":"skos:"};
   const shortUri = u => { for(const k in NSP) if(u.startsWith(k)) return NSP[k]+u.slice(k.length); const seg=String(u).split(/[#/]/).filter(Boolean).pop(); return seg||u; };
   const extLink = u => `[${shortUri(u)}](${u})`;
-  const childrenOf = id => ids.filter(x=>((model.concepts[x]||{}).broader||[]).includes(id));
-  const roots = ids.filter(id=>{ const c=model.concepts[id]; return c && (c.top || !(c.broader||[]).some(b=>model.concepts[b])); });
+  const _hp = c => (c.broader||[]).concat(c.broaderGeneric||[], c.broaderPartitive||[], c.broaderInstantial||[]);
+  const childrenOf = id => ids.filter(x=>_hp(model.concepts[x]||{}).includes(id));
+  const roots = ids.filter(id=>{ const c=model.concepts[id]; return c && (c.top || !_hp(c).some(b=>model.concepts[b])); });
 
   const s=model.scheme||{};
   let out = `# ${s.title||"Taxonomy"}\n\n`;
@@ -2372,9 +2373,11 @@ function validate(model){
     if (!hasDoc) push("info", "undocumented", "Undocumented concept",
       `No skos:definition or skos:scopeNote.`, id);
 
-    // 7 orphan (no broader/narrower/related and not top)
-    const hasNarrower = ids.some(x => (C[x].broader || []).includes(id));
-    const isOrphan = (c.broader || []).length === 0 && (c.related || []).length === 0 && !hasNarrower && !c.top;
+    // 7 orphan (no hierarchical — plain or ISO 25964 — or associative relations, and not top)
+    const _HIER = ["broader"].concat(ISO_BROADER);
+    const hasNarrower = ids.some(x => _HIER.some(f => (C[x][f] || []).includes(id)));
+    const hasBroaderAny = _HIER.some(f => (c[f] || []).length > 0);
+    const isOrphan = !hasBroaderAny && (c.related || []).length === 0 && !hasNarrower && !c.top;
     if (isOrphan) push("warning", "orphan", "Orphan concept",
       `No hierarchical or associative relations and not a top concept — it is disconnected.`, id);
 
@@ -2430,8 +2433,14 @@ function validate(model){
 
   // 12 disconnected components (weakly connected over broader/narrower/related)
   const comps = components(model);
-  if (comps.length > 1) push("info", "components", "Disconnected components",
-    `The vocabulary has ${comps.length} disconnected concept clusters (sizes: ${comps.map(c => c.length).sort((a,b)=>b-a).join(", ")}).`, comps.sort((a,b)=>b.length-a.length)[1]?.[0]);
+  if (comps.length > 1){
+    const lbl = id => { const c = model.concepts[id]; const p = c && (c.pref || []).find(l => l.val); return p ? p.val : id; };
+    const sorted = comps.slice().sort((a,b)=>b.length-a.length);
+    const named = sorted.slice(0,5).map(c => `${c.length} concept${c.length===1?"":"s"} around “${lbl(c[0])}”`);
+    const rest = sorted.length > 5 ? ` and ${sorted.length-5} smaller cluster${sorted.length-5===1?"":"s"}` : "";
+    push("info", "components", "Disconnected components",
+      `Concepts form ${comps.length} separate islands with no broader/narrower/related path between them (counting ISO 25964 relations): ${named.join("; ")}${rest}. One connected vocabulary is usually the goal — islands of size 1 are unlinked concepts. Informational, not an error.`, sorted[1]?.[0]);
+  }
 
   // 14 valueless associative relation (related pair sharing a direct parent)
   for (const id of ids) for (const r of (C[id].related || [])){
@@ -2485,8 +2494,9 @@ function ancestorsMap(model){
 function components(model){
   const C = model.concepts, ids = Object.keys(C), adj = {};
   for (const id of ids) adj[id] = new Set();
+  const HIER = ["broader"].concat(ISO_BROADER);   // ISO 25964 relations are hierarchy too (#52)
   for (const id of ids){
-    for (const p of (C[id].broader || [])) if (C[p]){ adj[id].add(p); adj[p].add(id); }
+    for (const f of HIER) for (const p of (C[id][f] || [])) if (C[p]){ adj[id].add(p); adj[p].add(id); }
     for (const r of (C[id].related || [])) if (C[r]){ adj[id].add(r); adj[r].add(id); }
   }
   const seen = new Set(), comps = [];
@@ -3503,7 +3513,7 @@ function addConcept(parentId){
 }
 async function deleteConcept(id){
   const c=model.concepts[id]; if(!c) return;
-  const kids = model.order.filter(x=>(model.concepts[x].broader||[]).includes(id));
+  const kids = model.order.filter(x=>hierParents(model.concepts[x]).includes(id));
   const nm = label(id)||id;
   const msg = kids.length? `Delete “${nm}” and detach ${kids.length} child concept(s)? The children are kept but lose this parent.` : `Delete “${nm}”?`;
   if(!await askConfirm(msg,"Delete")) return;
@@ -3595,14 +3605,17 @@ function initTreeOpts(){
   lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); reflow(); if(selected)renderEditor(); };
   sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); reflow(); };
   const ex=$('#tvExpand'), co=$('#tvCollapse');
-  if(ex) ex.onclick=()=>{ for(const x of model.order)(model.concepts[x].broader||[]).forEach(b=>{ if(model.concepts[b]) openIds.add(b); }); renderTree(); };
+  if(ex) ex.onclick=()=>{ for(const x of model.order)hierParents(model.concepts[x]).forEach(b=>{ if(model.concepts[b]) openIds.add(b); }); renderTree(); };
   if(co) co.onclick=()=>{ openIds.clear(); renderTree(); };
 }
 
 // ---------- tree ----------
 const openIds = new Set();
-function childrenOf(id){ return model.order.filter(x=>(model.concepts[x].broader||[]).includes(id)); }
-function roots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top || !(c.broader||[]).some(b=>model.concepts[b]); }); }
+// hierarchy = plain skos:broader PLUS the ISO 25964 specialisations (#52) — a
+// concept whose only parent link is broaderGeneric still sits under that parent
+function hierParents(c){ return (c.broader||[]).concat(c.broaderGeneric||[],c.broaderPartitive||[],c.broaderInstantial||[]); }
+function childrenOf(id){ return model.order.filter(x=>hierParents(model.concepts[x]).includes(id)); }
+function roots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top || !hierParents(c).some(b=>model.concepts[b]); }); }
 function descCount(id, seen){ seen=seen||new Set(); let n=0; for(const k of childrenOf(id)){ if(seen.has(k))continue; seen.add(k); n+=1+descCount(k,seen); } return n; }
 
 let treeFilter="";
@@ -5399,8 +5412,8 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     } else {
       // unordered: arrange concept members by their own broader/narrower — among the members only
       const memberSet=new Set(concepts.filter(m=>model.concepts[m]));
-      const childrenInSet=pid=>[...memberSet].filter(x=>(model.concepts[x].broader||[]).includes(pid));
-      const hasParentInSet=cid=>(model.concepts[cid].broader||[]).some(b=>memberSet.has(b));
+      const childrenInSet=pid=>[...memberSet].filter(x=>hierParents(model.concepts[x]).includes(pid));
+      const hasParentInSet=cid=>hierParents(model.concepts[cid]).some(b=>memberSet.has(b));
       const roots=[...memberSet].filter(cid=>!hasParentInSet(cid));
       const seen=new Set();
       const walk=(cid,d)=>{ if(seen.has(cid)) return; seen.add(cid); conceptLeaf(cid,d); for(const ch of sortIds(childrenInSet(cid))) walk(ch,d+1); };
@@ -5463,8 +5476,8 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
 if(document.getElementById('collNew')) document.getElementById('collNew').onclick=()=>createCollection(false);
 if(document.getElementById('collNewOrdered')) document.getElementById('collNewOrdered').onclick=()=>createCollection(true);
 if(document.getElementById('collSearch')) document.getElementById('collSearch').oninput=(e)=>{ collFilter=(e.target.value||"").trim().toLowerCase(); renderCollections(); };
-function browseChildren(id){ return model.order.filter(x=>(model.concepts[x].broader||[]).includes(id)); }
-function browseRoots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top||!(c.broader||[]).some(b=>model.concepts[b]); }); }
+function browseChildren(id){ return model.order.filter(x=>hierParents(model.concepts[x]).includes(id)); }
+function browseRoots(){ return model.order.filter(x=>{ const c=model.concepts[x]; return c.top||!hierParents(c).some(b=>model.concepts[b]); }); }
 function bdesc(id,seen){ seen=seen||new Set(); let n=0; for(const k of browseChildren(id)){ if(seen.has(k))continue; seen.add(k); n+=1+bdesc(k,seen);} return n; }
 function renderBrowse(){
   const host=$('#browseTree'); if(!host) return; host.innerHTML="";
@@ -5503,7 +5516,7 @@ function browseNode(id,path){
   return node;
 }
 function selectBrowse(id){ browseSel=id; if(model.concepts[id]){ let cur=[id],seen=new Set(); while(cur.length){const u=cur.pop(); for(const p of (model.concepts[u].broader||[])) if(model.concepts[p]&&!seen.has(p)){seen.add(p);browseOpen.add(p);cur.push(p);} } } renderBrowse(); renderBrowseDetail(id); }
-function browsePath(id){ const path=[id]; let cur=id, guard=0; while((model.concepts[cur].broader||[]).some(b=>model.concepts[b])){ cur=(model.concepts[cur].broader||[]).find(b=>model.concepts[b]); path.unshift(cur); if(++guard>100)break; } return path; }
+function browsePath(id){ const path=[id]; let cur=id, guard=0; while(hierParents(model.concepts[cur]).some(b=>model.concepts[b])){ cur=hierParents(model.concepts[cur]).find(b=>model.concepts[b]); path.unshift(cur); if(++guard>100)break; } return path; }
 function renderBrowseDetail(id){
   const c=model.concepts[id]; const host=$('#browseDetail');
   if(!c){ host.innerHTML='<div class="edit-empty">Select a term.</div>'; return; }
@@ -6233,7 +6246,7 @@ const G={ nodes:[], edges:[], byKey:{}, sel:null, mode:"select", from:null, alph
   t:{k:1,x:0,y:0}, W:1000, H:640, opened:false };
 
 // ---- derive the graph from the shared model ----
-function gDescCount(id,seen){ seen=seen||new Set(); let n=0; for(const k of model.order){ if((model.concepts[k].broader||[]).includes(id)&&!seen.has(k)){ seen.add(k); n+=1+gDescCount(k,seen);} } return n; }
+function gDescCount(id,seen){ seen=seen||new Set(); let n=0; for(const k of model.order){ if(hierParents(model.concepts[k]).includes(id)&&!seen.has(k)){ seen.add(k); n+=1+gDescCount(k,seen);} } return n; }
 function graphBuild(){
   const showC=$('#gShowConcepts').checked, showK=$('#gShowClasses').checked, showP=$('#gShowProps').checked, showX=$('#gShowExternal').checked;
   const showS=$('#gShowScheme')&&$('#gShowScheme').checked, showSrc=$('#gShowSources')&&$('#gShowSources').checked, showXw=$('#gShowXwalk')&&$('#gShowXwalk').checked;
@@ -7111,9 +7124,10 @@ function buildNavContents(){
      '<button class="nav-item" data-act="backup">Download workspace backup</button>'+
      '<button class="nav-item" data-act="restore">Restore a backup…</button>'+
      '<div style="padding:2px 10px 4px;font-size:11px;color:var(--faint,#9099a3);line-height:1.45">Taxonomies live only in this browser — back up before browser updates, and keep the editor to one tab.</div>'+
-     '</div><div class="nav-sec"><div class="nav-h">Help</div>'+
+     '</div><div class="nav-sec"><div class="nav-h">'+
+     `<a href="${REPO_URL}/blob/main/docs/README.md" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">Help ↗</a></div>`+
      '<button class="nav-item" data-act="tour">Take a quick tour</button>'+
-     `<a class="nav-item" href="${REPO_URL}/tree/main/docs" target="_blank" rel="noopener">Documentation <span class="rt">↗</span></a>`+
+     `<a class="nav-item" href="${REPO_URL}/blob/main/docs/README.md" target="_blank" rel="noopener">Documentation hub <span class="rt">↗</span></a>`+
      '</div><div class="nav-sec"><div class="nav-h">Feedback</div>'+
      `<a class="nav-item" href="${REPO_URL}/issues/new?template=feature_request.yml" target="_blank" rel="noopener">Request a feature <span class="rt">↗</span></a>`+
      `<a class="nav-item" href="${REPO_URL}/issues/new?template=bug_report.yml" target="_blank" rel="noopener">Report a bug <span class="rt">↗</span></a>`+

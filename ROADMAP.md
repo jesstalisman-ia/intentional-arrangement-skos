@@ -8,6 +8,11 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: ISO 25964 relations now count as hierarchy everywhere (v0.16.3, #52 #53)
+- The disconnected-components and orphan checks, the concept tree, Expand all, the Business view, collections arrangement, and the import health check all treated **only plain `skos:broader`** as hierarchy — a vocabulary linked through `iso-thes:broaderGeneric` (exactly what v0.16.1's dedup encourages) falsely validated as dozens of disconnected islands and rendered flat. All of them now count the ISO 25964 specialisations (generic, partitive, instantial) as hierarchy.
+- The **Disconnected components** message is now readable (#52): it names the largest clusters by a representative concept ("61 concepts around 'Event'; …"), explains what an island is, and says plainly that it's informational.
+- The ☰ menu's **Help** header now links to the documentation hub, and the item is labelled "Documentation hub" (#53).
+
 ### Fix: crosswalk lines invisible for federated (foreign-namespace) concepts (v0.16.2)
 - Since v0.15, drawing a mapping stores the target concept's **real URI** — but the crosswalk's mapping detector still only recognized URIs under the target's base namespace. Mapping to a concept that keeps a foreign namespace (anything from a federated import) stored correctly yet showed **no line, no mapped marking, and a zero count**. The detector now matches by each target concept's real URI first (base-prefix as before), so lines, counts, per-pair exports, and click-to-remove all see every mapping again.
 
