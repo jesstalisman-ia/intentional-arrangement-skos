@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.4</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.5</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -2305,6 +2305,12 @@ function autofix(model, kind){
     }
   } else if (kind === "topbroader"){
     for (const id of ids){ const c = C[id]; if (c.top && (c.broader || []).length){ c.top = false; n++; } }
+  } else if (kind === "unmarkedtop"){
+    const HIER = ["broader"].concat(ISO_BROADER);
+    for (const id of ids){ const c = C[id];
+      if (c.top || HIER.some(f => (c[f] || []).length > 0)) continue;
+      const hasNar = ids.some(x => HIER.some(f => (C[x][f] || []).includes(id)));
+      if (hasNar || (c.related || []).length){ c.top = true; n++; } }
   } else if (kind === "overlap"){
     for (const id of ids){ const c = C[id];
       const norm = l => (l.val || "").trim().toLowerCase() + "@" + (l.lang || "");
@@ -2380,6 +2386,12 @@ function validate(model){
     const isOrphan = !hasBroaderAny && (c.related || []).length === 0 && !hasNarrower && !c.top;
     if (isOrphan) push("warning", "orphan", "Orphan concept",
       `No hierarchical or associative relations and not a top concept — it is disconnected.`, id);
+
+    // 8 unmarked top concept (#54): participates in the vocabulary and acts as a
+    // hierarchy root, but isn't declared one — so it exports without
+    // skos:topConceptOf and the scheme's entry points are silently incomplete
+    if (!hasBroaderAny && !c.top && !isOrphan) push("warning", "unmarkedTop", "Unmarked top concept",
+      `No broader term (plain or ISO 25964) and not marked as a top concept — it acts as a hierarchy root but won't export skos:topConceptOf. Mark it top, or give it a parent.`, id);
 
     // 9 top concept with broader
     if (c.top && (c.broader || []).length)
@@ -4826,6 +4838,7 @@ const AUTOFIX=[
   {kind:"cycle", codes:["cycle"], label:c=>`Break ${c} hierarchy cycle(s)`},
   {kind:"redundant", codes:["redundancy"], label:c=>`Remove ${c} redundant broader link(s)`},
   {kind:"topbroader", codes:["topWithBroader"], label:c=>`Demote ${c} top concept(s) with a broader`},
+  {kind:"unmarkedtop", codes:["unmarkedTop"], label:c=>`Mark ${c} unmarked root(s) as top concepts`},
   {kind:"overlap", codes:["overlapLabel"], label:c=>`Remove ${c} overlapping alt/hidden label(s)`},
 ];
 function renderAutofix(){

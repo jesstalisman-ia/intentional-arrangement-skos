@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### New check: unmarked top concepts (v0.16.5, #54)
+- A concept with **no broader term (plain or ISO 25964) that isn't marked as a top concept** now raises a warning: it acts as a hierarchy root but exports without `skos:topConceptOf`, silently leaving the scheme's entry points incomplete. Comes with a one-click auto-fix ("Mark N unmarked root(s) as top concepts"). Deliberately distinct from the orphan warning — a concept with no relations at all stays an *orphan*, because auto-topping it would hide the real problem.
+
 ### Fix: crosswalk lines could fail to draw in a hidden tab (v0.16.4)
 - The visual crosswalk drew its connection lines in a `requestAnimationFrame` callback, which browsers never fire while a tab is hidden — render the view with the tab backgrounded (or switch away at the wrong moment) and the mappings existed but no lines appeared until a manual re-render. A timed fallback plus a visibility-change hook now guarantee the lines draw.
 
