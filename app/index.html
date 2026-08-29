@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.3</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.4</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -4550,7 +4550,11 @@ function renderXwVisual(){
   host.innerHTML=h;
   const inner=host.querySelector('.xw-vis-inner'), svg=host.querySelector('.xw-vis-svg');
   host.querySelectorAll('.xw-node').forEach(n=>n.onclick=()=>xwVisClick(n));
-  requestAnimationFrame(()=>{ xwDrawLines(inner,svg,srcIds); xwApplyVisSel(host); });
+  const _draw=()=>{ xwDrawLines(inner,svg,srcIds); xwApplyVisSel(host); };
+  requestAnimationFrame(_draw);
+  // rAF never fires while the tab is hidden — fall back so lines exist when it shows
+  setTimeout(()=>{ if(svg.isConnected&&!svg.childElementCount) _draw(); },250);
+  document.addEventListener('visibilitychange',function once(){ if(!document.hidden){ document.removeEventListener('visibilitychange',once); if(svg.isConnected&&!svg.childElementCount) _draw(); } });
   let mapped=0; xwSourceModel.order.forEach(id=>{ if(xwCrossMaps(xwSourceModel.concepts[id]).length) mapped++; });
   if($('#xwCount')) $('#xwCount').textContent=`${mapped}/${xwSourceModel.order.length} mapped`+(trunc?` · showing ${srcIds.length}↔${tgtIds.length} (filter for more)`:"");
 }

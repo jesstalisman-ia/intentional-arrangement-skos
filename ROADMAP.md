@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: crosswalk lines could fail to draw in a hidden tab (v0.16.4)
+- The visual crosswalk drew its connection lines in a `requestAnimationFrame` callback, which browsers never fire while a tab is hidden — render the view with the tab backgrounded (or switch away at the wrong moment) and the mappings existed but no lines appeared until a manual re-render. A timed fallback plus a visibility-change hook now guarantee the lines draw.
+
 ### Fix: ISO 25964 relations now count as hierarchy everywhere (v0.16.3, #52 #53)
 - The disconnected-components and orphan checks, the concept tree, Expand all, the Business view, collections arrangement, and the import health check all treated **only plain `skos:broader`** as hierarchy — a vocabulary linked through `iso-thes:broaderGeneric` (exactly what v0.16.1's dedup encourages) falsely validated as dozens of disconnected islands and rendered flat. All of them now count the ISO 25964 specialisations (generic, partitive, instantial) as hierarchy.
 - The **Disconnected components** message is now readable (#52): it names the largest clusters by a representative concept ("61 concepts around 'Event'; …"), explains what an island is, and says plainly that it's informational.
