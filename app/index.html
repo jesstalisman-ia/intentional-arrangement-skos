@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.2</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -4364,19 +4364,26 @@ function xwLoadTargetProj(pid){ const projs=loadProjects(); if(!projs[pid]){ xwT
 function xwSaveSource(){ if(!xwSourceModel)return; const projs=loadProjects(); if(projs[xwSourcePid]){ projs[xwSourcePid].model=xwSourceModel; if(projs[xwSourcePid].updated!==undefined) projs[xwSourcePid].updated=nowTs(); saveProjects(projs); } if(xwSourcePid===currentPid){ model=xwSourceModel; try{save();}catch(e){} } }
 function xwCommit(){ xwSaveSource(); }
 function xwBuildTargetIndex(){
-  xwTargetIdx={ byId:{}, byNorm:{}, byStem:{} };
+  xwTargetIdx={ byId:{}, byNorm:{}, byStem:{}, byUri:{} };
   if(!xwTargetModel) return;
   for(const id of xwTargetModel.order){ const lbl=xwPlabelOf(xwTargetModel,id); const uri=xwTargetUri(id);
     xwTargetIdx.byId[id]={label:lbl,uri};
+    xwTargetIdx.byUri[uri]=id;   // real URI → id, so foreign-namespace (federated) concepts match too
     for(const l of (xwTargetModel.concepts[id].pref||[]).concat(xwTargetModel.concepts[id].alt||[])){ if(!l.val)continue; const n=xwNorm(l.val);
       (xwTargetIdx.byNorm[n]=xwTargetIdx.byNorm[n]||[]).push({id,label:lbl,uri,via:l.val});
       const st=xwStem(n); if(st) (xwTargetIdx.byStem[st]=xwTargetIdx.byStem[st]||[]).push({id,label:lbl,uri,via:l.val}); }
   }
 }
-function xwCrossMaps(c){ // mappings on a source concept c that point into the target scheme
+function xwCrossMaps(c){ // mappings on a source concept c that point into the target taxonomy
   if(!xwTargetModel||!c) return [];
-  const base=xwTargetModel.base, out=[];
-  for(const t of XW_TYPES) for(const u of (c[t]||[])) if(u && u.startsWith(base)) out.push({type:t,uri:u,tid:u.slice(base.length),label:(xwTargetIdx.byId[u.slice(base.length)]||{}).label||u});
+  const base=xwTargetModel.base, byUri=(xwTargetIdx&&xwTargetIdx.byUri)||{}, out=[];
+  for(const t of XW_TYPES) for(const u of (c[t]||[])){ if(!u) continue;
+    // match by the concept's REAL URI first (covers foreign-namespace concepts in
+    // federated projects, whose URIs don't start with the target's base), then by
+    // base prefix as before
+    let tid = byUri[u]!==undefined ? byUri[u] : (u.startsWith(base) ? u.slice(base.length) : null);
+    if(tid!=null && xwTargetModel.concepts[tid]) out.push({type:t,uri:u,tid,label:xwPlabelOf(xwTargetModel,tid)});
+  }
   return out;
 }
 // ---- saved crosswalks: named source⇄target pairings, switchable and persistent ----

@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: crosswalk lines invisible for federated (foreign-namespace) concepts (v0.16.2)
+- Since v0.15, drawing a mapping stores the target concept's **real URI** — but the crosswalk's mapping detector still only recognized URIs under the target's base namespace. Mapping to a concept that keeps a foreign namespace (anything from a federated import) stored correctly yet showed **no line, no mapped marking, and a zero count**. The detector now matches by each target concept's real URI first (base-prefix as before), so lines, counts, per-pair exports, and click-to-remove all see every mapping again.
+
 ### Fix: duplicate `skos:broader` when an ISO relation entailed it (v0.16.1, #51)
 - Setting both plain **Broader** and **Broader — generic (is-a)** to the same parent exported `skos:broader` twice: the ISO relation asserts its `skos:broader` super-property, and the exporter never deduplicated. The importer has had exactly this dedup rule since v0.8 — the exporter simply never got it. Fixed three ways: the export now emits **every triple exactly once** (a global guarantee, not just this case); a plain `skos:broader` that an entailing iso-thes field covers is skipped at the source, matching the importer's rule so round-trips agree; and the editor now prevents the redundant pair — picking a plain parent that a generic/instantial relation already covers is declined with an explanation, and adding a generic/instantial relation moves the plain entry rather than duplicating it. Partitive relations (which deliberately do *not* entail `skos:broader`) are unaffected. Existing projects with both fields set export clean without any user action.
 
