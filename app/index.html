@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1549,7 +1549,11 @@ function isoDateTime(ts){ try{ return new Date(ts).toISOString().replace(/\.\d{3
 function buildTriples(model, opts){
   opts = opts || {};
   const T = [];
-  const add = (s, p, o) => T.push({ s, p, o });
+  // Every triple emits exactly once (#51 — plain skos:broader plus an entailing
+  // iso-thes broader used to produce duplicate skos:broader statements).
+  const _seenT = new Set();
+  const add = (s, p, o) => { const k = termId(s) + "|" + termId(p) + "|" + termId(o);
+    if (_seenT.has(k)) return; _seenT.add(k); T.push({ s, p, o }); };
   const A = iri(NS.rdf + "type");
   const schemeUri = model.scheme.uri || (model.base.replace(/[#/]$/, ""));
 
@@ -1637,8 +1641,12 @@ function buildTriples(model, opts){
     });
 
     // hierarchy + associative (assert both directions for broader/narrower)
+    // a plain skos:broader that an iso-thes field already entails is redundant —
+    // same rule the importer applies (ISO_ENTAILS_SKOS), so round-trips agree
+    const _entailedB = new Set();
+    for (const _f of ISO_BROADER){ if (ISO_ENTAILS_SKOS[_f]) (c[_f] || []).forEach(p => _entailedB.add(p)); }
     (c.broader || []).forEach(pid => {
-      if (!model.concepts[pid]) return;
+      if (!model.concepts[pid] || _entailedB.has(pid)) return;
       add(s, iri(NS.skos + "broader"), iri(conceptRes(model, pid)));
       add(iri(conceptRes(model, pid)), iri(NS.skos + "narrower"), s);
     });
@@ -4024,7 +4032,14 @@ function relGroup(title, c, field){
     sel.innerHTML='<option value="">'+(q?(list.length?list.length+" match"+(list.length===1?"":"es")+"…":"no matches"):'add '+(/^broader/.test(field)?"parent":"related")+'…')+'</option>'+
       list.map(x=>`<option value="${x}">${escapeHtml(nodeText(x))}</option>`).join(""); };
   build("");
-  const apply=v=>{ if(!v) return; c[field]=c[field]||[]; if(!c[field].includes(v)) c[field].push(v);
+  const apply=v=>{ if(!v) return;
+    // #51: generic/instantial iso-thes broader ENTAILS skos:broader — never hold both
+    if(field==="broader"){ const ent=Core.ISO_BROADER.filter(f=>Core.ISO_ENTAILS_SKOS[f]&&(c[f]||[]).includes(v));
+      if(ent.length){ toast("“"+nodeText(v)+"” is already a parent via "+ent[0].replace("broader","Broader — ")+", which asserts skos:broader on export"); renderEditor(); return; } }
+    if(Core.ISO_BROADER.includes(field)&&Core.ISO_ENTAILS_SKOS[field]&&(c.broader||[]).includes(v)){
+      c.broader=c.broader.filter(x=>x!==v);
+      toast("Moved “"+nodeText(v)+"” from plain Broader — this ISO relation asserts skos:broader itself, so keeping both would duplicate it"); }
+    c[field]=c[field]||[]; if(!c[field].includes(v)) c[field].push(v);
     // skos:related is symmetric — assert the inverse on the other concept so it holds both ways (and shows in the graph)
     if(field==="related"){ const o=model.concepts[v]; if(o){ o.related=o.related||[]; if(!o.related.includes(selected)) o.related.push(selected); } }
     renderEditor(); save(); renderTree(); afterChange(); };

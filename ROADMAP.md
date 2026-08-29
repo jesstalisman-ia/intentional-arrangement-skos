@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: duplicate `skos:broader` when an ISO relation entailed it (v0.16.1, #51)
+- Setting both plain **Broader** and **Broader — generic (is-a)** to the same parent exported `skos:broader` twice: the ISO relation asserts its `skos:broader` super-property, and the exporter never deduplicated. The importer has had exactly this dedup rule since v0.8 — the exporter simply never got it. Fixed three ways: the export now emits **every triple exactly once** (a global guarantee, not just this case); a plain `skos:broader` that an entailing iso-thes field covers is skipped at the source, matching the importer's rule so round-trips agree; and the editor now prevents the redundant pair — picking a plain parent that a generic/instantial relation already covers is declined with an explanation, and adding a generic/instantial relation moves the plain entry rather than duplicating it. Partitive relations (which deliberately do *not* entail `skos:broader`) are unaffected. Existing projects with both fields set export clean without any user action.
+
 ### Multiple contributors (v0.16.0, #50)
 - Scheme attribution now takes **any number of contributors**: a chip-style picker replaces the single Contributor dropdown, and the export emits one `dcterms:contributor` triple per agent — DCMI practice, no workaround vocabulary needed (Dublin Core properties repeat freely in RDF). Identity URIs are honored, so a contributor with an ORCID exports as `dcterms:contributor <https://orcid.org/…>`. Creator and Publisher stay single-valued by convention.
 - The importer now collects **all** `dcterms:contributor` statements instead of keeping only the last one — a silent lossless-round-trip gap this ticket surfaced. Existing projects migrate their single contributor automatically; agent renames and deletions cascade through the list; the graph draws one attribution edge per contributor.
