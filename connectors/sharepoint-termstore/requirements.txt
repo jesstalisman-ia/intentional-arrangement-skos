@@ -1,9 +1,12 @@
+# Pinned exactly so builds are reproducible and Renovate/Dependabot can see and
+# raise updates. Renovate keeps these current; do not loosen to ranges.
+
 # Mapping engine (offline conversion) needs only:
-rdflib>=7.0
+rdflib==7.6.0
 
 # Live pull from Microsoft Graph adds:
-msal>=1.28
-requests>=2.31
+msal==1.38.0
+requests==2.34.2
 
 # Bridge service (live sync) adds:
-flask>=3.0
+Flask==3.1.3

@@ -1,0 +1,3 @@
+# Tooling for the daily security-audit workflow. Pinned like everything else, so
+# the auditor itself is auditable and Renovate keeps it current.
+pip-audit==2.10.1

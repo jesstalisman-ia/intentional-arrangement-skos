@@ -1,0 +1,122 @@
+# Daily dependency and supply-chain audit.
+#
+# Renovate and Dependabot open PRs when a dependency *has* an update. This catches
+# the things neither of them watches: a base-image digest that has gone stale, an
+# SRI hash that no longer matches the bytes npm serves, a pin that was loosened
+# back to a range, an action that slipped back to a mutable tag.
+#
+# Findings are collected into ONE issue that is updated in place and closed
+# automatically when a run comes back clean, so this never becomes issue spam.
+name: Security audit
+
+on:
+  schedule:
+    # 06:17 UTC — deliberately off the hour, where every other cron piles up.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+  push:
+    # Two reasons to run on push. First, when the audit itself changes, so a broken
+    # checker surfaces immediately rather than at 06:17 the next morning. Second,
+    # when anything the audit actually inspects changes -- without that, a loosened
+    # pin or a hand-edited digest sits unreported until the next nightly run, which
+    # is precisely the drift this workflow exists to catch.
+    paths:
+      - ".github/workflows/security-audit.yml"
+      - ".github/scripts/**"
+      - "**/requirements*.txt"
+      - "deploy/Dockerfile"
+      - "deploy/docker-compose.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install audit tooling
+        run: pip install -r .github/scripts/requirements.txt
+
+      - name: Run audit
+        id: audit
+        run: python .github/scripts/security_audit.py --root . --output audit-report.md
+
+      - name: Run repository security tests
+        # No-op in repos that have none; where they exist (e.g. the SSRF guard on
+        # the bring-your-own LLM endpoint) a regression fails the audit outright.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tests=(tests/test_*.py)
+          if [ ${#tests[@]} -eq 0 ]; then
+            echo "No repository tests present."
+            exit 0
+          fi
+          # The tests import application modules, so the app's own dependencies
+          # have to be present. Installed only when there is something to run.
+          for req in requirements.txt api/requirements.txt; do
+            [ -f "$req" ] && pip install -r "$req"
+          done
+          for t in "${tests[@]}"; do
+            echo "--- $t"
+            python "$t"
+          done
+
+      - name: Upload report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-audit-report
+          path: audit-report.md
+          retention-days: 30
+
+      - name: Open or update the tracking issue
+        if: steps.audit.outputs.findings == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh label create security-audit --color B60205 \
+            --description "Raised by the daily security audit" 2>/dev/null || true
+          TITLE="Security audit: ${{ steps.audit.outputs.count }} open finding(s)"
+          {
+            echo "Run: [\`${GITHUB_RUN_ID}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) · commit \`${GITHUB_SHA:0:7}\`"
+            echo
+            cat audit-report.md
+          } > issue-body.md
+          NUM=$(gh issue list --label security-audit --state open \
+                  --json number --jq '.[0].number // empty')
+          if [ -n "$NUM" ]; then
+            gh issue edit  "$NUM" --title "$TITLE" --body-file issue-body.md
+            echo "Updated issue #$NUM"
+          else
+            gh issue create --title "$TITLE" --body-file issue-body.md \
+                            --label security-audit
+          fi
+
+      - name: Close the tracking issue when clean
+        if: steps.audit.outputs.findings == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NUM=$(gh issue list --label security-audit --state open \
+                  --json number --jq '.[0].number // empty')
+          if [ -n "$NUM" ]; then
+            gh issue comment "$NUM" --body \
+              "Audit is clean as of commit \`${GITHUB_SHA:0:7}\`. Closing; it will reopen if anything regresses."
+            gh issue close "$NUM"
+            echo "Closed issue #$NUM"
+          else
+            echo "Clean, and no open audit issue. Nothing to do."
+          fi

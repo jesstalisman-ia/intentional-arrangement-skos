@@ -1,11 +1,74 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
+# Dependabot here is deliberately limited to SECURITY updates only.
+#
+# Renovate owns routine version updates (see renovate.json). Running both on
+# version updates would open two PRs for every bump, so every entry below sets
+# `open-pull-requests-limit: 0`, which suppresses Dependabot's scheduled version
+# PRs while still letting it raise a PR the moment an advisory affects a pinned
+# dependency. That is the one job Renovate cannot do as well: Dependabot is wired
+# straight into the GitHub Advisory Database and the repo's alerts.
+#
+# The interval below is "daily" to match the repository's stated preference, but note
+# it has little practical effect here: `open-pull-requests-limit: 0` suppresses the
+# scheduled version PRs the interval governs, and security PRs are raised when an
+# advisory lands, not on a schedule.
+#
+# NOTE: this file alone is inert. "Dependabot alerts" and "Dependabot security
+# updates" must also be switched on in
+#   Settings -> Advanced Security (or Code security and analysis)
+# for the repository, otherwise nothing here fires.
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Flask API service
+  - package-ecosystem: "pip"
+    directory: "/api"
     schedule:
       interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+  # MCP server
+  - package-ecosystem: "pip"
+    directory: "/mcp-server"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+  # SharePoint term-store connector
+  - package-ecosystem: "pip"
+    directory: "/connectors/sharepoint-termstore"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+  # Fuseki base image (digest-pinned in deploy/Dockerfile)
+  - package-ecosystem: "docker"
+    directory: "/deploy"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+  # Workflow actions, pinned to commit SHAs
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+  # Audit tooling used by the security-audit workflow
+  - package-ecosystem: "pip"
+    directory: "/.github/scripts"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"

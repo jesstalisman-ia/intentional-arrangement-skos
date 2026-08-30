@@ -1,0 +1,105 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "description": "Renovate owns version updates here. Dependabot is configured for security updates only (.github/dependabot.yml), so the two never open duplicate PRs.",
+  "timezone": "Etc/UTC",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate: dependency dashboard",
+  "prConcurrentLimit": 3,
+  "labels": [
+    "dependencies"
+  ],
+  "semanticCommits": "disabled",
+  "vulnerabilityAlerts": {
+    "description": "Security fixes ignore the weekly window and go out immediately.",
+    "schedule": [
+      "at any time"
+    ],
+    "labels": [
+      "dependencies",
+      "security"
+    ]
+  },
+  "lockFileMaintenance": {
+    "enabled": false
+  },
+  "customManagers": [
+    {
+      "description": "Apache Jena Fuseki version, tracked in two places that must move together: ARG FUSEKI_VERSION in deploy/Dockerfile and the local image tag in deploy/docker-compose.yml. Renovate raises the version; the SHA-512 in FUSEKI_SHA512 must be re-verified by hand against the Apache release before merging \u2014 Renovate cannot compute it.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^deploy/Dockerfile$/",
+        "/^deploy/docker-compose\\.yml$/"
+      ],
+      "matchStrings": [
+        "ARG FUSEKI_VERSION=(?<currentValue>[0-9.]+)",
+        "image:\\s*[a-z0-9-]+-fuseki:(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "org.apache.jena:jena-fuseki-main",
+      "datasourceTemplate": "maven"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Batch routine Python patch/minor bumps into one reviewable PR per repo.",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
+      "groupName": "python dependencies (patch/minor)"
+    },
+    {
+      "description": "Major Python bumps land alone \u2014 they need a human read of the changelog.",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": null
+    },
+    {
+      "description": "Pin GitHub Actions to full commit SHAs; a mutable tag is a supply-chain hole.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true,
+      "groupName": "github actions"
+    },
+    {
+      "description": "Base image is pinned by digest on purpose \u2014 keep the digest fresh so base-OS CVEs get picked up.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "groupName": "container base images"
+    },
+    {
+      "description": "Hold the base image on the floating 17-jre tag and let only the digest move. Renovate otherwise proposes retagging to a point release (17.0.20_8-jre) or to Java 25 (25.0.4_7-jre). A point-release tag stops moving, which would make the daily digest-drift check meaningless -- and that check is what catches an unpatched base image. allowedVersions filters candidate TAGS during lookup; digest updates are a separate mechanism and keep working.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchDepNames": [
+        "eclipse-temurin"
+      ],
+      "allowedVersions": "/^17-jre$/"
+    },
+    {
+      "description": "Fuseki majors change the server config surface; never automate them.",
+      "matchDepNames": [
+        "org.apache.jena:jena-fuseki-main"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}
