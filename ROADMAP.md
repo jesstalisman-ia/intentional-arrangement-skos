@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Agents & documents namespace (v0.16.7, #57)
+- Provenance resources — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` and `foaf:Document` sources — are metadata *about* the vocabulary, not members of it, yet they minted URIs inside the concept namespace: they dereferenced as terms, namespace-enumerating tools picked them up, and a concept and an agent could collide on one URI. A new optional scheme field, **Agents & documents namespace** (Build → scheme metadata), mints them elsewhere — slash or hash form both allowed, blank keeps the old behavior so existing projects are untouched. An explicit identity URI on an agent or document (ORCID, DOI, homepage) still always wins. The annex namespace is **declared like every other source namespace** — `@prefix agents:` in Turtle (subjects compact to `agents:Name`), `xmlns:agents` in RDF/XML, an `agents` entry in the JSON-LD `@context` — and imports under it round-trip losslessly.
+
 ### Fix: date literals valid and single-valued (v0.16.6, #55 #56)
 - **Malformed date literals (#56):** an imported `dcterms:created`/`issued`/`modified` carrying a full timestamp landed verbatim in the concept's date field, and the next export typed it `xsd:date` — a dateTime lexical form outside `xsd:date`'s lexical space, rejected by Jena's `riot --validate` and SHACL. Dates are now reduced to their calendar-date part on import **and** defensively on export, so existing polluted files heal on their next round-trip.
 - **Double created/modified values (#55):** the exporter emitted the editable date fields (`xsd:date`) *and* history-derived timestamps (`xsd:dateTime`) for the same properties — two `dcterms:created` per concept. The editable fields are now authoritative; history-derived stamps only fill in when no field is set. One value per property, always.

@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.6</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.7</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1551,6 +1551,20 @@ function isoDateTime(ts){ try{ return new Date(ts).toISOString().replace(/\.\d{3
 // filed into these fields — #55/#56): reduce it to its date part so the value always
 // sits inside xsd:date's lexical space. Anything unrecognizable passes through untouched.
 function dateOnly(v){ const s = String(v == null ? "" : v).trim(); const m = s.match(/^(\d{4}-\d{2}-\d{2})([T ]|$)/); return m ? m[1] : s; }
+// Agents & documents are provenance ABOUT the vocabulary, not members of it (#57):
+// mint them under the scheme's dedicated annex namespace when one is set (slash or
+// hash form both allowed), the concept namespace otherwise — an explicit identity
+// URI on the record (ORCID, DOI, homepage) always wins.
+function annexNs(model){
+  const b = ((model.scheme || {}).agentsBase || "").trim();
+  if (!/^https?:\/\//i.test(b)) return "";
+  return b + (/[#\/]$/.test(b) ? "" : "/");
+}
+function annexUri(model, rec, id){
+  if (rec && rec.uri && /^https?:\/\//i.test(rec.uri)) return rec.uri;
+  const ns = annexNs(model);
+  return ns ? ns + id : conceptUri(model, id);
+}
 function buildTriples(model, opts){
   opts = opts || {};
   const T = [];
@@ -1571,7 +1585,7 @@ function buildTriples(model, opts){
     if (model.scheme.description) add(s, dct("description"), lit(model.scheme.description, L));
     // creator / publisher / contributor — an agent reference (prov:Agent) if set, else the plain literal
     const _ag = model.agents || {};
-    const _resUri = (rec, id) => (rec && rec.uri && /^https?:\/\//i.test(rec.uri)) ? rec.uri : conceptUri(model, id);
+    const _resUri = (rec, id) => annexUri(model, rec, id);
     if (model.scheme.creatorAgent && _ag[model.scheme.creatorAgent]) add(s, dct("creator"), iri(_resUri(_ag[model.scheme.creatorAgent], model.scheme.creatorAgent)));
     else if (model.scheme.creator) add(s, dct("creator"), lit(model.scheme.creator, L));
     if (model.scheme.publisherAgent && _ag[model.scheme.publisherAgent]) add(s, dct("publisher"), iri(_resUri(_ag[model.scheme.publisherAgent], model.scheme.publisherAgent)));
@@ -1631,7 +1645,7 @@ function buildTriples(model, opts){
     (c.rdfsLabel || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
     // dct:source -> foaf:Document
-    (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri((_d.uri && /^https?:\/\//i.test(_d.uri)) ? _d.uri : conceptUri(model, did))); });
+    (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri(annexUri(model, _d, did))); });
     // per-concept Dublin Core metadata (editable fields)
     if (c.creator) add(s, iri(NS.dcterms + "creator"), lit(c.creator, ""));
     if (c.created) add(s, iri(NS.dcterms + "created"), lit(dateOnly(c.created), "", NS.xsd + "date"));
@@ -1720,7 +1734,7 @@ function buildTriples(model, opts){
   }
   // foaf:Document sources
   for (const did in (model.documents || {})){
-    const d = model.documents[did]; const du = iri((d.uri && /^https?:\/\//i.test(d.uri)) ? d.uri : conceptUri(model, did));
+    const d = model.documents[did]; const du = iri(annexUri(model, d, did));
     add(du, A, iri(NS.foaf + "Document"));
     (d.title || []).forEach(L => { if (L.val) add(du, iri(NS.dcterms + "title"), lit(L.val, L.lang)); });
     (d.page || []).forEach(u => { if (u) add(du, iri(NS.foaf + "page"), iri(u)); });
@@ -1729,7 +1743,7 @@ function buildTriples(model, opts){
   // prov:Agent — Person / Organization / SoftwareAgent
   const _agentCls = { person: "Person", organization: "Organization", software: "SoftwareAgent" };
   for (const aid in (model.agents || {})){
-    const a = model.agents[aid]; const au = iri((a.uri && /^https?:\/\//i.test(a.uri)) ? a.uri : conceptUri(model, aid));
+    const a = model.agents[aid]; const au = iri(annexUri(model, a, aid));
     add(au, A, iri(NS.prov + (_agentCls[a.kind] || "Person")));
     if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name));
     if (a.homepage) add(au, iri(NS.foaf + "homepage"), iri(a.homepage));
@@ -1758,6 +1772,11 @@ function qname(model, uri){
     // allow digit-leading locals (valid Turtle PN_LOCAL) so 32-char UUID ids compact to :xxxx
     if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return (model.prefix || "") + ":" + loc;
   }
+  const _ans = annexNs(model);
+  if (_ans && uri.startsWith(_ans)){
+    const loc = uri.slice(_ans.length);
+    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return "agents:" + loc;
+  }
   return "<" + uri + ">";
 }
 function termTurtle(model, o){
@@ -1785,7 +1804,12 @@ function toTurtle(model, opts){
   for (const p of Object.keys(NS)) usedNs.add(p);
   for (const p of Object.keys(NS))
     out += "@prefix " + p + ": <" + NS[p] + "> .\n";
-  out += "@prefix " + (model.prefix || "") + ": <" + model.base + "> .\n\n";
+  out += "@prefix " + (model.prefix || "") + ": <" + model.base + "> .\n";
+  // the annex namespace for provenance resources is a source namespace of this
+  // document — declare it like every other one (#57)
+  const _abDecl = annexNs(model);
+  if (_abDecl) out += "@prefix agents: <" + _abDecl + "> .\n";
+  out += "\n";
 
   const rdfType = NS.rdf + "type";
   for (const k of order){
@@ -1818,6 +1842,8 @@ function toRdfXml(model, opts){
   const pfxName = uri => { for (const [p, ns] of Object.entries(NS)) if (uri.startsWith(ns)) return [p, uri.slice(ns.length)]; return null; };
   let out = '<?xml version="1.0" encoding="UTF-8"?>\n<rdf:RDF';
   for (const [p, ns] of Object.entries(NS)) out += `\n    xmlns:${p}="${ns}"`;
+  const _axml = annexNs(model);
+  if (_axml) out += `\n    xmlns:agents="${xmlEsc(_axml)}"`;
   out += `\n    xmlns="${model.base}">\n`;
   const rdfType = NS.rdf + "type";
   for (const k of order){
@@ -1851,6 +1877,8 @@ function toJsonLd(model, opts){
   const { triples } = (opts && opts._triples) ? { triples: opts._triples } : buildTriples(model, opts);
   const ctx = {}; for (const p of ["skos", "skosxl", "rdf", "rdfs", "dcterms", "xsd"]) ctx[p] = NS[p];
   if (model.prefix) ctx[model.prefix] = model.base;
+  const _actx = annexNs(model);
+  if (_actx) ctx.agents = _actx;
   const order = [], groups = new Map();
   for (const t of triples){
     const k = termId(t.s);
@@ -2928,7 +2956,9 @@ function triplesToModel(triples, prefixes){
   if (Object.keys(docSubs).length){
     model.documents = model.documents || {};
     for (const uri in docSubs){ const id=localOf(uri); const d={ id, title:[], page:[], comment:[] };
-      if (model.base && uri.indexOf(model.base)!==0) d.uri=uri;   // external subject URI — keep it for lossless re-export
+      // keep an external subject URI for lossless re-export — unless it is simply the
+      // workspace's own annex namespace, which re-derives from agentsBase (#57)
+      if (model.base && uri.indexOf(model.base)!==0 && uri!==annexUri(model, null, id)) d.uri=uri;
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
         if (t.p.v===NS.dcterms+"title" && t.o.t==="lit") d.title.push({ lang:t.o.lang||"", val:t.o.v });
         else if (t.p.v===NS.foaf+"page" && t.o.t==="iri") d.page.push(t.o.v);
@@ -2945,7 +2975,9 @@ function triplesToModel(triples, prefixes){
   if (Object.keys(agentSubs).length){
     model.agents = model.agents || {};
     for (const uri in agentSubs){ const id=localOf(uri); const a={ id, kind:agentSubs[uri], name:"", homepage:"" };
-      if (model.base && uri.indexOf(model.base)!==0) a.uri=uri;   // external identity URI (e.g. ORCID) — keep it
+      // keep an external identity URI (e.g. ORCID) — unless it is simply the workspace's
+      // own annex namespace, which re-derives from agentsBase (#57)
+      if (model.base && uri.indexOf(model.base)!==0 && uri!==annexUri(model, null, id)) a.uri=uri;
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
         if (t.p.v===NS.foaf+"name" && t.o.t==="lit") a.name=t.o.v;
         else if (t.p.v===NS.foaf+"homepage" && t.o.t==="iri") a.homepage=t.o.v;
@@ -4106,6 +4138,7 @@ function updateTreeLabel(){ const row=$$('.trow.sel .tlabel')[0]; if(row){ const
 // ---------- scheme editor ----------
 const SCHEME_FIELDS=[
   ["base","Base namespace (URI, ends with # or /)","text"],["prefix","Namespace prefix (blank = “:”)","text"],["uri","Concept scheme URI","text"],
+  ["agentsBase","Agents & documents namespace (optional — provenance resources mint here instead of the term namespace; # or / form)","text"],
   ["defaultLang","Default language","lang"],
   ["title","dcterms:title","text"],["description","dcterms:description","area"],
   ["creator","dcterms:creator","text"],["publisher","dcterms:publisher","text"],
