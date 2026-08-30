@@ -136,6 +136,7 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## 💡 Planned
 
+- **Linked-data matching (DBpedia)** — a per-concept **Match to DBpedia** button in the concept editor's External mappings: send the preferred label to DBpedia's official Lookup service (directly from your browser — no account, no server), review scored candidates with clickable URIs, pick the SKOS mapping relation for each, and approve. Scoped and designed; **deliberately held** until the current stabilization pass (automated smoke testing, the shared-engine split) has had time to prove itself — correctness before features.
 - **Schema Binding / projection export and import** — export or import the model (and a "projection map") toward implementation targets: Pydantic, SwiftData, Cypher/neosemantics, MongoDB, Obsidian properties.
 - **Import diagnostics, deepened** — an inline report (not just a toast) after import/merge.
 - **Validation** — a persistent "edited since last check" state and clearer manual/automatic explanation.
