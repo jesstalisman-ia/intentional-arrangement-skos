@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Glossary: no more silent promotions into the wrong taxonomy (v0.16.8)
+- A glossary list stays linked to the taxonomy it was created under — so after switching projects, **Promote** quietly sent adopted terms into the *linked* taxonomy while the open scheme showed nothing. Now a prominent warning banner appears whenever the active list is linked to a different taxonomy than the one open (or is unlinked), with a one-click **Link to the open taxonomy**; and the promote confirmation names the destination taxonomy whenever it isn't the open one.
+
 ### Agents & documents namespace (v0.16.7, #57)
 - Provenance resources — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` and `foaf:Document` sources — are metadata *about* the vocabulary, not members of it, yet they minted URIs inside the concept namespace: they dereferenced as terms, namespace-enumerating tools picked them up, and a concept and an agent could collide on one URI. A new optional scheme field, **Agents & documents namespace** (Build → scheme metadata), mints them elsewhere — slash or hash form both allowed, blank keeps the old behavior so existing projects are untouched. An explicit identity URI on an agent or document (ORCID, DOI, homepage) still always wins. The annex namespace is **declared like every other source namespace** — `@prefix agents:` in Turtle (subjects compact to `agents:Name`), `xmlns:agents` in RDF/XML, an `agents` entry in the JSON-LD `@context` — and imports under it round-trip losslessly.
 

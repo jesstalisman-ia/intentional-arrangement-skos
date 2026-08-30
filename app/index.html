@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.7</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.8</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -7312,6 +7312,21 @@ function renderGlossary(){
   }
   const pend=cur.terms.filter(t=>!t.conceptId).length, prom=cur.terms.length-pend;
   $('#glossMeta').textContent=`${cur.terms.length} term${cur.terms.length===1?"":"s"} · ${pend} candidate · ${prom} promoted`+(cur.projectId&&projs[cur.projectId]?` · linked to “${projs[cur.projectId].name}”`:" · unlinked");
+  // promoting into a taxonomy that is not the one open is the classic silent trap:
+  // say so loudly, with a one-click relink to the open taxonomy
+  (function(){ const old=document.getElementById('glossLinkWarn'); if(old) old.remove();
+    const mismatch = cur.projectId && projs[cur.projectId] && cur.projectId!==currentPid && projs[currentPid];
+    const unlinked = !cur.projectId || !projs[cur.projectId];
+    if(!mismatch && !unlinked) return;
+    const w=document.createElement('div'); w.id='glossLinkWarn';
+    w.style.cssText='margin:8px 0;padding:9px 12px;border:1.5px solid #af8501;background:rgba(254,199,1,.12);border-radius:9px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+    w.innerHTML = mismatch
+      ? `⚠ This list promotes terms into <b>“${escapeHtml(projs[cur.projectId].name)}”</b> — <b>not</b> the taxonomy you have open (“${escapeHtml(projs[currentPid].name||'')}”). Adopted terms will not appear in this scheme.`
+      : `⚠ This list is <b>unlinked</b> — promoting will not work until you link it to a taxonomy (the Taxonomy dropdown, top right).`;
+    if(mismatch||unlinked){ const b=document.createElement('button'); b.className='btn sm primary'; b.textContent='Link to the open taxonomy';
+      b.onclick=()=>{ const g=loadGloss(); if(g[currentGid]){ g[currentGid].projectId=currentPid; g[currentGid].updated=nowTs(); saveGloss(g); renderGlossary(); toast('List relinked — promotions now land in the open taxonomy'); } };
+      w.appendChild(b); }
+    list.parentElement.insertBefore(w, list); })();
   updateGlossPill();
 }
 function glossAddTerms(text){
@@ -7344,7 +7359,8 @@ function promoteTerm(gid,tid,parentId){
   else { projs[pid].model=m; projs[pid].updated=nowTs(); saveProjects(projs); }
   b.updated=nowTs(); saveGloss(g); renderGlossary();
   const under=parent?` under “${(function(){const p=(m.concepts[parent].pref||[]).find(l=>l.val);return p?p.val:parent;})()}”`:" as a top concept";
-  toast(`Promoted “${t.term}”${under}`);
+  toast(isCur?`Promoted “${t.term}”${under}`
+             :`Promoted “${t.term}”${under} into “${projs[pid].name||'the linked taxonomy'}” — NOT the open taxonomy. Open it via ☰ → Projects, or relink this list.`);
 }
 function promoteAll(){
   const g=loadGloss(), b=g[currentGid]; if(!b) return;
