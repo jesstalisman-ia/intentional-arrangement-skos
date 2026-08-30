@@ -10,3 +10,33 @@
     Cache-Control = "no-cache"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+
+    # Clickjacking: nothing should ever frame the editor.
+    X-Frame-Options = "DENY"
+
+    # Force HTTPS for a year, including subdomains. Netlify terminates TLS, so
+    # this is safe to send unconditionally.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+    # Drop access to device APIs the editor has no use for.
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
+
+    # Content Security Policy. Notes on why it is shaped this way:
+    #
+    #  script-src 'self' 'unsafe-inline'
+    #      The app is one self-contained HTML file, so its own logic is inline and
+    #      'unsafe-inline' is unavoidable without a build step. It still blocks the
+    #      thing that matters most here — pulling in an EXTERNAL script — so a
+    #      compromised CDN or an injected <script src> cannot execute.
+    #      There is no eval() or new Function() in the app, so 'unsafe-eval' is
+    #      deliberately NOT granted.
+    #
+    #  connect-src *
+    #      The SPARQL/Fuseki endpoint is typed in by the user at runtime and can be
+    #      any host (localhost:3030, an intranet box, a hosted triplestore), so this
+    #      cannot be narrowed without breaking the core sync feature. Restricting it
+    #      would need an allowlist the user maintains.
+    #
+    #  object-src/base-uri 'none'
+    #      Kill plugin embedding and <base> injection outright; the app uses neither.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src *; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"

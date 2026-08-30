@@ -9,6 +9,14 @@
   Taxonomies you create with this tool are your own; this license covers the editor.
 -->
 <meta charset="utf-8">
+<!-- Content Security Policy, carried in the document so it applies wherever this
+     file is served from — GitHub Pages and a plain file:// open included, neither of
+     which can set response headers. The Netlify deploy additionally sends this as a
+     real header, along with HSTS and frame-ancestors, which a meta tag cannot express.
+     script-src omits 'unsafe-eval' on purpose (the app uses no eval/new Function);
+     connect-src stays open because the SPARQL endpoint is supplied by the user at
+     runtime and can be any host. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src *; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Intentional Arrangement SKOS</title>
 </head>
