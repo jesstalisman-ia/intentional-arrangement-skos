@@ -8,6 +8,14 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Six-ticket batch (v0.17.0, #58–#63)
+- **Collections export at parity (#58):** collections now carry `skos:prefLabel` (first label per language; further same-language labels become `skos:altLabel`, keeping the one-prefLabel-per-language integrity condition), `skos:inScheme`, and `dcterms:created`/`modified` (new collections are date-stamped; imported dates round-trip). `skos:note` stays — it is the honest property for a collection's free-text note.
+- **Concept creator as a URI (#59):** a concept's `dcterms:creator` that names a registered agent now exports as that agent's URI — the same practice as the scheme's attribution. A URI value passes through as a URI; anything else stays a literal, and imports of either form round-trip.
+- **Partitive entails broader (#60):** the published iso-thes ontology declares *all three* ISO 25964 specialisations subproperties of `skos:broader` — partitive included. `broaderPartitive` now asserts `skos:broader` like generic and instantial, so no ISO link exports without the hierarchy it entails; the same-parent dedup and editor guardrails extend to partitive automatically.
+- **Downloadable validation report (#61):** Validate → **⬇ Report (Markdown)** writes the current findings as a checkbox work list — grouped by severity then by check, each item naming the concept and its identifier — so fixes can be worked through without bouncing between the editor and the report.
+- **Mappings that target vocabulary terms (#62):** a new warning flags any `skos:*Match` whose target is a term of the metadata vocabularies (DC, FOAF, PROV, RDF(S), OWL, DCAT, SKOS itself) — a property or class is not a `skos:Concept`, and the slip otherwise surfaces only after publication.
+- **Separate documents namespace (#63):** the annex namespace from v0.16.7 splits in two — **Agents namespace** and an optional **Documents namespace** that falls back to the agents one when blank (both blank keeps concept-namespace minting). `foaf:Document` sources mint under the documents namespace, declared as `@prefix resources:` in Turtle, `xmlns:resources` in RDF/XML, and a `resources` entry in the JSON-LD context.
+
 ### Glossary: no more silent promotions into the wrong taxonomy (v0.16.8)
 - A glossary list stays linked to the taxonomy it was created under — so after switching projects, **Promote** quietly sent adopted terms into the *linked* taxonomy while the open scheme showed nothing. Now a prominent warning banner appears whenever the active list is linked to a different taxonomy than the one open (or is unlinked), with a one-click **Link to the open taxonomy**; and the promote confirmation names the destination taxonomy whenever it isn't the open one.
 

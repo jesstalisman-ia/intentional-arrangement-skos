@@ -30,7 +30,7 @@ The Build tab is where the work happens. The tree of concepts sits on the left; 
 
 **Jump to a related concept.** In a concept's **Broader**, **Related**, or ISO 25964 pickers, click a linked concept to jump straight to it in the tree (it expands and scrolls into view). The same works for concept members in the Collections editor.
 
-**ISO 25964 relations (opt-in).** In the concept-scheme panel, turn on **ISO 25964 relations** to add three specialised broader pickers to the concept editor alongside plain `skos:broader`: **generic** (is-a, `iso-thes:broaderGeneric`), **partitive** (part-of, `iso-thes:broaderPartitive`), and **instantial** (instance-of, `iso-thes:broaderInstantial`). On export, generic and instantial also assert `skos:broader` so plain-SKOS tools still see the hierarchy; partitive is emitted as `iso-thes` only. Leave the toggle off and the editor stays plain SKOS.
+**ISO 25964 relations (opt-in).** In the concept-scheme panel, turn on **ISO 25964 relations** to add three specialised broader pickers to the concept editor alongside plain `skos:broader`: **generic** (is-a, `iso-thes:broaderGeneric`), **partitive** (part-of, `iso-thes:broaderPartitive`), and **instantial** (instance-of, `iso-thes:broaderInstantial`). On export, all three also assert `skos:broader` — the published iso-thes ontology declares every specialisation a subproperty of `skos:broader`, partitive included — so plain-SKOS tools always see the full hierarchy. Leave the toggle off and the editor stays plain SKOS.
 
 ### A concept's fields
 
@@ -81,6 +81,8 @@ When SKOS-XL is on, a teal **SKOS-XL** badge appears in the header (click it to 
 The **Collections** tab groups concepts into a `skos:Collection`, or an ordered `skos:OrderedCollection` whose member order is significant. Collections sit *beside* the broader/narrower hierarchy rather than inside it, and they nest — a collection can contain sub-collections, giving a second tree with concepts at the leaves.
 
 Each node has a **green ● circle** marking a collection; an ordered one also carries an **ordered** badge. Click the large **▶ / ▼ caret** to collapse or expand a node — the tree is expanded by default. Inside a collection, concept members arrange by their own broader/narrower (an ordered collection keeps its `skos:memberList` sequence instead). The **filter box** narrows the tree to matching collections and members and highlights the hits. Select a collection to edit its name, note, type, and members in the panel on the right.
+
+Collections export as first-class citizens: `skos:prefLabel` for the name (one per language; extra same-language names become `skos:altLabel`), `skos:note` for the note, `skos:inScheme`, and `dcterms:created`/`modified` date stamps — the same description discipline concepts get.
 
 A collection's **Identifier** — its URI local name — derives from the name the first time you set one ("Day Collection" → `Day-Collection`), and is editable to any form you prefer (`DayCollection`), with a "↦ from name" button to re-derive on demand. Once set it stays stable through renames, per ISO 25964's identifier-persistence rule; changing it explicitly updates every membership reference, and uniqueness is checked against concepts, documents, and agents, which share the same namespace.
 
@@ -136,6 +138,8 @@ Not everyone who has an idea for a term should edit the vocabulary directly. In 
 The **SPARQL** tab runs queries against your taxonomy entirely in the browser. It ships with a preseeded library of example queries, and a **natural-language** box that turns plain questions ("children of X", "concepts without a definition", "descendants of X") into SPARQL using an offline, rule-based generator — no server, no LLM, nothing leaves your machine. You can toggle whether SKOS-XL triples are included in what's queried.
 
 ## Validate — keep it sound
+
+**⬇ Report (Markdown)** downloads the current findings as a checkbox work list — grouped by severity, then by check, each item naming the concept and its identifier — so you can work through fixes in the editor without switching back and forth.
 
 The Validate tab runs qSKOS-style quality checks. A vocabulary can be valid RDF and still be broken as a thesaurus, so this is where you catch that.
 
@@ -199,7 +203,7 @@ After an import, a short summary reports the concept count and top concepts, and
 
 Under **Concept scheme, identifiers & Dublin Core metadata** you set the vocabulary's own record: title, description, creator, publisher, the created/published/modified dates, rights, a **license URI** (`dcterms:license` — e.g. a Creative Commons license; complements the free-text rights statement), a **version** (`owl:versionInfo`), and language, plus the base namespace and whether identifiers are readable or UUIDs.
 
-An optional **Agents & documents namespace** keeps provenance resources out of your term space: `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` records and `foaf:Document` sources are metadata *about* the vocabulary, not members of it, so when this field is set (slash or hash form — `https://example.org/agents#` works) they mint their URIs there instead of beside your concepts. The namespace is declared in every export (`@prefix agents:` in Turtle, `xmlns:agents` in RDF/XML, an `agents` entry in the JSON-LD context) and round-trips losslessly. Blank means everything shares the concept namespace, as before; an explicit identity URI on an agent or document (ORCID, DOI, homepage) always wins either way. Exports also annotate the scheme with `vann:preferredNamespacePrefix` and `vann:preferredNamespaceUri`, taken automatically from your namespace settings. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.
+Two optional annex namespaces keep provenance resources out of your term space — they are metadata *about* the vocabulary, not members of it. The **Agents namespace** mints `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` URIs (e.g. `https://example.org/agents#`); the **Documents namespace** mints `foaf:Document` sources (e.g. `https://example.org/resources#`), and falls back to the agents namespace when blank. Both are declared in every export (`@prefix agents:` / `@prefix resources:` in Turtle, matching `xmlns:` declarations in RDF/XML and entries in the JSON-LD context) and round-trip losslessly. Both blank means everything shares the concept namespace, as before; an explicit identity URI on an agent or document (ORCID, DOI, homepage) always wins either way. Exports also annotate the scheme with `vann:preferredNamespacePrefix` and `vann:preferredNamespaceUri`, taken automatically from your namespace settings. This is also where the **Label style** (plain SKOS vs [SKOS-XL](#a-concepts-fields)) lives, and a one-click **Assign UUIDs to all terms**. This metadata travels with every export.
 
 ## Where your work lives
 

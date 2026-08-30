@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.8</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.17.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1130,6 +1130,7 @@
         <span class="h" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)">Mode</span>
         <div class="seg" id="valMode"><button data-m="manual" class="on" title="You re-check by clicking Run validation">Manual</button><button data-m="auto" title="Re-checks automatically a moment after each edit">Automatic</button></div>
         <button class="btn sm primary" id="valRun">Run validation</button>
+        <button class="btn sm" id="valDownload" title="Download the current findings as a Markdown work list — checkbox items grouped by severity and check, with concept names and identifiers">⬇ Report (Markdown)</button>
         <div class="sev-sum" id="valSummary"></div>
         <span class="val-when" id="valWhen" style="margin-left:auto;font-size:12px;color:var(--faint)"></span>
       </div>
@@ -1512,7 +1513,9 @@ const MAP_FIELDS = ["exactMatch", "closeMatch", "broadMatch", "narrowMatch", "re
 const ISO_BROADER = ["broaderGeneric", "broaderPartitive", "broaderInstantial"];
 const ISO_INVERSE = { broaderGeneric: "narrowerGeneric", broaderPartitive: "narrowerPartitive", broaderInstantial: "narrowerInstantial" };
 // Which specialisations also assert their skos:broader super-property. Partitive is kept out for now.
-const ISO_ENTAILS_SKOS = { broaderGeneric: true, broaderPartitive: false, broaderInstantial: true };
+// iso-thes (http://purl.org/iso25964/skos-thes) declares ALL THREE specialisations
+// subproperties of skos:broader — partitive included (#60).
+const ISO_ENTAILS_SKOS = { broaderGeneric: true, broaderPartitive: true, broaderInstantial: true };
 const XL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 const SKOS_LABEL_PRED = { pref: "prefLabel", alt: "altLabel", hidden: "hiddenLabel" };
 
@@ -1555,14 +1558,17 @@ function dateOnly(v){ const s = String(v == null ? "" : v).trim(); const m = s.m
 // mint them under the scheme's dedicated annex namespace when one is set (slash or
 // hash form both allowed), the concept namespace otherwise — an explicit identity
 // URI on the record (ORCID, DOI, homepage) always wins.
-function annexNs(model){
-  const b = ((model.scheme || {}).agentsBase || "").trim();
+function annexNs(model, kind){
+  const sc = model.scheme || {};
+  // documents get their own namespace when one is set (#63), falling back to the
+  // agents namespace (#57), falling back to the concept namespace
+  const b = (kind === "doc" && (sc.docsBase || "").trim()) || (sc.agentsBase || "").trim();
   if (!/^https?:\/\//i.test(b)) return "";
   return b + (/[#\/]$/.test(b) ? "" : "/");
 }
-function annexUri(model, rec, id){
+function annexUri(model, rec, id, kind){
   if (rec && rec.uri && /^https?:\/\//i.test(rec.uri)) return rec.uri;
-  const ns = annexNs(model);
+  const ns = annexNs(model, kind);
   return ns ? ns + id : conceptUri(model, id);
 }
 function buildTriples(model, opts){
@@ -1645,9 +1651,18 @@ function buildTriples(model, opts){
     (c.rdfsLabel || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
     (c.comment || []).forEach(L => { if (L.val) add(s, iri(NS.rdfs + "comment"), lit(L.val, L.lang)); });
     // dct:source -> foaf:Document
-    (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri(annexUri(model, _d, did))); });
+    (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri(annexUri(model, _d, did, "doc"))); });
     // per-concept Dublin Core metadata (editable fields)
-    if (c.creator) add(s, iri(NS.dcterms + "creator"), lit(c.creator, ""));
+    if (c.creator){
+      // a creator string naming a registered agent exports as that agent's URI —
+      // same practice as the scheme's attribution (#59); a URI passes through as
+      // a URI; anything else stays a literal
+      const _cv = String(c.creator).trim(); const _ags = model.agents || {};
+      const _hit = Object.keys(_ags).find(aid => (_ags[aid].name || "").trim().toLowerCase() === _cv.toLowerCase());
+      if (_hit) add(s, iri(NS.dcterms + "creator"), iri(annexUri(model, _ags[_hit], _hit)));
+      else if (/^https?:\/\//i.test(_cv)) add(s, iri(NS.dcterms + "creator"), iri(_cv));
+      else add(s, iri(NS.dcterms + "creator"), lit(_cv, ""));
+    }
     if (c.created) add(s, iri(NS.dcterms + "created"), lit(dateOnly(c.created), "", NS.xsd + "date"));
     if (c.issued) add(s, iri(NS.dcterms + "issued"), lit(dateOnly(c.issued), "", NS.xsd + "date"));
     if (c.modified) add(s, iri(NS.dcterms + "modified"), lit(dateOnly(c.modified), "", NS.xsd + "date"));
@@ -1674,8 +1689,9 @@ function buildTriples(model, opts){
       add(s, iri(NS.skos + "related"), iri(conceptRes(model, rid)));
     });
     // ISO 25964 specialised hierarchy (iso-thes). Emit the specialisation + its narrower
-    // inverse; generic/instantial also assert their skos:broader super-property (partitive
-    // is kept iso-thes-only for now), so plain-SKOS consumers still see the hierarchy.
+    // inverse; every specialisation also asserts its skos:broader super-property (all
+    // three are subproperties of skos:broader in iso-thes, #60), so plain-SKOS
+    // consumers always see the hierarchy.
     for (const fld of ISO_BROADER){
       (c[fld] || []).forEach(pid => {
         if (!model.concepts[pid]) return;
@@ -1716,8 +1732,16 @@ function buildTriples(model, opts){
     const col = model.collections[cid];
     const cs = iri(conceptUri(model, cid));
     add(cs, A, iri(NS.skos + (col.ordered ? "OrderedCollection" : "Collection")));
-    (col.label || []).forEach(L => { if (L.val) add(cs, iri(NS.rdfs + "label"), lit(L.val, L.lang)); });
+    // labels at parity with concepts (#58): first label per language is the
+    // skos:prefLabel (S14-safe), any further same-language labels are altLabels
+    { const _pl = {};
+      (col.label || []).forEach(L => { if (!L.val) return; const k = L.lang || "";
+        if (!_pl[k]){ _pl[k] = 1; add(cs, iri(NS.skos + "prefLabel"), lit(L.val, L.lang)); }
+        else add(cs, iri(NS.skos + "altLabel"), lit(L.val, L.lang)); }); }
     (col.note || []).forEach(L => { if (L.val) add(cs, iri(NS.skos + "note"), lit(L.val, L.lang)); });
+    add(cs, iri(NS.skos + "inScheme"), iri(schemeUri));
+    if (col.created) add(cs, iri(NS.dcterms + "created"), lit(dateOnly(col.created), "", NS.xsd + "date"));
+    if (col.modified) add(cs, iri(NS.dcterms + "modified"), lit(dateOnly(col.modified), "", NS.xsd + "date"));
     const mems = (col.members || []).filter(mid => model.concepts[mid] || (model.collections && model.collections[mid]));
     mems.forEach(mid => add(cs, iri(NS.skos + "member"), iri(model.concepts[mid] ? conceptRes(model, mid) : conceptUri(model, mid))));
     if (col.ordered && mems.length){        // ordered members as an rdf:List via skos:memberList
@@ -1734,7 +1758,7 @@ function buildTriples(model, opts){
   }
   // foaf:Document sources
   for (const did in (model.documents || {})){
-    const d = model.documents[did]; const du = iri(annexUri(model, d, did));
+    const d = model.documents[did]; const du = iri(annexUri(model, d, did, "doc"));
     add(du, A, iri(NS.foaf + "Document"));
     (d.title || []).forEach(L => { if (L.val) add(du, iri(NS.dcterms + "title"), lit(L.val, L.lang)); });
     (d.page || []).forEach(u => { if (u) add(du, iri(NS.foaf + "page"), iri(u)); });
@@ -1772,7 +1796,11 @@ function qname(model, uri){
     // allow digit-leading locals (valid Turtle PN_LOCAL) so 32-char UUID ids compact to :xxxx
     if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return (model.prefix || "") + ":" + loc;
   }
-  const _ans = annexNs(model);
+  const _dns = annexNs(model, "doc"), _ans = annexNs(model);
+  if (_dns && _dns !== _ans && uri.startsWith(_dns)){
+    const loc = uri.slice(_dns.length);
+    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return "resources:" + loc;
+  }
   if (_ans && uri.startsWith(_ans)){
     const loc = uri.slice(_ans.length);
     if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return "agents:" + loc;
@@ -1805,10 +1833,11 @@ function toTurtle(model, opts){
   for (const p of Object.keys(NS))
     out += "@prefix " + p + ": <" + NS[p] + "> .\n";
   out += "@prefix " + (model.prefix || "") + ": <" + model.base + "> .\n";
-  // the annex namespace for provenance resources is a source namespace of this
-  // document — declare it like every other one (#57)
-  const _abDecl = annexNs(model);
+  // the annex namespaces for provenance resources are source namespaces of this
+  // document — declare them like every other one (#57, #63)
+  const _abDecl = annexNs(model), _dbDecl = annexNs(model, "doc");
   if (_abDecl) out += "@prefix agents: <" + _abDecl + "> .\n";
+  if (_dbDecl && _dbDecl !== _abDecl) out += "@prefix resources: <" + _dbDecl + "> .\n";
   out += "\n";
 
   const rdfType = NS.rdf + "type";
@@ -1842,8 +1871,9 @@ function toRdfXml(model, opts){
   const pfxName = uri => { for (const [p, ns] of Object.entries(NS)) if (uri.startsWith(ns)) return [p, uri.slice(ns.length)]; return null; };
   let out = '<?xml version="1.0" encoding="UTF-8"?>\n<rdf:RDF';
   for (const [p, ns] of Object.entries(NS)) out += `\n    xmlns:${p}="${ns}"`;
-  const _axml = annexNs(model);
+  const _axml = annexNs(model), _dxml = annexNs(model, "doc");
   if (_axml) out += `\n    xmlns:agents="${xmlEsc(_axml)}"`;
+  if (_dxml && _dxml !== _axml) out += `\n    xmlns:resources="${xmlEsc(_dxml)}"`;
   out += `\n    xmlns="${model.base}">\n`;
   const rdfType = NS.rdf + "type";
   for (const k of order){
@@ -1877,8 +1907,9 @@ function toJsonLd(model, opts){
   const { triples } = (opts && opts._triples) ? { triples: opts._triples } : buildTriples(model, opts);
   const ctx = {}; for (const p of ["skos", "skosxl", "rdf", "rdfs", "dcterms", "xsd"]) ctx[p] = NS[p];
   if (model.prefix) ctx[model.prefix] = model.base;
-  const _actx = annexNs(model);
+  const _actx = annexNs(model), _dctx = annexNs(model, "doc");
   if (_actx) ctx.agents = _actx;
+  if (_dctx && _dctx !== _actx) ctx.resources = _dctx;
   const order = [], groups = new Map();
   for (const t of triples){
     const k = termId(t.s);
@@ -2444,6 +2475,16 @@ function validate(model){
       `skos:broader points to unknown concept "${p}".`, id);
     for (const r of (c.related || [])) if (!C[r]) push("error", "danglingRelated", "Dangling related",
       `skos:related points to unknown concept "${r}".`, id);
+
+    // mapping targets that are metadata-vocabulary terms, not concepts (#62):
+    // skos:*Match aligns concepts with concepts — pointing one at a property or
+    // class of DC/FOAF/PROV/RDF(S)/OWL/DCAT/SKOS itself is a modeling slip that
+    // only surfaces after publication
+    for (const mf of MAP_FIELDS)
+      for (const u of (c[mf] || []))
+        if (u && Object.values(NS).some(ns => u.startsWith(ns)))
+          push("warning", "mappingToVocabTerm", "Mapping targets a vocabulary term",
+            `skos:${mf} points at <${u}> — a term of a metadata vocabulary (a property or class), not a skos:Concept. Mappings align concepts with concepts; if this concept is about that term, cite it via a Source or a linked artifact instead.`, id);
   }
 
   // 5 ambiguous prefLabels (same pref@lang on >1 concept)
@@ -2858,7 +2899,7 @@ function triplesToModel(triples, prefixes){
     else if (pv === X + "altLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.alt.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     // per-concept Dublin Core metadata → editable fields
-    else if (pv === NS.dcterms + "creator" && o.t === "lit"){ const c = ensure(s); if (c) c.creator = o.v; }
+    else if (pv === NS.dcterms + "creator"){ const c = ensure(s); if (c) c.creator = o.v; }   // literal or agent URI — both round-trip (#59)
     else if (pv === NS.dcterms + "created" && o.t === "lit"){ const c = ensure(s); if (c) c.created = dateOnly(o.v); }
     else if (pv === NS.dcterms + "issued" && o.t === "lit"){ const c = ensure(s); if (c) c.issued = dateOnly(o.v); }
     else if (pv === NS.dcterms + "modified" && o.t === "lit"){ const c = ensure(s); if (c) c.modified = dateOnly(o.v); }
@@ -2941,8 +2982,10 @@ function triplesToModel(triples, prefixes){
       const orderedMembers = memberList ? walkList(memberList.o) : null;
       for (const t of triples){ if (t.p.t!=="iri" || t.s.v!==uri) continue;
         if (t.p.v===NS.rdfs+"label" && t.o.t==="lit") col.label.push({lang:t.o.lang||"", val:t.o.v});
-        else if (t.p.v===P+"prefLabel" && t.o.t==="lit" && !col.label.length) col.label.push({lang:t.o.lang||"", val:t.o.v});
+        else if ((t.p.v===P+"prefLabel" || t.p.v===P+"altLabel") && t.o.t==="lit") col.label.push({lang:t.o.lang||"", val:t.o.v});
         else if (t.p.v===P+"note" && t.o.t==="lit") col.note.push({lang:t.o.lang||"", val:t.o.v});
+        else if (t.p.v===NS.dcterms+"created" && t.o.t==="lit") col.created = dateOnly(t.o.v);
+        else if (t.p.v===NS.dcterms+"modified" && t.o.t==="lit") col.modified = dateOnly(t.o.v);
         else if (t.p.v===P+"member" && t.o.t==="iri"){ const m=idOf(t.o.v); if(isMember(m) && col.members.indexOf(m)<0) col.members.push(m); }
       }
       if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
@@ -2958,7 +3001,7 @@ function triplesToModel(triples, prefixes){
     for (const uri in docSubs){ const id=localOf(uri); const d={ id, title:[], page:[], comment:[] };
       // keep an external subject URI for lossless re-export — unless it is simply the
       // workspace's own annex namespace, which re-derives from agentsBase (#57)
-      if (model.base && uri.indexOf(model.base)!==0 && uri!==annexUri(model, null, id)) d.uri=uri;
+      if (model.base && uri.indexOf(model.base)!==0 && uri!==annexUri(model, null, id, "doc")) d.uri=uri;
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
         if (t.p.v===NS.dcterms+"title" && t.o.t==="lit") d.title.push({ lang:t.o.lang||"", val:t.o.v });
         else if (t.p.v===NS.foaf+"page" && t.o.t==="iri") d.page.push(t.o.v);
@@ -4138,7 +4181,8 @@ function updateTreeLabel(){ const row=$$('.trow.sel .tlabel')[0]; if(row){ const
 // ---------- scheme editor ----------
 const SCHEME_FIELDS=[
   ["base","Base namespace (URI, ends with # or /)","text"],["prefix","Namespace prefix (blank = “:”)","text"],["uri","Concept scheme URI","text"],
-  ["agentsBase","Agents & documents namespace (optional — provenance resources mint here instead of the term namespace; # or / form)","text"],
+  ["agentsBase","Agents namespace (optional — prov:Person/Organization/SoftwareAgent mint here instead of the term namespace; # or / form)","text"],
+  ["docsBase","Documents namespace (optional — foaf:Document sources mint here; blank = same as the agents namespace)","text"],
   ["defaultLang","Default language","lang"],
   ["title","dcterms:title","text"],["description","dcterms:description","area"],
   ["creator","dcterms:creator","text"],["publisher","dcterms:publisher","text"],
@@ -4858,6 +4902,37 @@ const CHECK_DOC={
   components:"qSKOS Disconnected Concept Clusters: the vocabulary splits into unconnected components.",
   valuelessAssoc:"qSKOS Valueless Associative Relations: related concepts that also share a parent.",
 };
+// #61: the validation report as a downloadable Markdown work list — checkbox
+// items grouped by severity and check, so fixes can be worked through without
+// switching back and forth between the editor and the report
+function downloadValReport(){
+  if(!lastValidatedTs) runValidation();
+  const iss=lastIssues||[];
+  const sev={error:[],warning:[],info:[]};
+  iss.forEach(i=>{(sev[i.severity]||sev.info).push(i);});
+  const t=model.scheme.title||"Untitled taxonomy";
+  let md=`# Validation report — ${t}\n\n`;
+  md+=`*Generated ${todayISO()} · ${model.order.length} concepts · ${iss.length} finding${iss.length===1?"":"s"}: ${sev.error.length} error${sev.error.length===1?"":"s"} · ${sev.warning.length} warning${sev.warning.length===1?"":"s"} · ${sev.info.length} info*\n\n`;
+  if(!iss.length) md+="No findings — the taxonomy passes every check. ✅\n\n";
+  const SECT=[["error","Errors — fix before publishing"],["warning","Warnings — review"],["info","Info — optional polish"]];
+  for(const [k,label] of SECT){ if(!sev[k].length) continue;
+    md+=`## ${label} (${sev[k].length})\n\n`;
+    const by={}; sev[k].forEach(i=>{(by[i.title]=by[i.title]||[]).push(i);});
+    for(const title in by){
+      md+=`### ${title} (${by[title].length})\n\n`;
+      by[title].forEach(i=>{ const who=i.concept?`**${(plabel(i.concept)||i.concept)}** (\`${i.concept}\`) — `:"";
+        md+=`- [ ] ${who}${i.message}\n`; });
+      md+="\n";
+    }
+  }
+  md+="---\n*Checked against qSKOS quality criteria in the Intentional Arrangement SKOS editor.*\n";
+  const blob=new Blob([md],{type:"text/markdown"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=(slugId(t)||"taxonomy")+"-validation-report.md"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),500);
+  toast("Validation report downloaded — a checkbox work list in Markdown");
+}
+if(document.getElementById('valDownload')) document.getElementById('valDownload').onclick=downloadValReport;
 function runValidation(){
   lastIssues=Core.validate(model);
   lastValidatedTs=nowTs();
@@ -5402,7 +5477,7 @@ function updateCollPill(){ const el=document.getElementById('pillColl'); if(el) 
 function collMemberOf(id){ const cs=colls(); return Object.keys(cs).filter(k=>(cs[k].members||[]).indexOf(id)>=0); }
 function topCollections(){ const cs=colls(); return Object.keys(cs).filter(id=>collMemberOf(id).length===0); }
 function collContains(a, target, seen){ seen=seen||new Set(); if(seen.has(a)) return false; seen.add(a); const col=colls()[a]; if(!col) return false; for(const m of (col.members||[])){ if(m===target) return true; if(colls()[m] && collContains(m,target,seen)) return true; } return false; }
-function createCollection(ordered){ const cs=colls(); const id=newCollId(); cs[id]={id,label:[{lang:model.defaultLang,val:ordered?"New ordered collection":"New collection"}],note:[],ordered:!!ordered,members:[]}; collSel=id; save(); renderCollections(); }
+function createCollection(ordered){ const cs=colls(); const id=newCollId(); cs[id]={id,label:[{lang:model.defaultLang,val:ordered?"New ordered collection":"New collection"}],note:[],ordered:!!ordered,members:[],created:todayISO(),modified:todayISO()}; collSel=id; save(); renderCollections(); }
 function deleteCollection(id){ if(!confirm('Delete this collection? The concepts themselves are not affected.')) return; delete colls()[id]; if(collSel===id) collSel=null; save(); renderCollections(); }
 function renderCollections(){ updateCollPill(); const cs=colls(); const list=document.getElementById('collList'); const ed=document.getElementById('collEditor'); if(!list||!ed) return;
   const ids=Object.keys(cs); list.innerHTML="";
