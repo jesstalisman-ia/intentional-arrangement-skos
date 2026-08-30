@@ -17,7 +17,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 
 | Folder | What it is |
 |---|---|
-| **`app/`** | The browser app — one self-contained `index.html`. |
+| **`app/`** | The browser app — `index.html` (UI) + `core.js` (the shared standards engine) + `vocab-data.js` (bundled reference vocabularies). Static, no build step. |
 
 | **`api/`** | A small REST API (Flask + rdflib + pySHACL) to validate a vocabulary and convert between RDF serializations. |
 
@@ -110,7 +110,7 @@ This repo is meant to be read and rebuilt, not just run. The essays in [`docs/`]
 
 ## Hosting
 
-The app is live on GitHub Pages (repo **Settings → Pages → Source: GitHub Actions**). Because it's one static file, you can host a copy anywhere:
+The app is live on GitHub Pages (repo **Settings → Pages → Source: GitHub Actions**). Because it's three static files with no build step, you can host a copy anywhere (serve the `app/` folder):
 
 - **GitHub Pages** — free: fork, then **Settings → Pages → Source: GitHub Actions**. Lands at `https://<you>.github.io/intentional-arrangement-skos/`.
 - **Netlify / Cloudflare Pages** — free, with a custom domain. `netlify.toml` points the publish directory at `app/`, so it imports in one click; then add a domain and a CNAME record at your registrar.
