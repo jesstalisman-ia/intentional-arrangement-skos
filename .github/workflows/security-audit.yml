@@ -15,11 +15,17 @@ on:
     - cron: "17 6 * * *"
   workflow_dispatch:
   push:
-    # Exercise the audit whenever the audit itself changes, so a broken checker
-    # is caught immediately rather than at 06:17 the next morning.
+    # Two reasons to run on push. First, when the audit itself changes, so a broken
+    # checker surfaces immediately rather than at 06:17 the next morning. Second,
+    # when anything the audit actually inspects changes -- without that, a loosened
+    # pin or a hand-edited digest sits unreported until the next nightly run, which
+    # is precisely the drift this workflow exists to catch.
     paths:
       - ".github/workflows/security-audit.yml"
       - ".github/scripts/**"
+      - "**/requirements*.txt"
+      - "deploy/Dockerfile"
+      - "deploy/docker-compose.yml"
 
 permissions:
   contents: read
