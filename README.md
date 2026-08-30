@@ -1,9 +1,9 @@
 # Intentional Arrangement SKOS
 
-Build a real SKOS taxonomy in your browser. It validates as you type, exports to seven formats, and sticks to the standards a cataloguer would check it against. No account, no server — one HTML file you open and use.
+Build a real SKOS taxonomy in your browser. It validates as you type, exports to seven formats, and sticks to the standards a cataloguer would check it against. No account, no server — a static page you open and use.
 
 **Try it:** https://jesstalisman-ia.github.io/intentional-arrangement-skos/
-Or download `app/index.html` and open it from your desktop. That file is the app.
+Or download the `app/` folder (three static files, no build step) and open `index.html` from your desktop.
 
 > Informed building, not blind building. Augmentation, not automation.
 
@@ -35,7 +35,7 @@ Or download `app/index.html` and open it from your desktop. That file is the app
 
 - **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, an optional `rdfs:label` alternate name and `rdfs:comment`, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it holds both ways and shows in the graph. Click a linked concept in any relationship picker to jump straight to it in the tree. Identifiers are readable or opaque UUIDs, your call. Language tags use BCP 47 / ISO 639.
 
-- **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. Generic and instantial also assert their `skos:broader` super-property, so plain-SKOS tools still read the hierarchy.
+- **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. All three assert their `skos:broader` super-property — as the iso-thes ontology declares — so plain-SKOS tools always read the hierarchy.
 
 - **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dcterms:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dcterms:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
 
