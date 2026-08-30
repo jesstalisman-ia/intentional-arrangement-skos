@@ -169,6 +169,8 @@ Beyond concepts and their `broader`/`related` links, the graph can show the rest
 
 The legend at bottom right names every bubble type. Alt labels remain available as an optional satellite layer.
 
+**Connecting in the graph**: with **Connect** active, click two concepts to add a `broader` or `related` link — or click a concept and the scheme hub (either order) to mark it a **top concept of the scheme**, which exports as `skos:topConceptOf` / `skos:hasTopConcept` and records a history note. Selecting an explicitly marked top-concept edge in the inspector lets you unmark it; the edge drawn for a concept that simply has no parent is derived, and stays until the concept gets one.
+
 ## Export — take it out without loss
 
 Export from the **Export** tab (it's the last tab — it does more than RDF, so it's labelled just "Export"). The RDF forms are lossless; the flat forms are for people and other tools.

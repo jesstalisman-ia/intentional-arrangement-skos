@@ -918,7 +918,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.16.5</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.16.6</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1546,6 +1546,11 @@ function xlLabelUri(model, cid, kind, index, lang){
 // When xl=false, plain skos labels are always emitted.
 // ============================================================================
 function isoDateTime(ts){ try{ return new Date(ts).toISOString().replace(/\.\d{3}Z$/, "Z"); }catch(e){ return null; } }
+// dcterms:created/issued/modified fields hold calendar dates. A dateTime can leak in
+// (older exports emitted history-derived xsd:dateTime stamps, which an import then
+// filed into these fields — #55/#56): reduce it to its date part so the value always
+// sits inside xsd:date's lexical space. Anything unrecognizable passes through untouched.
+function dateOnly(v){ const s = String(v == null ? "" : v).trim(); const m = s.match(/^(\d{4}-\d{2}-\d{2})([T ]|$)/); return m ? m[1] : s; }
 function buildTriples(model, opts){
   opts = opts || {};
   const T = [];
@@ -1573,9 +1578,9 @@ function buildTriples(model, opts){
     else if (model.scheme.publisher) add(s, dct("publisher"), lit(model.scheme.publisher, L));
     { const _cl = Array.isArray(model.scheme.contributorAgents) ? model.scheme.contributorAgents : (model.scheme.contributorAgent ? [model.scheme.contributorAgent] : []);
       _cl.forEach(aid => { if (_ag[aid]) add(s, dct("contributor"), iri(_resUri(_ag[aid], aid))); }); }
-    if (model.scheme.created) add(s, dct("created"), lit(model.scheme.created, "", NS.xsd + "date"));
-    if (model.scheme.issued) add(s, dct("issued"), lit(model.scheme.issued, "", NS.xsd + "date"));
-    if (model.scheme.modified) add(s, dct("modified"), lit(model.scheme.modified, "", NS.xsd + "date"));
+    if (model.scheme.created) add(s, dct("created"), lit(dateOnly(model.scheme.created), "", NS.xsd + "date"));
+    if (model.scheme.issued) add(s, dct("issued"), lit(dateOnly(model.scheme.issued), "", NS.xsd + "date"));
+    if (model.scheme.modified) add(s, dct("modified"), lit(dateOnly(model.scheme.modified), "", NS.xsd + "date"));
     if (model.scheme.rights) add(s, dct("rights"), lit(model.scheme.rights, L));
     // publication metadata (#45 #46 #47): license as a URI, version, and the
     // vann namespace annotations derived from the workspace's own base + prefix
@@ -1629,9 +1634,9 @@ function buildTriples(model, opts){
     (c.source || []).forEach(did => { const _d = model.documents && model.documents[did]; if (_d) add(s, iri(NS.dcterms + "source"), iri((_d.uri && /^https?:\/\//i.test(_d.uri)) ? _d.uri : conceptUri(model, did))); });
     // per-concept Dublin Core metadata (editable fields)
     if (c.creator) add(s, iri(NS.dcterms + "creator"), lit(c.creator, ""));
-    if (c.created) add(s, iri(NS.dcterms + "created"), lit(c.created, "", NS.xsd + "date"));
-    if (c.issued) add(s, iri(NS.dcterms + "issued"), lit(c.issued, "", NS.xsd + "date"));
-    if (c.modified) add(s, iri(NS.dcterms + "modified"), lit(c.modified, "", NS.xsd + "date"));
+    if (c.created) add(s, iri(NS.dcterms + "created"), lit(dateOnly(c.created), "", NS.xsd + "date"));
+    if (c.issued) add(s, iri(NS.dcterms + "issued"), lit(dateOnly(c.issued), "", NS.xsd + "date"));
+    if (c.modified) add(s, iri(NS.dcterms + "modified"), lit(dateOnly(c.modified), "", NS.xsd + "date"));
     // Passthrough: any other imported metadata the editor does not model (ISO 25964,
     // or any predicate beyond the fields above) is re-emitted verbatim so nothing is
     // dropped on a round-trip.
@@ -1675,9 +1680,11 @@ function buildTriples(model, opts){
     if (opts.dc && c.history && c.history.length){
       const times = c.history.map(h => h.ts).filter(Boolean);
       if (times.length){
+        // one value per property (#55): the editable date fields are authoritative;
+        // history-derived dateTime stamps only fill in where no field is set
         const ci = isoDateTime(Math.min.apply(null, times)), mi = isoDateTime(Math.max.apply(null, times));
-        if (ci) add(s, iri(NS.dcterms + "created"), lit(ci, "", NS.xsd + "dateTime"));
-        if (mi) add(s, iri(NS.dcterms + "modified"), lit(mi, "", NS.xsd + "dateTime"));
+        if (ci && !c.created) add(s, iri(NS.dcterms + "created"), lit(ci, "", NS.xsd + "dateTime"));
+        if (mi && !c.modified) add(s, iri(NS.dcterms + "modified"), lit(mi, "", NS.xsd + "dateTime"));
       }
       // each history entry → one skos:changeNote (date — what changed; by whom)
       c.history.forEach(h => {
@@ -2781,9 +2788,9 @@ function triplesToModel(triples, prefixes){
       else if (pv === D + "creator"){ if (o.t === "iri") model.scheme.creatorAgent = localOf(o.v); else model.scheme.creator = o.v; }
       else if (pv === D + "publisher"){ if (o.t === "iri") model.scheme.publisherAgent = localOf(o.v); else model.scheme.publisher = o.v; }
       else if (pv === D + "contributor" && o.t === "iri"){ (model.scheme.contributorAgents = model.scheme.contributorAgents || []).push(localOf(o.v)); }   // repeatable — collect ALL contributors (was last-wins)
-      else if (pv === D + "created") model.scheme.created = o.v;
-      else if (pv === D + "issued") model.scheme.issued = o.v;
-      else if (pv === D + "modified") model.scheme.modified = o.v;
+      else if (pv === D + "created") model.scheme.created = dateOnly(o.v);
+      else if (pv === D + "issued") model.scheme.issued = dateOnly(o.v);
+      else if (pv === D + "modified") model.scheme.modified = dateOnly(o.v);
       else if (pv === D + "language") model.scheme.language = o.v;
       else if (pv === D + "rights") model.scheme.rights = o.v;
       else if (pv === D + "license" && o.t === "iri") model.scheme.license = o.v;
@@ -2824,9 +2831,9 @@ function triplesToModel(triples, prefixes){
     else if (pv === X + "hiddenLabel" && o.t === "iri"){ const c = ensure(s), f = xlForm[o.v]; if (c && f){ c.hidden.push({ lang: f.lang || "", val: f.v, uri:o.v, source:f.source }); sawXl=true; } }
     // per-concept Dublin Core metadata → editable fields
     else if (pv === NS.dcterms + "creator" && o.t === "lit"){ const c = ensure(s); if (c) c.creator = o.v; }
-    else if (pv === NS.dcterms + "created" && o.t === "lit"){ const c = ensure(s); if (c) c.created = o.v; }
-    else if (pv === NS.dcterms + "issued" && o.t === "lit"){ const c = ensure(s); if (c) c.issued = o.v; }
-    else if (pv === NS.dcterms + "modified" && o.t === "lit"){ const c = ensure(s); if (c) c.modified = o.v; }
+    else if (pv === NS.dcterms + "created" && o.t === "lit"){ const c = ensure(s); if (c) c.created = dateOnly(o.v); }
+    else if (pv === NS.dcterms + "issued" && o.t === "lit"){ const c = ensure(s); if (c) c.issued = dateOnly(o.v); }
+    else if (pv === NS.dcterms + "modified" && o.t === "lit"){ const c = ensure(s); if (c) c.modified = dateOnly(o.v); }
     // skos:inScheme is re-derived on export (single-scheme editor); consume it here so
     // the passthrough below doesn't duplicate what the exporter already emits.
     else if (pv === P + "inScheme"){ const c = ensure(s);
@@ -6395,7 +6402,7 @@ function graphRefreshSel(){ $$('#gNodes .gnode').forEach(el=>el.classList.remove
 function graphInspector(){
   const ins=$('#gInspector'); if(!G.sel){ ins.classList.remove('show'); return; } ins.classList.add('show');
   if(G.sel.kind==="edge"){ const e=G.sel.e; const relTxt={broader:"skos:broader",related:"skos:related",subClassOf:"rdfs:subClassOf",equivalentClass:"owl:equivalentClass",disjointWith:"owl:disjointWith",hasTopConcept:"skos:hasTopConcept",source:"dcterms:source",attrib:(e.label||"attribution"),exactMatch:"skos:exactMatch",closeMatch:"skos:closeMatch",broadMatch:"skos:broadMatch",narrowMatch:"skos:narrowMatch",relatedMatch:"skos:relatedMatch",objprop:(e.label||"object property")};
-    const removable=!["hasTopConcept","attrib"].includes(e.rel);
+    const removable=e.rel!=="attrib"&&!(e.rel==="hasTopConcept"&&!(model.concepts[(G.byKey[e.t]||{}).refId]||{}).top);
     ins.innerHTML=`<h4>Relationship</h4><div class="gi-meta">${escapeHtml(G.byKey[e.s].label)} <b>— ${escapeHtml(relTxt[e.rel])} →</b> ${escapeHtml(G.byKey[e.t].label)}</div>`+(removable?`<div class="gi-acts"><button class="btn sm" id="giDelEdge">Remove relationship</button></div>`:`<div class="gi-meta">Derived from the scheme — edit it in the Build tab.</div>`);
     const de=$('#giDelEdge'); if(de) de.onclick=()=>graphRemoveEdge(e); return; }
   const n=G.sel.node; const kindLbl=n.kind==="concept"?"SKOS concept":n.kind==="class"?"OWL class":n.kind==="scheme"?"Concept scheme":n.kind==="doc"?"Source · foaf:Document":n.kind==="agent"?"Agent · prov:Agent":n.kind==="xc"?"Mapped concept (external)":"Vocabulary term (external)";
@@ -6430,7 +6437,7 @@ function graphInspector(){
 
 // ---- pointer: node drag / connect ----
 function graphNodeDown(ev,n){ ev.stopPropagation(); ev.preventDefault(); $('#gMenu').style.display="none";
-  if(G.mode==="connect"){ if(!["alt","scheme","doc","agent","xc"].includes(n.kind)) graphConnectPick(n); return; }
+  if(G.mode==="connect"){ if(!["alt","doc","agent","xc"].includes(n.kind)) graphConnectPick(n); return; }
   if(n.kind!=="alt") graphSelect(n);  // alt-label satellites are visual: draggable but not selectable
   const p=graphLocal(ev.clientX,ev.clientY); G.drag={node:n,dx:n.x-p.x,dy:n.y-p.y,moved:false}; n.pinned=true;
   window.addEventListener("pointermove",graphDragMove); window.addEventListener("pointerup",graphDragUp,{once:true});
@@ -6450,12 +6457,14 @@ function graphRelMenu(a,b){
   const menu=$('#gMenu'); const opts=[];
   const A=a.label, B=b.label;
   if(a.kind==="concept"&&b.kind==="concept"){ opts.push(["broader",`“${A}” ⊑ broader “${B}”`]); opts.push(["related",`“${A}” related “${B}”`]); }
-  else if(a.kind!=="concept"&&b.kind!=="concept"){ // class/ext ↔ class/ext
+  else if((a.kind==="scheme"&&b.kind==="concept")||(a.kind==="concept"&&b.kind==="scheme")){
+    const cn=a.kind==="concept"?a:b; opts.push(["hasTopConcept",`“${cn.label}” ⊤ top concept of the scheme`]); }
+  else if(a.kind!=="concept"&&b.kind!=="concept"&&a.kind!=="scheme"&&b.kind!=="scheme"){ // class/ext ↔ class/ext
     if(a.kind==="class"){ opts.push(["subClassOf",`“${A}” subClassOf “${B}”`]);
       if(b.kind==="class"){ opts.push(["equivalentClass",`“${A}” equivalentClass “${B}”`]); opts.push(["disjointWith",`“${A}” disjointWith “${B}”`]); }
       opts.push(["objprop",`“${A}” —[new object property]→ “${B}”`]); }
   }
-  if(!opts.length){ $('#gMenu').style.display="none"; toast("Link two concepts (SKOS) or two classes (OWL) — a concept and a class can't be linked here."); graphSetMode("select"); return; }
+  if(!opts.length){ $('#gMenu').style.display="none"; toast("Link two concepts (SKOS), two classes (OWL), or a concept and the scheme (top concept) — a concept and a class can't be linked here."); graphSetMode("select"); return; }
   menu.innerHTML=`<div class="mh">Add relationship</div>`+opts.map(([r,l],i)=>`<button data-r="${r}">${escapeHtml(l)}</button>`).join("");
   const mid=graphMid(a,b); menu.style.left=Math.min(G.W-190,Math.max(6,mid.sx))+"px"; menu.style.top=Math.min(G.H-40,Math.max(6,mid.sy))+"px"; menu.style.display="flex";
   menu.querySelectorAll('button').forEach(btn=>btn.onclick=()=>{ menu.style.display="none"; graphApplyRel(a,b,btn.dataset.r); });
@@ -6465,6 +6474,9 @@ async function graphApplyRel(a,b,rel){
   graphSetMode("select");
   const uriOf=n=> n.kind==="ext"?n.refUri:ownUri(n.refId);
   if(rel==="broader"){ const c=model.concepts[a.refId]; c.broader=c.broader||[]; if(!c.broader.includes(b.refId)){ c.broader.push(b.refId); if(c.top) c.top=false; seedHistory(c,`Set broader → ${plabel(b.refId)} (graph)`);} renderTree(); }
+  else if(rel==="hasTopConcept"){ const cn=a.kind==="concept"?a:b; const c=model.concepts[cn.refId];
+    if(c&&!c.top){ c.top=true; seedHistory(c,"Marked as top concept of the scheme (graph)"); }
+    renderTree(); }
   else if(rel==="related"){ [[a.refId,b.refId],[b.refId,a.refId]].forEach(([x,y])=>{ const c=model.concepts[x]; c.related=c.related||[]; if(!c.related.includes(y)) c.related.push(y); }); }
   else if(rel==="subClassOf"||rel==="equivalentClass"||rel==="disjointWith"){ const c=model.onto.classes[a.refId]; const key=rel==="subClassOf"?"sub":rel==="equivalentClass"?"equiv":"disjoint"; c[key]=c[key]||[]; const u=uriOf(b); if(!c[key].includes(u)){ c[key].push(u); if(b.kind==="ext") ontoAutoImport(u); } }
   else if(rel==="objprop"){ const name=await askPrompt(`Name the object property from “${a.label}” to “${b.label}”`, "relatesTo", "Create"); if(!name) return; const id=uniqueOntoId(name); model.onto.props[id]={id,label:name,comment:"",ptype:"object",sub:[],domain:[ownUri(a.refId)],range:[uriOf(b)],inverseOf:[],chars:{}}; model.onto.order.props.push(id); if(b.kind==="ext") ontoAutoImport(uriOf(b)); }
@@ -6473,6 +6485,11 @@ async function graphApplyRel(a,b,rel){
 function graphRemoveEdge(e){
   if(e.rel==="broader"){ const c=model.concepts[G.byKey[e.s].refId]; c.broader=(c.broader||[]).filter(x=>x!==G.byKey[e.t].refId); }
   else if(e.rel==="related"){ const s=G.byKey[e.s].refId,t=G.byKey[e.t].refId; [s,t].forEach(x=>{ const c=model.concepts[x]; if(c) c.related=(c.related||[]).filter(y=>y!==(x===s?t:s)); }); }
+  else if(e.rel==="hasTopConcept"){ const c=model.concepts[(G.byKey[e.t]||{}).refId];
+    if(c&&c.top){ c.top=false; seedHistory(c,"Unmarked as top concept (graph)"); renderTree(); }
+    G.sel=null; save(); graphRender();
+    toast((c&&!(c.broader||[]).some(b=>model.concepts[b]))?"Unmarked as top concept — it still acts as a hierarchy root until it's given a parent":"Relationship removed");
+    return; }
   else if(e.rel==="objprop"){ if(e.pid){ delete model.onto.props[e.pid]; model.onto.order.props=model.onto.order.props.filter(x=>x!==e.pid); } }
   else if(["exactMatch","closeMatch","broadMatch","narrowMatch","relatedMatch"].includes(e.rel)){
     const c=model.concepts[G.byKey[e.s].refId]; const t=G.byKey[e.t];

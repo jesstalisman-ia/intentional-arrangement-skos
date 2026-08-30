@@ -8,6 +8,13 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Fix: date literals valid and single-valued (v0.16.6, #55 #56)
+- **Malformed date literals (#56):** an imported `dcterms:created`/`issued`/`modified` carrying a full timestamp landed verbatim in the concept's date field, and the next export typed it `xsd:date` — a dateTime lexical form outside `xsd:date`'s lexical space, rejected by Jena's `riot --validate` and SHACL. Dates are now reduced to their calendar-date part on import **and** defensively on export, so existing polluted files heal on their next round-trip.
+- **Double created/modified values (#55):** the exporter emitted the editable date fields (`xsd:date`) *and* history-derived timestamps (`xsd:dateTime`) for the same properties — two `dcterms:created` per concept. The editable fields are now authoritative; history-derived stamps only fill in when no field is set. One value per property, always.
+
+### Graph: connect a top concept to its scheme (v0.16.6)
+- The concept-scheme bubble was visible in the graph but excluded from **Connect** mode — there was no way to link a concept to the scheme. Connecting a concept and the scheme (either click order) now offers **"top concept of the scheme"**, which marks it top (`skos:topConceptOf` / `skos:hasTopConcept` on export) with a history note. An explicitly marked top-concept edge can be removed in the inspector to unmark it; derived root edges remain informational.
+
 ### New check: unmarked top concepts (v0.16.5, #54)
 - A concept with **no broader term (plain or ISO 25964) that isn't marked as a top concept** now raises a warning: it acts as a hierarchy root but exports without `skos:topConceptOf`, silently leaving the scheme's entry points incomplete. Comes with a one-click auto-fix ("Mark N unmarked root(s) as top concepts"). Deliberately distinct from the orphan warning — a concept with no relations at all stays an *orphan*, because auto-topping it would hide the real problem.
 
