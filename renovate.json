@@ -82,6 +82,16 @@
       "groupName": "container base images"
     },
     {
+      "description": "Hold the base image on the floating 17-jre tag and let only the digest move. Renovate otherwise proposes retagging to a point release (17.0.20_8-jre) or to Java 25 (25.0.4_7-jre). A point-release tag stops moving, which would make the daily digest-drift check meaningless -- and that check is what catches an unpatched base image. allowedVersions filters candidate TAGS during lookup; digest updates are a separate mechanism and keep working.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchDepNames": [
+        "eclipse-temurin"
+      ],
+      "allowedVersions": "/^17-jre$/"
+    },
+    {
       "description": "Fuseki majors change the server config surface; never automate them.",
       "matchDepNames": [
         "org.apache.jena:jena-fuseki-main"

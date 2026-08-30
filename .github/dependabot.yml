@@ -7,6 +7,11 @@
 # dependency. That is the one job Renovate cannot do as well: Dependabot is wired
 # straight into the GitHub Advisory Database and the repo's alerts.
 #
+# The interval below is "daily" to match the repository's stated preference, but note
+# it has little practical effect here: `open-pull-requests-limit: 0` suppresses the
+# scheduled version PRs the interval governs, and security PRs are raised when an
+# advisory lands, not on a schedule.
+#
 # NOTE: this file alone is inert. "Dependabot alerts" and "Dependabot security
 # updates" must also be switched on in
 #   Settings -> Advanced Security (or Code security and analysis)
@@ -17,7 +22,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/api"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
@@ -26,7 +31,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/mcp-server"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
@@ -35,7 +40,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/connectors/sharepoint-termstore"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
@@ -44,7 +49,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/deploy"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
@@ -53,7 +58,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
@@ -62,7 +67,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/.github/scripts"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     open-pull-requests-limit: 0
     labels:
       - "dependencies"

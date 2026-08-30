@@ -27,17 +27,32 @@ tag, an SRI hash that no longer matches the published bytes. Findings collect in
 single issue that is updated in place and closed automatically when a run comes back
 clean.
 
-## Finding: dependencies were not pinned (fixed)
+## Change: dependencies are now pinned exactly
 
-**Severity: high — it disabled dependency management entirely.**
+**Severity: medium — a gap in coverage and reproducibility, not a vulnerability.**
 
-Every requirement was an open range (`flask>=3.0`, `rdflib>=7.0`). Neither Renovate nor
-Dependabot can raise a version PR against `>=3.0`, because every new release already
-satisfies it. The dependency tooling would have been installed and silently done nothing.
+Every requirement was an open range (`flask>=3.0`, `rdflib>=7.0`). What the two tools do
+with that differs, and the distinction matters:
+
+- **Dependabot does raise PRs against an open range**, widening the lower bound — this
+  repository's own history shows it, in closed PRs titled
+  "Update flask requirement from >=3.0 to >=3.1.3".
+- **Renovate, on its default range strategy, leaves a satisfied range alone.** Nothing to
+  replace when `7.6.0` already satisfies `>=7.0`, so those dependencies would have sat
+  outside Renovate's coverage entirely.
+
+So pinning is not what makes dependency management work — it is what makes both tools
+see the same thing, and what makes a build reproducible: an unpinned range means the
+version you deployed is whatever PyPI served that day, and is not recorded anywhere.
+
+An earlier draft of this document claimed neither tool could act on `>=3.0`. That was
+wrong about Dependabot, and is corrected here. The commit messages on this branch still
+carry the original overstatement; rewriting them would mean rewriting published history,
+so the correction lives here instead.
 
 All requirements are now pinned with `==`. The daily audit re-checks this, so a pin
 loosened back to a range is reported rather than quietly dropping that dependency out
-of tracking.
+of Renovate's tracking.
 
 ## Finding: the Fuseki base image was pinned to a stale digest (fixed)
 
@@ -50,6 +65,16 @@ without a freshness check trades one risk for another.
 Refreshed to `sha256:13cc28a6…`, verified as a like-for-like OCI index covering the same
 six platforms. Renovate's Docker manager now raises this bump, and the daily audit fails
 if the pin drifts from the live tag again.
+
+### Why the tag stays `17-jre`
+
+Renovate will offer to retag the base image to a point release (`17.0.20_8-jre`) or to
+Java 25 (`25.0.4_7-jre`). Both are declined by an `allowedVersions` rule in
+`renovate.json`, and deliberately so: a point-release tag stops moving, and the daily
+audit's whole base-image check is "does the pinned digest still match what this tag
+resolves to". Freeze the tag and that check quietly becomes a no-op — which is exactly
+how the stale digest above went unnoticed in the first place. The tag stays floating;
+the digest is pinned and Renovate keeps it fresh.
 
 ## Finding: Apache Jena version tracked in two places that could diverge (fixed)
 
@@ -119,6 +144,9 @@ Neither can be done from a commit:
 2. **Enable Dependabot alerts and security updates** in
    *Settings → Advanced Security* (or *Code security and analysis*). `dependabot.yml`
    configures Dependabot; it does not switch it on.
+   **This one appears already done for this repository** — Dependabot has previously
+   opened PRs here (#6–#15, since closed against a rewritten base), which it could not
+   have done while switched off. Worth confirming rather than assuming.
 
 The daily `security-audit` workflow needs neither, and starts working on the first push.
 
