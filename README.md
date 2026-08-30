@@ -73,6 +73,8 @@ cd app && python3 -m http.server 8080     # http://localhost:8080
 ```
 It's also [live on GitHub Pages](https://jesstalisman-ia.github.io/intentional-arrangement-skos/).
 
+Canonical local URL: **http://localhost:8080** — the sibling tools keep their own: IA Studio on :8081, the RDF Wiki workspace server on :8070, Ontology Studio on :8083.
+
 ### 2. As a REST API
 ```bash
 cd api && pip install -r requirements.txt && python server.py     # http://127.0.0.1:8000
