@@ -68,8 +68,13 @@ function xlLabelUri(model, cid, kind, index, lang){
 }
 
 // ============================================================================
-// Build triples (canonical). opts: {xl:bool, dumbDown:bool, dc:bool}
+// Build triples (canonical). opts: {xl:bool, dumbDown:bool, dc:bool, rlabel:bool}
 // xl=true emits skosxl reified labels; dumbDown=true also emits plain skos labels.
+// rlabel=true additionally mirrors PREFERRED labels as rdfs:label (#65) — a
+// materialization of skos:prefLabel ⊑ rdfs:label (SKOS Reference §5.2) for
+// consumers without a reasoner; in XL mode the skosxl:Label resources also get
+// rdfs:label = literalForm. Preferred labels only: mirroring alt/hidden would
+// blur ISO 25964's preferred/non-preferred distinction for naive consumers.
 // When xl=false, plain skos labels are always emitted.
 // ============================================================================
 function isoDateTime(ts){ try{ return new Date(ts).toISOString().replace(/\.\d{3}Z$/, "Z"); }catch(e){ return null; } }
@@ -158,14 +163,17 @@ function buildTriples(model, opts){
       (c[kind] || []).forEach((L, i) => {
         if (!L.val) return;
         const plain = () => add(s, iri(NS.skos + SKOS_LABEL_PRED[kind]), lit(L.val, L.lang));
+        const mirror = () => { if (opts.rlabel && kind === "pref") add(s, iri(NS.rdfs + "label"), lit(L.val, L.lang)); };
         if (opts.xl){
           const lu = iri(L.uri || xlLabelUri(model, id, kind, i + 1, L.lang));
           add(s, iri(NS.skosxl + XL_PRED[kind]), lu);
           add(lu, A, iri(NS.skosxl + "Label"));
           add(lu, iri(NS.skosxl + "literalForm"), lit(L.val, L.lang));
+          if (opts.rlabel) add(lu, iri(NS.rdfs + "label"), lit(L.val, L.lang));
           if (L.source) add(lu, iri(NS.dcterms + "source"), lit(L.source, L.lang));
           if (opts.dumbDown) plain();
-        } else plain();
+          mirror();
+        } else { plain(); mirror(); }
       });
     }
     // documentation
@@ -260,7 +268,8 @@ function buildTriples(model, opts){
     // skos:prefLabel (S14-safe), any further same-language labels are altLabels
     { const _pl = {};
       (col.label || []).forEach(L => { if (!L.val) return; const k = L.lang || "";
-        if (!_pl[k]){ _pl[k] = 1; add(cs, iri(NS.skos + "prefLabel"), lit(L.val, L.lang)); }
+        if (!_pl[k]){ _pl[k] = 1; add(cs, iri(NS.skos + "prefLabel"), lit(L.val, L.lang));
+          if (opts.rlabel) add(cs, iri(NS.rdfs + "label"), lit(L.val, L.lang)); }
         else add(cs, iri(NS.skos + "altLabel"), lit(L.val, L.lang)); }); }
     (col.note || []).forEach(L => { if (L.val) add(cs, iri(NS.skos + "note"), lit(L.val, L.lang)); });
     add(cs, iri(NS.skos + "inScheme"), iri(schemeUri));
@@ -1515,6 +1524,21 @@ function triplesToModel(triples, prefixes){
       if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
       model.collections[cid] = col;
     }
+  }
+
+  // a mirrored rdfs:label (#65 export option) is generated content — recognizing
+  // it here keeps round-trips clean: concepts drop rdfs:label entries duplicating
+  // a preferred label, collections dedupe their label list
+  for (const id in model.concepts){ const c = model.concepts[id];
+    if ((c.rdfsLabel || []).length && (c.pref || []).length){
+      const pk = new Set((c.pref || []).map(L => (L.lang || "") + "\u0000" + (L.val || "")));
+      c.rdfsLabel = c.rdfsLabel.filter(L => !pk.has((L.lang || "") + "\u0000" + (L.val || "")));
+    }
+  }
+  for (const cid in (model.collections || {})){ const col = model.collections[cid];
+    const seenL = new Set();
+    col.label = (col.label || []).filter(L => { const k = (L.lang || "") + "\u0000" + (L.val || "");
+      if (seenL.has(k)) return false; seenL.add(k); return true; });
   }
 
   // ---- foaf:Document sources ----

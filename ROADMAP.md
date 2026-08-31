@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Export option: mirror preferred labels as rdfs:label (v0.17.1, #65)
+- A new export option — **Also emit rdfs:label (generic RDF tools)** — mirrors each *preferred* label as `rdfs:label`, materializing `skos:prefLabel ⊑ rdfs:label` (SKOS Reference §5.2) for consumers without a reasoner: generic RDF browsers, LodView, a plain `?s rdfs:label ?l` query. In SKOS-XL mode the `skosxl:Label` resources are labelled too (their only text is otherwise `literalForm`, invisible to generic tools). **Off by default** — the default export stays pure SKOS labels. Deliberately scoped to preferred labels only: mirroring alt/hidden labels would blur ISO 25964's preferred/non-preferred distinction for naive consumers. Round-trips stay clean either way — a mirrored `rdfs:label` is recognized on import and never becomes a duplicate alternate name or collection label.
+
 ### Six-ticket batch (v0.17.0, #58–#63)
 - **Collections export at parity (#58):** collections now carry `skos:prefLabel` (first label per language; further same-language labels become `skos:altLabel`, keeping the one-prefLabel-per-language integrity condition), `skos:inScheme`, and `dcterms:created`/`modified` (new collections are date-stamped; imported dates round-trip). `skos:note` stays — it is the honest property for a collection's free-text note.
 - **Concept creator as a URI (#59):** a concept's `dcterms:creator` that names a registered agent now exports as that agent's URI — the same practice as the scheme's attribution. A URI value passes through as a URI; anything else stays a literal, and imports of either form round-trip.

@@ -184,7 +184,7 @@ Export from the **Export** tab (it's the last tab — it does more than RDF, so 
 - **CSV, Excel (`.xlsx`)** — a flat, spreadsheet-friendly view. Good for editing and review; treat an RDF export as the version of record.
 - **Markdown** — the vocabulary and its links as one readable document.
 
-For the RDF forms you also choose the **label style** — *Plain SKOS*, *SKOS-XL*, or *SKOS-XL + plain*. If the taxonomy is in SKOS-XL mode (see [Labels](#a-concepts-fields)) this defaults to *SKOS-XL + plain*.
+For the RDF forms you also choose the **label style** — *Plain SKOS*, *SKOS-XL*, or *SKOS-XL + plain*. A separate option, **Also emit rdfs:label**, mirrors each preferred label as `rdfs:label` for generic RDF tools that don't reason over `skos:prefLabel ⊑ rdfs:label` (in SKOS-XL mode the label resources are labelled too). It's off by default, keeping the export pure SKOS; turn it on when a downstream consumer reads `rdfs:label`. If the taxonomy is in SKOS-XL mode (see [Labels](#a-concepts-fields)) this defaults to *SKOS-XL + plain*.
 
 Everything is generated in your browser. Nothing is uploaded.
 

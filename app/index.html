@@ -929,7 +929,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.17.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.17.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -1123,7 +1123,8 @@
           <label><input type="radio" name="lbl" value="xlplain"><span>SKOS-XL + plain</span></label>
         </div></div>
         <div class="optset"><span class="h">Metadata</span>
-          <label class="toggle"><input type="checkbox" id="expDc" checked> Include Dublin Core</label></div>
+          <label class="toggle"><input type="checkbox" id="expDc" checked> Include Dublin Core</label>
+          <label class="toggle" title="Mirror each preferred label as rdfs:label (skos:prefLabel is rdfs:subPropertyOf rdfs:label — SKOS Reference §5.2). For generic RDF tools that read rdfs:label without a reasoner; off = pure SKOS labels."><input type="checkbox" id="expRlabel"> Also emit rdfs:label <span class="subtle">(generic RDF tools)</span></label></div>
         <div class="optset" style="margin-left:auto;align-self:flex-end"><div class="radios">
           <button class="btn sm" id="expCopy">Copy</button>
           <button class="btn sm primary" id="expDownload">Download</button>
@@ -1300,6 +1301,7 @@
         <button class="btn" data-exp="audit" style="grid-column:1/-1"><b>Audit log</b> &nbsp;.csv — full change history with author &amp; timestamp</button>
       </div>
       <label class="toggle" style="margin-top:12px;align-items:flex-start;gap:7px"><input type="checkbox" id="expXlMode" style="margin-top:2px"><span><b>SKOS-XL labels</b> — emit <code>skosxl:Label</code> resources (plus plain <code>skos:</code> labels) in Turtle, RDF/XML &amp; JSON-LD</span></label>
+      <label class="toggle" style="margin-top:8px;align-items:flex-start;gap:7px"><input type="checkbox" id="expRlabelMode" style="margin-top:2px"><span><b>Also emit rdfs:label</b> — mirror each preferred label for generic RDF tools (<code>skos:prefLabel ⊑ rdfs:label</code>); in SKOS-XL mode the <code>skosxl:Label</code> resources are labelled too. Off = pure SKOS labels.</span></label>
       <label class="toggle" style="margin-top:8px;align-items:flex-start;gap:7px"><input type="checkbox" id="expCopyMode" style="margin-top:2px"><span>Downloads blocked by your browser? Show the text to copy instead</span></label>
       <p class="subtle" style="margin-bottom:0">Want a live preview or more formats (RDF/JSON, Markdown, Excel)? Use the <b>Export</b> tab.</p>
     </div>
@@ -2915,7 +2917,8 @@ function exportOpts(){
   const fmt=$('input[name=fmt]:checked').value;
   const lbl=$('input[name=lbl]:checked').value;
   const dc=$('#expDc').checked;
-  return { fmt, opts:{ dc, xl:lbl!=="plain", dumbDown:lbl==="xlplain" } };
+  const rlabel=!!($('#expRlabel')&&$('#expRlabel').checked);
+  return { fmt, opts:{ dc, xl:lbl!=="plain", dumbDown:lbl==="xlplain", rlabel } };
 }
 function renderExport(){
   const {fmt,opts}=exportOpts();
@@ -2936,6 +2939,7 @@ function renderExport(){
 }
 $$('#expFormat input, #expLabel input').forEach(r=>r.onchange=renderExport);
 $('#expDc').onchange=renderExport;
+if($('#expRlabel')) $('#expRlabel').onchange=renderExport;
 $('#expCopy').onclick=()=>{ copyText(window._export.text); };
 $('#expDownload').onclick=async ()=>{ const {text,mime,ext}=window._export;
   const slug=(model.scheme.title||"taxonomy").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"taxonomy";
@@ -5031,7 +5035,7 @@ function doExport(kind){
   // SKOS-XL is chosen at export time via the modal's toggle (defaulted from the project).
   // When on, emit skosxl:Label resources AND dumb-down to plain skos labels, so consumers
   // that don't read SKOS-XL still get labels.
-  const xl = !!($('#expXlMode') && $('#expXlMode').checked); const ropts = {dc:true, xl, dumbDown:xl};
+  const xl = !!($('#expXlMode') && $('#expXlMode').checked); const rlabel = !!($('#expRlabelMode') && $('#expRlabelMode').checked); const ropts = {dc:true, xl, dumbDown:xl, rlabel};
   if(kind==="ttl"){ text=Core.toTurtle(model,ropts); mime="text/turtle"; ext="ttl"; }
   else if(kind==="rdf"){ text=Core.toRdfXml(model,ropts); mime="application/rdf+xml"; ext="rdf"; }
   else if(kind==="jsonld"){ text=Core.toJsonLd(model,ropts); mime="application/ld+json"; ext="jsonld"; }
