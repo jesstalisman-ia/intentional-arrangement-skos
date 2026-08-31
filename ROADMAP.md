@@ -8,6 +8,11 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Collections polish from the field (v0.17.2, #67 #68 #69)
+- **"Collection editor" heading (#67):** the Collections editor panel now carries the same card header the Concept editor has — the two halves of the screen finally read as siblings.
+- **The way back (#68):** the concept editor gains a **Collections** group listing every collection the concept belongs to, as clickable chips that jump straight back to that collection in the Collections editor. Derived from the model — no extension property needed in your RDF. The importer additionally understands `uneskos:memberOf` (the UNESKOS inverse of `skos:member`), consuming it as membership; exports stay core SKOS and never emit the extension property.
+- **Language tags on all annotation fields (#69):** collection **names and notes** are now language-tagged, multi-row editors (the first name per language exports as `skos:prefLabel`, further ones as `skos:altLabel`, per v0.17.0's collection export) — which also fixes a lurking bug where editing a collection's name silently discarded its other-language names. The concept scheme's title and description now display the language tag they export with.
+
 ### Export option: mirror preferred labels as rdfs:label (v0.17.1, #65)
 - A new export option — **Also emit rdfs:label (generic RDF tools)** — mirrors each *preferred* label as `rdfs:label`, materializing `skos:prefLabel ⊑ rdfs:label` (SKOS Reference §5.2) for consumers without a reasoner: generic RDF browsers, LodView, a plain `?s rdfs:label ?l` query. In SKOS-XL mode the `skosxl:Label` resources are labelled too (their only text is otherwise `literalForm`, invisible to generic tools). **Off by default** — the default export stays pure SKOS labels. Deliberately scoped to preferred labels only: mirroring alt/hidden labels would blur ISO 25964's preferred/non-preferred distinction for naive consumers. Round-trips stay clean either way — a mirrored `rdfs:label` is recognized on import and never becomes a duplicate alternate name or collection label.
 

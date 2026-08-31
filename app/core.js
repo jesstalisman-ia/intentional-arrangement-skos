@@ -1341,7 +1341,7 @@ function triplesToModel(triples, prefixes){
   // Concepts are keyed by a URI→id map so a federated file can hold several
   // namespaces: home-namespace concepts get their local name; foreign concepts get a
   // unique local id AND keep their original URI (c.uri), which the exporter honors.
-  const _uriId = {}, _idUri = {}, _maybeForeign = [];
+  const _uriId = {}, _idUri = {}, _maybeForeign = [], _memberOf = [];
   const ensure = u => { if(!isConcept(u)) return null;
     let id = _uriId[u];
     if (!id){ let bid = localOf(u); if (bid === u) bid = (u.match(/[^#/]+$/) || ["c"])[0] || "c";
@@ -1442,6 +1442,10 @@ function triplesToModel(triples, prefixes){
       // a foreign concept's membership in ITS OWN scheme is data — preserve it;
       // home-namespace membership is re-derived on export as before
       if (c && c.uri && o.t === "iri" && o.v !== model.scheme.uri) (c.extra = c.extra || []).push({ p: pv, o: { t: "iri", v: o.v, lang: "", dt: "" } }); }
+    // uneskos:memberOf (UNESKOS extension, #68): the inverse of skos:member.
+    // Consumed as collection membership — re-derived as plain skos:member on
+    // export; the extension property itself is never emitted.
+    else if (pv === "http://purl.org/umu/uneskos#memberOf" && o.t === "iri"){ _memberOf.push({ concept: s, coll: o.v }); }
     // Passthrough: preserve any predicate on a concept we don't model (per-concept
     // dcterms:created/issued/modified/creator, ISO 25964, custom metadata) so it
     // survives the round-trip and is re-emitted on export.
@@ -1524,6 +1528,16 @@ function triplesToModel(triples, prefixes){
       if (orderedMembers && orderedMembers.length){ col.members = orderedMembers.filter(isMember); }
       model.collections[cid] = col;
     }
+  }
+  // apply uneskos:memberOf statements (#68) — membership into collections the file
+  // actually declares; unknown targets are ignored
+  for (const mo of _memberOf){
+    const cid = localOf(mo.coll);
+    const col = model.collections && model.collections[cid];
+    if (!col) continue;
+    const m = idOf(mo.concept);
+    if ((model.concepts[m] || (model.collections && model.collections[m])) && col.members.indexOf(m) < 0)
+      col.members.push(m);
   }
 
   // a mirrored rdfs:label (#65 export option) is generated content — recognizing

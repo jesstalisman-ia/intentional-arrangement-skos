@@ -886,6 +886,7 @@
         <div id="collList"></div>
       </div>
       <div class="card">
+        <div class="card-h"><h2>Collection editor</h2></div>
         <div id="collEditor" class="browse-detail"></div>
       </div>
     </div>
@@ -929,7 +930,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.17.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.17.2</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -2020,6 +2021,19 @@ function renderEditor(){
   }
   host.appendChild(relGroup("Related", c, "related"));
   host.appendChild(mapGroup(c));
+  // collections this concept belongs to (#68) — the way back from Build to the
+  // Collections editor; derived from the model, no extension property needed
+  { const _cs=(typeof colls==="function")?colls():(model.collections||{});
+    const _mine=Object.keys(_cs).filter(k=>((_cs[k].members)||[]).includes(selected));
+    if(_mine.length){
+      const g=groupShell("Collections ("+_mine.length+")", null);
+      const row=document.createElement("div"); row.style.cssText="display:flex;gap:6px;flex-wrap:wrap;padding:2px 0";
+      _mine.forEach(k=>{ const b=document.createElement("button"); b.className="btn sm";
+        b.textContent="● "+(collLabel(_cs[k])||k); b.title="Open this collection in the Collections editor";
+        b.onclick=()=>{ collSel=k; switchTab("collections"); renderCollections(); };
+        row.appendChild(b); });
+      g.appendChild(row); host.appendChild(g);
+    } }
   host.appendChild(sourceGroup(c));
   host.appendChild(metaGroup(c));
   host.appendChild(artifactGroup(c));
@@ -2255,7 +2269,12 @@ function renderScheme(){
   const g=$('#schemeGrid'); g.innerHTML="";
   for(const [key,lbl,type] of SCHEME_FIELDS){
     const f=document.createElement("div"); f.className="fld";
-    const l=document.createElement("label"); l.textContent=lbl; f.appendChild(l);
+    const l=document.createElement("label"); l.textContent=lbl;
+    if(key==="title"||key==="description"){ const lc=document.createElement("span"); lc.className="subtle";
+      lc.style.cssText="margin-left:6px;font-size:11px;font-family:var(--mono)";
+      lc.textContent="@"+((model.scheme.lang||model.defaultLang||"en")); lc.title="Exported with the scheme's language tag";
+      l.appendChild(lc); }
+    f.appendChild(l);
     let el; const getv=()=> key==="base"?model.base : key==="prefix"?(model.prefix||"") : key==="defaultLang"?model.defaultLang : model.scheme[key]||"";
     if(type==="area"){ el=document.createElement("textarea"); } else { el=document.createElement("input"); if(type==="date") el.type="date"; }
     if(key==="modified") el.id="fldModified";
@@ -3623,9 +3642,24 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   if(!collSel||!cs[collSel]){ ed.innerHTML='<div class="subtle" style="padding:16px">Select a collection on the left, or create one above.</div>'; return; }
   const col=cs[collSel]; ed.innerHTML="";
   const wrap=el2=>{ const d=document.createElement('div'); d.style.cssText="margin-bottom:14px"; return d; };
-  // name
-  const nameW=wrap(); const nlab=document.createElement('label'); nlab.textContent="Name (rdfs:label)"; nlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nin=document.createElement('input'); nin.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=collLabel(col); nin.oninput=()=>{ col.label=[{lang:model.defaultLang,val:nin.value}]; save(); updateCollPill(); const r=document.getElementById('collList'); /*live*/ };
-  nin.onchange=()=>{ const v=nin.value.trim(); if(isAutoId(col.id,"collection")&&v&&!/^New (ordered )?collection$/i.test(v)){ const nid=slugLocalId(v,col.id); if(nid&&nid!==col.id) renameCollection(col.id,nid); } renderCollections(); }; nameW.append(nlab,nin); ed.appendChild(nameW);
+  // names — language-tagged rows (#69): the first per language exports as
+  // skos:prefLabel, further same-language names as skos:altLabel (#58)
+  const nameW=wrap(); const nlab=document.createElement('label'); nlab.textContent="Names (skos:prefLabel)"; nlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px";
+  const addN=document.createElement('button'); addN.className="btn sm add"; addN.textContent="+ add"; addN.style.marginLeft="8px";
+  addN.onclick=()=>{ (col.label=col.label||[]).push({lang:model.defaultLang,val:""}); save(); renderCollections(); };
+  nlab.appendChild(addN); nameW.appendChild(nlab);
+  (col.label=col.label&&col.label.length?col.label:[{lang:model.defaultLang,val:""}]).forEach((L,i)=>{
+    const r=document.createElement('div'); r.className="rowline"; r.style.marginBottom="4px";
+    const lang=mkLangSelect(L, ()=>{ save(); });
+    const nin=document.createElement('input'); nin.className="val"; nin.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=L.val||"";
+    nin.oninput=()=>{ L.val=nin.value; save(); updateCollPill(); };
+    nin.onchange=()=>{ const v=nin.value.trim(); if(v!==nin.value){ nin.value=v; L.val=v; save(); }
+      if(i===0&&isAutoId(col.id,"collection")&&v&&!/^New (ordered )?collection$/i.test(v)){ const nid=slugLocalId(v,col.id); if(nid&&nid!==col.id) renameCollection(col.id,nid); }
+      renderCollections(); };
+    const rm=document.createElement('button'); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
+    rm.onclick=()=>{ col.label.splice(i,1); save(); renderCollections(); };
+    r.append(lang,nin,rm); nameW.appendChild(r); });
+  ed.appendChild(nameW);
   // identifier (URI local name) — readable, stable, editable (#37)
   const idW=wrap(); const idlab=document.createElement('label'); idlab.textContent="Identifier (URI local name)"; idlab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px";
   const idrow=document.createElement('div'); idrow.style.cssText="display:flex;gap:6px;align-items:center";
@@ -3639,8 +3673,20 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   const ol=document.createElement('label'); ol.style.cssText="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"; const ocb=document.createElement('input'); ocb.type="checkbox"; ocb.checked=!!col.ordered; ocb.onchange=()=>{ col.ordered=ocb.checked; save(); renderCollections(); }; ol.append(ocb, document.createTextNode("Ordered collection (preserves member order via skos:memberList)"));
   const del=document.createElement('button'); del.className="btn sm"; del.textContent="Delete collection"; del.style.marginLeft="auto"; del.onclick=()=>deleteCollection(col.id);
   tW.append(ol,del); ed.appendChild(tW);
-  // note
-  const noteW=wrap(); const nolab=document.createElement('label'); nolab.textContent="Note (skos:note, optional)"; nolab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px"; const nta=document.createElement('textarea'); nta.style.cssText="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nta.rows=2; nta.value=(col.note&&col.note[0]&&col.note[0].val)||""; nta.oninput=()=>{ col.note=nta.value.trim()?[{lang:model.defaultLang,val:nta.value}]:[]; save(); }; noteW.append(nolab,nta); ed.appendChild(noteW);
+  // notes — language-tagged rows (#69); each exports as skos:note
+  const noteW=wrap(); const nolab=document.createElement('label'); nolab.textContent="Notes (skos:note, optional)"; nolab.style.cssText="display:block;font-size:12px;font-weight:600;margin-bottom:4px";
+  const addNo=document.createElement('button'); addNo.className="btn sm add"; addNo.textContent="+ add"; addNo.style.marginLeft="8px";
+  addNo.onclick=()=>{ (col.note=col.note||[]).push({lang:model.defaultLang,val:""}); save(); renderCollections(); };
+  nolab.appendChild(addNo); noteW.appendChild(nolab);
+  (col.note||[]).forEach((L,i)=>{
+    const r=document.createElement('div'); r.className="rowline"; r.style.marginBottom="4px";
+    const lang=mkLangSelect(L, ()=>{ save(); });
+    const nta=document.createElement('textarea'); nta.className="val"; nta.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nta.rows=2; nta.value=L.val||"";
+    nta.oninput=()=>{ L.val=nta.value; save(); };
+    const rm=document.createElement('button'); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
+    rm.onclick=()=>{ col.note.splice(i,1); save(); renderCollections(); };
+    r.append(lang,nta,rm); noteW.appendChild(r); });
+  ed.appendChild(noteW);
   // members
   const mh=document.createElement('div'); mh.style.cssText="font-size:12px;font-weight:600;margin-bottom:6px"; mh.textContent="Members ("+(col.members||[]).length+")"; ed.appendChild(mh);
   const mlist=document.createElement('div'); mlist.style.cssText="margin-bottom:10px";
