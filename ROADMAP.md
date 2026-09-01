@@ -8,6 +8,9 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+### Collections stamp their modifications (v0.17.3)
+- Editing a collection — its names, notes, type, or members — now stamps `dcterms:modified`, the same discipline concepts have had since v0.7. Collections predating v0.17.0 carry no dates and none are invented for them (the editor never fabricates provenance): they gain a `modified` stamp the first time they're actually edited, and `created` stays absent by design. Documented, after a field report showed the absence reads as a bug.
+
 ### Collections polish from the field (v0.17.2, #67 #68 #69)
 - **"Collection editor" heading (#67):** the Collections editor panel now carries the same card header the Concept editor has — the two halves of the screen finally read as siblings.
 - **The way back (#68):** the concept editor gains a **Collections** group listing every collection the concept belongs to, as clickable chips that jump straight back to that collection in the Collections editor. Derived from the model — no extension property needed in your RDF. The importer additionally understands `uneskos:memberOf` (the UNESKOS inverse of `skos:member`), consuming it as membership; exports stay core SKOS and never emit the extension property.

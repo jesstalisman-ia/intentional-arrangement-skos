@@ -930,7 +930,7 @@
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.17.2</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.17.3</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -3652,7 +3652,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     const r=document.createElement('div'); r.className="rowline"; r.style.marginBottom="4px";
     const lang=mkLangSelect(L, ()=>{ save(); });
     const nin=document.createElement('input'); nin.className="val"; nin.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nin.value=L.val||"";
-    nin.oninput=()=>{ L.val=nin.value; save(); updateCollPill(); };
+    nin.oninput=()=>{ L.val=nin.value; col.modified=todayISO(); save(); updateCollPill(); };
     nin.onchange=()=>{ const v=nin.value.trim(); if(v!==nin.value){ nin.value=v; L.val=v; save(); }
       if(i===0&&isAutoId(col.id,"collection")&&v&&!/^New (ordered )?collection$/i.test(v)){ const nid=slugLocalId(v,col.id); if(nid&&nid!==col.id) renameCollection(col.id,nid); }
       renderCollections(); };
@@ -3670,7 +3670,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   idrow.append(idin,sy); idW.append(idlab,idrow,hint); ed.appendChild(idW);
   // type toggle + delete
   const tW=document.createElement('div'); tW.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap";
-  const ol=document.createElement('label'); ol.style.cssText="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"; const ocb=document.createElement('input'); ocb.type="checkbox"; ocb.checked=!!col.ordered; ocb.onchange=()=>{ col.ordered=ocb.checked; save(); renderCollections(); }; ol.append(ocb, document.createTextNode("Ordered collection (preserves member order via skos:memberList)"));
+  const ol=document.createElement('label'); ol.style.cssText="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"; const ocb=document.createElement('input'); ocb.type="checkbox"; ocb.checked=!!col.ordered; ocb.onchange=()=>{ col.ordered=ocb.checked; col.modified=todayISO(); save(); renderCollections(); }; ol.append(ocb, document.createTextNode("Ordered collection (preserves member order via skos:memberList)"));
   const del=document.createElement('button'); del.className="btn sm"; del.textContent="Delete collection"; del.style.marginLeft="auto"; del.onclick=()=>deleteCollection(col.id);
   tW.append(ol,del); ed.appendChild(tW);
   // notes — language-tagged rows (#69); each exports as skos:note
@@ -3682,7 +3682,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     const r=document.createElement('div'); r.className="rowline"; r.style.marginBottom="4px";
     const lang=mkLangSelect(L, ()=>{ save(); });
     const nta=document.createElement('textarea'); nta.className="val"; nta.style.cssText="flex:1;padding:7px 9px;border:1px solid var(--border);border-radius:8px"; nta.rows=2; nta.value=L.val||"";
-    nta.oninput=()=>{ L.val=nta.value; save(); };
+    nta.oninput=()=>{ L.val=nta.value; col.modified=todayISO(); save(); };
     const rm=document.createElement('button'); rm.className="rmv"; rm.textContent="✕"; rm.title="remove";
     rm.onclick=()=>{ col.note.splice(i,1); save(); renderCollections(); };
     r.append(lang,nta,rm); noteW.appendChild(r); });
@@ -3699,7 +3699,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
     r.appendChild(nm);
     if(col.ordered){ const up=document.createElement('button'); up.className="btn sm"; up.textContent="▲"; up.disabled=i===0; up.onclick=()=>{ const m=col.members; [m[i-1],m[i]]=[m[i],m[i-1]]; save(); renderCollections(); };
       const dn=document.createElement('button'); dn.className="btn sm"; dn.textContent="▼"; dn.disabled=i===col.members.length-1; dn.onclick=()=>{ const m=col.members; [m[i+1],m[i]]=[m[i],m[i+1]]; save(); renderCollections(); }; r.append(up,dn); }
-    const rm=document.createElement('button'); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from collection"; rm.onclick=()=>{ col.members.splice(i,1); save(); renderCollections(); }; r.appendChild(rm); mlist.appendChild(r); });
+    const rm=document.createElement('button'); rm.className="btn sm"; rm.textContent="✕"; rm.title="Remove from collection"; rm.onclick=()=>{ col.members.splice(i,1); col.modified=todayISO(); save(); renderCollections(); }; r.appendChild(rm); mlist.appendChild(r); });
   if(!(col.members||[]).length){ const e=document.createElement('div'); e.className="subtle"; e.style.cssText="font-size:12px;padding:4px 0 10px"; e.textContent="No members yet — add concepts or sub-collections below."; mlist.appendChild(e); }
   ed.appendChild(mlist);
   // add member — concepts and other collections (nesting), excluding cycles
@@ -3711,7 +3711,7 @@ function renderCollections(){ updateCollPill(); const cs=colls(); const list=doc
   if(availColl.length) html+='<optgroup label="Collections (nest)">'+availColl.map(k=>'<option value="'+k+'">▦ '+escapeHtml(collLabel(cs[k]))+'</option>').join("")+'</optgroup>';
   html+='<optgroup label="Concepts">'+availC.map(id=>'<option value="'+id+'">'+escapeHtml(plabel(id))+'</option>').join("")+'</optgroup>';
   sel.innerHTML=html;
-  sel.onchange=()=>{ if(sel.value){ (col.members=col.members||[]).push(sel.value); save(); renderCollections(); } };
+  sel.onchange=()=>{ if(sel.value){ (col.members=col.members||[]).push(sel.value); col.modified=todayISO(); save(); renderCollections(); } };
   addW.appendChild(sel); ed.appendChild(addW);
 }
 if(document.getElementById('collNew')) document.getElementById('collNew').onclick=()=>createCollection(false);
