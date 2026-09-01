@@ -174,6 +174,12 @@ PAGE_TEST = r"""
     const m2 = modelFromTTL(ttl);
     if (!(m2 && m2.concepts && m2.concepts.SmokeTest)) fail('Turtle round-trip lost the concept');
     if (!Array.isArray(Core.validate(m))) fail('Core.validate did not return an array');
+    // Doug's invariant (#65 field report): with the rdfs:label mirror ON, no
+    // resource may carry more rdfs:label than skos:prefLabel values
+    const tOn = Core.toTurtle(m, { dc: true, rlabel: true });
+    const nPref = (tOn.match(/skos:prefLabel /g) || []).length;
+    const nR = (tOn.match(/rdfs:label /g) || []).length;
+    if (nR > nPref) fail(`rdfs:label mirror leaked: ${nR} rdfs:label vs ${nPref} prefLabel predicates`);
   } catch (e) { fail('engine: ' + String(e.message || e)); }
 
   return JSON.stringify(out);
