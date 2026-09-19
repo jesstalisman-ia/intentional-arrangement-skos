@@ -89,7 +89,7 @@ A collection's **Identifier** — its URI local name — derives from the name t
 
 ## Sources — documents & agents
 
-The **Sources** tab holds reusable records that concepts and the scheme can point at.
+The **Sources** tab holds reusable records that concepts and the scheme can point at. It is laid out like Build: a tree on the left with two collapsible groups, **Documents** and **Agents**, and an editor on the right for whichever record you select.
 
 - **Documents** (`foaf:Document`) — a source document with a title (`dcterms:title`), a page URL (`foaf:page`), and an optional comment (`rdfs:comment`). Add documents here, then cite them from a concept with the **Sources** picker in the concept editor (`dcterms:source`). Each document has an **identifier** (its URI local name) that derives from the title when you first set it, stays stable afterwards, and can be edited — plus an optional **URI** (a DOI or w3id) that becomes the document's subject URI on export, so citations point at the real resource.
 - **Agents** (`prov:Agent`) — a **Person**, **Organization**, or **Software agent** (`prov:Person` / `prov:Organization` / `prov:SoftwareAgent`) with a name (`foaf:name`) and optional homepage (`foaf:homepage`). In the concept-scheme panel, link an agent as the scheme's **creator**, **contributor**, or **publisher** — the agent reference is exported in place of the plain-text field.

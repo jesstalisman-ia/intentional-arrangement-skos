@@ -893,11 +893,19 @@
   </section>
 
   <section class="panel" data-panel="sources">
-    <div class="card">
-      <div class="card-h"><h2 style="flex:0 0 auto;white-space:nowrap">Sources</h2>
-        <span class="subtle" style="margin-left:8px;font-size:12px;flex:1;min-width:0">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dcterms:source</code> in the concept editor.</span>
+    <div class="build">
+      <div class="card">
+        <div class="card-h"><h2 style="white-space:nowrap">Sources</h2><span class="sp"></span>
+          <button class="btn sm primary" id="srcNewDoc">＋ Document</button>
+          <button class="btn sm" id="srcNewAgent">＋ Agent</button></div>
+        <div class="subtle" style="font-size:12px;padding:8px 13px 2px">Reusable <b>documents</b> (<code>foaf:Document</code>) and <b>agents</b> (<code>prov:Agent</code>). Link a concept to a document with <code>dcterms:source</code> in the concept editor; credit an agent in the scheme metadata.</div>
+        <div class="tsearch"><input id="srcSearch" type="search" placeholder="Filter documents &amp; agents…" autocomplete="off"></div>
+        <div class="treewrap" id="srcList"></div>
       </div>
-      <div id="sourcesBody"></div>
+      <div class="card">
+        <div class="card-h"><h2>Source editor</h2></div>
+        <div class="edit" id="srcEditor"><div class="edit-empty">Select a document or agent on the left, or add one above.</div></div>
+      </div>
     </div>
   </section>
 
@@ -3617,78 +3625,137 @@ let collFilter="";
 const collapsedColls=new Set();   // #24: collapsible collection nodes — expanded by default
 function colls(){ return model.collections=model.collections||{}; }
 // ---------- Sources tab: foaf:Document + prov:Agent ----------
+// Same shape as Build: a grouped tree (Documents / Agents) on the left, one record's form on the right.
 function docs(){ return model.documents=model.documents||{}; }
 function provAgents(){ return model.agents=model.agents||{}; }
+let srcSel=null;                 // {kind:"doc"|"agent", id} — the record open in the Source editor
+let srcFilter="";
+let srcFocusNew=false;           // focus the title/name field right after ＋ Document / ＋ Agent
+const collapsedSrc=new Set();    // "doc" / "agent" group nodes — expanded by default
 function updateSrcPill(){ const el=document.getElementById('pillSrc'); if(el) el.textContent=Object.keys(docs()).length+Object.keys(provAgents()).length; }
 function newDocId(){ let n=1,id; do{ id="doc"+n++; }while(localNameTaken(id)); return id; }
 function docTitle(d){ const t=(d&&d.title||[]).find(x=>x.val); return t?t.val:(d&&d.id||"(untitled document)"); }
-function createDocument(){ const d=docs(); const id=newDocId(); d[id]={id,title:[{lang:model.defaultLang,val:""}],page:[""],comment:[]}; save(); renderSources(); }
+function srcRecord(){ if(!srcSel) return null; return srcSel.kind==="doc"?docs()[srcSel.id]:provAgents()[srcSel.id]; }
+function selectSource(kind,id){ srcSel={kind,id}; collapsedSrc.delete(kind); renderSources(); }
+function createDocument(){ const d=docs(); const id=newDocId(); d[id]={id,title:[{lang:model.defaultLang,val:""}],page:[""],comment:[]}; save(); srcFocusNew=true; srcClearFilter(); selectSource("doc",id); }
 function deleteDocument(id){ if(!confirm("Delete this document? Concepts that reference it keep the link until you remove it.")) return; delete docs()[id];
   for(const cid in model.concepts){ const c=model.concepts[cid]; if(c.source) c.source=c.source.filter(x=>x!==id); }
+  if(srcSel&&srcSel.kind==="doc"&&srcSel.id===id) srcSel=null;
   save(); renderSources(); if(selected) renderEditor(); }
-const _srcInput="border:1px solid var(--border);border-radius:7px;padding:6px 9px;font:inherit;background:var(--surface-2)";
-function renderSources(){ updateSrcPill(); const body=document.getElementById("sourcesBody"); if(!body) return; body.innerHTML="";
-  // ----- Documents -----
-  const dh=document.createElement("div"); dh.style.cssText="display:flex;align-items:center;gap:10px;margin:2px 0 8px";
-  dh.innerHTML='<h3 style="margin:0;font-size:14px">Documents <span class="subtle" style="font-weight:400;font-size:12px;font-family:var(--mono)">foaf:Document</span></h3>';
-  const addD=document.createElement("button"); addD.className="btn sm primary"; addD.textContent="＋ Document"; addD.onclick=createDocument; dh.appendChild(addD); body.appendChild(dh);
-  const dl=docs();
-  if(!Object.keys(dl).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 14px"; e.textContent="No documents yet. Add one, then reference it from a concept with dcterms:source in the concept editor."; body.appendChild(e); }
-  for(const id in dl){ const d=dl[id]; d.title=d.title&&d.title.length?d.title:[{lang:model.defaultLang,val:""}]; d.page=d.page&&d.page.length?d.page:[""]; d.comment=d.comment||[];
-    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:grid;gap:7px";
-    const tr=document.createElement("div"); tr.style.cssText="display:flex;gap:6px;align-items:center";
-    const tl=document.createElement("input"); tl.style.cssText=_srcInput+";width:56px"; tl.placeholder="lang"; tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
-    const tv=document.createElement("input"); tv.style.cssText=_srcInput+";flex:1"; tv.placeholder="Title (dcterms:title)"; tv.value=d.title[0].val||""; tv.oninput=()=>{ d.title[0].val=tv.value; save(); updateSrcPill(); };
+function srcClearFilter(){ srcFilter=""; const q=document.getElementById("srcSearch"); if(q) q.value=""; }
+const SRC_CARET='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+const SRC_GROUPS=[
+  {kind:"doc",   title:"Documents", cls:"foaf:Document", items:docs,       name:docTitle,  blank:d=>!docTitle(d)||docTitle(d)===d.id,
+    hay:d=>[docTitle(d),d.id,d.uri||"",...(d.page||[]),...((d.comment||[]).map(c=>c.val||""))].join(" "),
+    empty:"No documents yet — ＋ Document above, then cite it from a concept with dcterms:source."},
+  {kind:"agent", title:"Agents",    cls:"prov:Agent",    items:provAgents, name:agentName, blank:a=>!(a.name||"").trim(),
+    hay:a=>[agentName(a),a.id,a.kind||"",a.uri||"",a.homepage||""].join(" "),
+    empty:"No agents yet — ＋ Agent above to credit people, organizations, or software as creator / contributor / publisher."}
+];
+function renderSources(){ updateSrcPill(); renderSrcTree(); renderSrcEditor(); }
+function renderSrcTree(){ const list=document.getElementById("srcList"); if(!list) return; list.innerHTML="";
+  const f=srcFilter; let shown=0;
+  for(const g of SRC_GROUPS){ const all=g.items(); const ids=Object.keys(all).filter(id=>!f||g.hay(all[id]).toLowerCase().includes(f));
+    if(f&&!ids.length) continue; shown++;
+    const isOpen=!!f||!collapsedSrc.has(g.kind);
+    const node=document.createElement("div");
+    const row=document.createElement("div"); row.className="trow top"+(isOpen?" open":"");
+    const caret=document.createElement("button"); caret.className="caret"; caret.innerHTML=SRC_CARET; caret.title=isOpen?"Collapse":"Expand";
+    const toggle=e=>{ e.stopPropagation(); if(collapsedSrc.has(g.kind)) collapsedSrc.delete(g.kind); else collapsedSrc.add(g.kind); renderSrcTree(); };
+    caret.onclick=toggle; row.onclick=toggle; row.appendChild(caret);
+    const lb=document.createElement("span"); lb.className="tlabel"; lb.style.fontWeight="600"; lb.textContent=g.title+" ";
+    const cls=document.createElement("span"); cls.className="subtle"; cls.style.cssText="font-weight:400;font-family:var(--mono);font-size:11px"; cls.textContent=g.cls; lb.appendChild(cls); row.appendChild(lb);
+    const ct=document.createElement("span"); ct.className="tcount"; ct.textContent=ids.length; row.appendChild(ct);
+    node.appendChild(row);
+    if(isOpen){ const kw=document.createElement("div"); kw.className="kids";
+      if(!ids.length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:5px 8px 7px"; e.textContent=g.empty; kw.appendChild(e); }
+      for(const id of ids){ const rec=all[id]; const sel=srcSel&&srcSel.kind===g.kind&&srcSel.id===id;
+        const r=document.createElement("div"); r.className="trow"+(sel?" sel":""); r.onclick=()=>selectSource(g.kind,id);
+        const c2=document.createElement("button"); c2.className="caret empty"; c2.innerHTML=SRC_CARET; c2.tabIndex=-1; r.appendChild(c2);
+        const dot=document.createElement("span"); dot.className="tdot"; r.appendChild(dot);
+        const nm=document.createElement("span"); nm.className="tlabel"+(f?" fmatch":"");
+        if(g.blank(rec)){ const u=document.createElement("span"); u.className="unl"; u.textContent=g.kind==="doc"?"(untitled document)":"(unnamed agent)"; nm.appendChild(u); nm.appendChild(document.createTextNode(" · "+id)); }
+        else nm.textContent=g.name(rec);
+        nm.title=(rec.uri||((model.prefix?model.prefix+":":"")+id)); r.appendChild(nm);
+        if(g.kind==="agent"){ const k=AGENT_KINDS.find(x=>x.v===rec.kind); const kb=document.createElement("span"); kb.className="tcount"; kb.textContent=k?k.cls:"Person"; kb.title="prov:"+(k?k.cls:"Person"); r.appendChild(kb); }
+        else { const n=Object.values(model.concepts||{}).filter(c=>(c.source||[]).includes(id)).length; if(n){ const kb=document.createElement("span"); kb.className="tcount"; kb.textContent=n; kb.title=n+" concept"+(n===1?"":"s")+" cite this document"; r.appendChild(kb); } }
+        kw.appendChild(r); }
+      node.appendChild(kw); }
+    list.appendChild(node); }
+  if(f&&!shown){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="padding:14px 8px"; e.textContent="Nothing matches “"+f+"”."; list.appendChild(e); }
+}
+// ----- Source editor (right card) -----
+function srcGrp(ed,title){ const g=document.createElement("div"); g.className="grp"; const l=document.createElement("div"); l.className="lbl"; l.textContent=title; g.appendChild(l); ed.appendChild(g); return g; }
+function srcRow(g){ const r=document.createElement("div"); r.className="rowline"; g.appendChild(r); return r; }
+function srcInput(cls,placeholder){ const i=document.createElement("input"); i.className=cls||"val"; if(placeholder) i.placeholder=placeholder; return i; }
+function srcIdRow(g,rec,kind,derive,rename){
+  const r=document.createElement("div"); r.className="rowline"; r.style.alignItems="center";
+  const idin=srcInput("val","identifier"); idin.style.cssText="font-family:var(--mono);font-size:12px"; idin.title="Identifier — the "+(kind==="doc"?"document's":"agent's")+" local name in your namespace"; idin.value=rec.id;
+  idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=rec.id; return; }
+    if(nid!==rec.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, "+(kind==="doc"?"and agents":"and documents")); idin.value=rec.id; return; }
+    rename(rec.id,nid); renderSources(); };
+  const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent=kind==="doc"?"↦ from title":"↦ from name"; sy.title="Derive the identifier from the "+(kind==="doc"?"title":"name");
+  sy.onclick=()=>{ const nid=slugLocalId(derive(),rec.id); if(nid){ rename(rec.id,nid); renderSources(); } };
+  r.append(idin,sy); g.appendChild(r);
+  const hint=document.createElement("div"); hint.className="subtle"; hint.style.cssText="font-size:11px;margin-top:4px"; hint.textContent="Becomes the "+(kind==="doc"?"document's":"agent's")+" URI ("+(model.prefix?model.prefix+":":"")+rec.id+") unless an explicit URI is set below. Stable once set — renaming doesn't change it."; g.appendChild(hint);
+}
+function renderSrcEditor(){ const ed=document.getElementById("srcEditor"); if(!ed) return; ed.innerHTML="";
+  const rec=srcRecord();
+  if(!rec){ srcSel=null; ed.innerHTML='<div class="edit-empty">Select a document or agent on the left, or add one above.</div>'; return; }
+  const head=document.createElement("h3"); head.className="uri"; const setHead=()=>{ head.textContent=(rec.uri||((model.prefix?model.prefix+":":"")+rec.id)); }; setHead(); ed.appendChild(head);
+  let focusEl=null;
+  if(srcSel.kind==="doc"){ const d=rec; d.title=d.title&&d.title.length?d.title:[{lang:model.defaultLang,val:""}]; d.page=d.page&&d.page.length?d.page:[""]; d.comment=d.comment||[];
+    const tg=srcGrp(ed,"Title (dcterms:title)"); const tr=document.createElement("div"); tr.className="rowline";
+    const tl=srcInput("lang","lang"); tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
+    const tv=srcInput("val","Title"); tv.value=d.title[0].val||""; focusEl=tv;
+    tv.oninput=()=>{ d.title[0].val=tv.value; save(); renderSrcTree(); };
     tv.onchange=()=>{ if(isAutoId(d.id,"doc")&&tv.value.trim()){ const nid=slugLocalId(tv.value,d.id); if(nid&&nid!==d.id){ renameDocument(d.id,nid); renderSources(); } } };
-    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete document"; del.onclick=()=>deleteDocument(id);
-    tr.append(tl,tv,del); card.appendChild(tr);
-    const ir=document.createElement("div"); ir.style.cssText="display:flex;gap:6px;align-items:center";
-    const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the document's local name in your namespace"; idin.placeholder="identifier"; idin.value=d.id;
-    idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=d.id; return; } if(nid!==d.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and agents"); idin.value=d.id; return; } renameDocument(d.id,nid); renderSources(); };
-    const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from title"; sy.title="Derive the identifier from the title"; sy.onclick=()=>{ const nid=slugLocalId(docTitle(d),d.id); if(nid){ renameDocument(d.id,nid); renderSources(); } };
-    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="URI (optional — DOI / w3id; overrides the local name on export)"; uin.value=d.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) d.uri=v; else delete d.uri; save(); }; attachUriGuard(uin,v=>{ if(v) d.uri=v; else delete d.uri; save(); });
-    ir.append(idin,sy,uin); card.appendChild(ir);
-    const pg=document.createElement("input"); pg.style.cssText=_srcInput+";width:100%"; pg.placeholder="Page URL (foaf:page) — https://…"; pg.value=d.page[0]||""; pg.oninput=()=>{ d.page[0]=pg.value.trim(); save(); }; attachUriGuard(pg,v=>{ d.page[0]=v; save(); }); card.appendChild(pg);
-    const cm=document.createElement("textarea"); cm.rows=2; cm.style.cssText=_srcInput+";width:100%;resize:vertical"; cm.placeholder="Comment (rdfs:comment, optional)"; cm.value=(d.comment[0]&&d.comment[0].val)||""; cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; card.appendChild(cm);
-    body.appendChild(card);
+    tr.append(tl,tv); tg.appendChild(tr);
+    srcIdRow(srcGrp(ed,"Identifier (URI local name)"),d,"doc",()=>docTitle(d),renameDocument);
+    const ug=srcGrp(ed,"URI (optional)"); const uin=srcInput("val","DOI / w3id — overrides the local name on export"); uin.value=d.uri||"";
+    const setUri=v=>{ if(v) d.uri=v; else delete d.uri; save(); setHead(); renderSrcTree(); }; uin.oninput=()=>setUri(uin.value.trim()); attachUriGuard(uin,setUri); srcRow(ug).appendChild(uin);
+    const pg=srcGrp(ed,"Page URL (foaf:page)"); const pin=srcInput("val","https://…"); pin.value=d.page[0]||"";
+    pin.oninput=()=>{ d.page[0]=pin.value.trim(); save(); }; attachUriGuard(pin,v=>{ d.page[0]=v; save(); }); srcRow(pg).appendChild(pin);
+    const cg=srcGrp(ed,"Comment (rdfs:comment, optional)"); const cm=document.createElement("textarea"); cm.className="val"; cm.rows=3; cm.value=(d.comment[0]&&d.comment[0].val)||"";
+    cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; srcRow(cg).appendChild(cm);
+    const cited=Object.keys(model.concepts||{}).filter(cid=>(model.concepts[cid].source||[]).includes(d.id));
+    const ft=document.createElement("div"); ft.style.cssText="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px";
+    const cs=document.createElement("span"); cs.className="subtle"; cs.style.fontSize="12px"; cs.textContent=cited.length?("Cited by "+cited.length+" concept"+(cited.length===1?"":"s")+"."):"Not cited by any concept yet."; ft.appendChild(cs);
+    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="Delete document"; del.style.marginLeft="auto"; del.onclick=()=>deleteDocument(d.id); ft.appendChild(del); ed.appendChild(ft);
+  } else { const a=rec;
+    const kg=srcGrp(ed,"Type"); const kind=document.createElement("select"); kind.className="val";
+    kind.innerHTML=AGENT_KINDS.map(k=>`<option value="${k.v}" ${k.v===a.kind?"selected":""}>${k.label} (prov:${k.cls})</option>`).join(""); kind.onchange=()=>{ a.kind=kind.value; save(); renderSrcTree(); }; srcRow(kg).appendChild(kind);
+    const ng=srcGrp(ed,"Name (foaf:name)"); const nm=srcInput("val","Name"); nm.value=a.name||""; focusEl=nm;
+    nm.oninput=()=>{ a.name=nm.value; save(); renderSrcTree(); };
+    nm.onchange=()=>{ if(isAutoId(a.id,"agent")&&nm.value.trim()){ const nid=slugLocalId(nm.value,a.id); if(nid&&nid!==a.id){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } } };
+    srcRow(ng).appendChild(nm);
+    srcIdRow(srcGrp(ed,"Identifier (URI local name)"),a,"agent",()=>a.name||"",(o,n)=>{ renameAgent(o,n); if(typeof renderScheme==="function") renderScheme(); });
+    const ug=srcGrp(ed,"Identity URI (optional)"); const uin=srcInput("val","ORCID / ROR / homepage URI — used as the agent's URI on export"); uin.value=a.uri||"";
+    const setUri=v=>{ if(v) a.uri=v; else delete a.uri; save(); setHead(); renderSrcTree(); }; uin.oninput=()=>setUri(uin.value.trim()); attachUriGuard(uin,setUri); srcRow(ug).appendChild(uin);
+    const hg=srcGrp(ed,"Homepage (foaf:homepage)"); const hp=srcInput("val","https://…"); hp.value=a.homepage||"";
+    hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); }; attachUriGuard(hp,v=>{ a.homepage=v; save(); }); srcRow(hg).appendChild(hp);
+    const sc=model.scheme||{}; const roles=[]; if(sc.creatorAgent===a.id) roles.push("creator"); if(sc.publisherAgent===a.id) roles.push("publisher");
+    if((Array.isArray(sc.contributorAgents)&&sc.contributorAgents.includes(a.id))||sc.contributorAgent===a.id) roles.push("contributor");
+    const ft=document.createElement("div"); ft.style.cssText="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px";
+    const rs=document.createElement("span"); rs.className="subtle"; rs.style.fontSize="12px"; rs.textContent=roles.length?("Credited as scheme "+roles.join(", ")+"."):"Not credited in the scheme metadata yet."; ft.appendChild(rs);
+    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="Delete agent"; del.style.marginLeft="auto"; del.onclick=()=>deleteAgent(a.id); ft.appendChild(del); ed.appendChild(ft);
   }
-  // ----- Agents -----
-  if(typeof renderAgentsSection==="function") renderAgentsSection(body);
+  if(srcFocusNew&&focusEl){ srcFocusNew=false; focusEl.focus(); }
 }
 const AGENT_KINDS=[{v:"person",label:"Person",cls:"Person"},{v:"organization",label:"Organization",cls:"Organization"},{v:"software",label:"Software agent",cls:"SoftwareAgent"}];
 function agentClass(kind){ const k=AGENT_KINDS.find(x=>x.v===kind); return (k?k.cls:"Person"); }
 function newAgentId(){ let n=1,id; do{ id="agent"+n++; }while(localNameTaken(id)); return id; }
 function agentName(a){ return (a&&a.name)||(a&&a.id)||"(unnamed agent)"; }
-function createAgent(){ const a=provAgents(); const id=newAgentId(); a[id]={id,kind:"person",name:"",homepage:""}; save(); renderSources(); }
+function createAgent(){ const a=provAgents(); const id=newAgentId(); a[id]={id,kind:"person",name:"",homepage:""}; save(); srcFocusNew=true; srcClearFilter(); selectSource("agent",id); }
 function deleteAgent(id){ if(!confirm("Delete this agent?")) return; delete provAgents()[id];
   const sc=model.scheme||{}; ["creatorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===id) sc[k]=""; });
   if(Array.isArray(sc.contributorAgents)) sc.contributorAgents=sc.contributorAgents.filter(x=>x!==id);
   if(sc.contributorAgent===id) sc.contributorAgent="";
+  if(srcSel&&srcSel.kind==="agent"&&srcSel.id===id) srcSel=null;
   save(); renderSources(); if(typeof renderScheme==="function") renderScheme(); }
-function renderAgentsSection(body){
-  const ah=document.createElement("div"); ah.style.cssText="display:flex;align-items:center;gap:10px;margin:18px 0 8px;border-top:1px solid var(--border-soft);padding-top:14px";
-  ah.innerHTML='<h3 style="margin:0;font-size:14px">Agents <span class="subtle" style="font-weight:400;font-size:12px;font-family:var(--mono)">prov:Agent</span></h3>';
-  const addA=document.createElement("button"); addA.className="btn sm primary"; addA.textContent="＋ Agent"; addA.onclick=createAgent; ah.appendChild(addA); body.appendChild(ah);
-  const al=provAgents();
-  if(!Object.keys(al).length){ const e=document.createElement("div"); e.className="subtle"; e.style.cssText="font-size:12px;padding:2px 0 6px"; e.textContent="No agents yet. Add people, organizations, or software agents to credit as creator / contributor / publisher (set that in the scheme metadata)."; body.appendChild(e); }
-  for(const id in al){ const a=al[id];
-    const card=document.createElement("div"); card.style.cssText="border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:8px;display:grid;gap:7px";
-    const r1=document.createElement("div"); r1.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
-    const kind=document.createElement("select"); kind.style.cssText=_srcInput; kind.innerHTML=AGENT_KINDS.map(k=>`<option value="${k.v}" ${k.v===a.kind?"selected":""}>${k.label}</option>`).join(""); kind.onchange=()=>{ a.kind=kind.value; save(); };
-    const nm=document.createElement("input"); nm.style.cssText=_srcInput+";flex:1;min-width:150px"; nm.placeholder="Name (foaf:name)"; nm.value=a.name||""; nm.oninput=()=>{ a.name=nm.value; save(); };
-    nm.onchange=()=>{ if(isAutoId(a.id,"agent")&&nm.value.trim()){ const nid=slugLocalId(nm.value,a.id); if(nid&&nid!==a.id){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } } };
-    const hp=document.createElement("input"); hp.style.cssText=_srcInput+";flex:1;min-width:150px"; hp.placeholder="Homepage (foaf:homepage) — https://…"; hp.value=a.homepage||""; hp.oninput=()=>{ a.homepage=hp.value.trim(); save(); }; attachUriGuard(hp,v=>{ a.homepage=v; save(); });
-    const del=document.createElement("button"); del.className="btn sm del"; del.textContent="✕"; del.title="Delete agent"; del.onclick=()=>deleteAgent(id);
-    r1.append(kind,nm,hp,del); card.appendChild(r1);
-    const r2=document.createElement("div"); r2.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
-    const idin=document.createElement("input"); idin.style.cssText=_srcInput+";width:170px;font-family:var(--mono);font-size:11.5px"; idin.title="Identifier — the agent's local name in your namespace"; idin.placeholder="identifier"; idin.value=a.id;
-    idin.onchange=()=>{ const nid=Core.safeLocal(idin.value||""); if(!nid||nid==="x"){ idin.value=a.id; return; } if(nid!==a.id&&localNameTaken(nid)){ toast("“"+nid+"” is already used — identifiers are shared with concepts, collections, and documents"); idin.value=a.id; return; } renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); };
-    const sy=document.createElement("button"); sy.className="btn sm"; sy.textContent="↦ from name"; sy.title="Derive the identifier from the name"; sy.onclick=()=>{ const nid=slugLocalId(a.name||"",a.id); if(nid){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } };
-    const uin=document.createElement("input"); uin.style.cssText=_srcInput+";flex:1;min-width:150px"; uin.placeholder="Identity URI (optional — ORCID / ROR / homepage; used as the agent's URI on export)"; uin.value=a.uri||""; uin.oninput=()=>{ const v=uin.value.trim(); if(v) a.uri=v; else delete a.uri; save(); }; attachUriGuard(uin,v=>{ if(v) a.uri=v; else delete a.uri; save(); });
-    r2.append(idin,sy,uin); card.appendChild(r2);
-    body.appendChild(card);
-  }
-}
+if(document.getElementById('srcNewDoc')) document.getElementById('srcNewDoc').onclick=createDocument;
+if(document.getElementById('srcNewAgent')) document.getElementById('srcNewAgent').onclick=createAgent;
+if(document.getElementById('srcSearch')) document.getElementById('srcSearch').oninput=(e)=>{ srcFilter=(e.target.value||"").trim().toLowerCase(); renderSrcTree(); };
 function collLabel(col){ const l=(col.label||[]).find(x=>x.val); return l?l.val:(col.id||"(untitled)"); }
 // Human name for a collection member (a concept or a sub-collection), for change notes.
 function collMemberName(mid){ return model.concepts[mid] ? (plabel(mid)||mid) : ((model.collections&&model.collections[mid]) ? collLabel(model.collections[mid]) : mid); }
@@ -3703,12 +3770,14 @@ function renameCollection(old,nid){ const cs=colls(); if(!nid||old===nid||!cs[ol
   for(const k in cs) if(cs[k].members) cs[k].members=cs[k].members.map(m=>m===old?nid:m);
   if(collSel===old) collSel=nid; if(collapsedColls.has(old)){ collapsedColls.delete(old); collapsedColls.add(nid); }
   save(); return nid; }
+// Re-key in place, preserving insertion order — a renamed record keeps its row instead of jumping to the end.
+function renameKeyInPlace(obj,old,nid){ const entries=Object.entries(obj); for(const k of Object.keys(obj)) delete obj[k]; for(const [k,v] of entries) obj[k===old?nid:k]=v; obj[nid].id=nid; }
 function renameDocument(old,nid){ const dl=docs(); if(!nid||old===nid||!dl[old]||localNameTaken(nid)) return old;
-  dl[nid]=dl[old]; dl[nid].id=nid; delete dl[old];
+  renameKeyInPlace(dl,old,nid); if(srcSel&&srcSel.kind==="doc"&&srcSel.id===old) srcSel.id=nid;
   for(const cid in model.concepts){ const c=model.concepts[cid]; if(c.source) c.source=c.source.map(x=>x===old?nid:x); }
   save(); return nid; }
 function renameAgent(old,nid){ const al=provAgents(); if(!nid||old===nid||!al[old]||localNameTaken(nid)) return old;
-  al[nid]=al[old]; al[nid].id=nid; delete al[old];
+  renameKeyInPlace(al,old,nid); if(srcSel&&srcSel.kind==="agent"&&srcSel.id===old) srcSel.id=nid;
   const sc=model.scheme||{}; ["creatorAgent","publisherAgent"].forEach(k=>{ if(sc[k]===old) sc[k]=nid; });
   if(Array.isArray(sc.contributorAgents)) sc.contributorAgents=sc.contributorAgents.map(x=>x===old?nid:x);
   if(sc.contributorAgent===old) sc.contributorAgent=nid;
