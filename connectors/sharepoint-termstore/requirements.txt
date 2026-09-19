@@ -5,7 +5,7 @@
 rdflib==7.6.0
 
 # Live pull from Microsoft Graph adds:
-msal==1.38.0
+msal==1.39.0
 requests==2.34.2
 
 # Bridge service (live sync) adds:

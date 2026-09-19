@@ -1,5 +1,5 @@
 # Pinned exactly so builds are reproducible and Renovate/Dependabot can see and
 # raise updates. Renovate keeps these current; do not loosen to ranges.
-mcp==2.1.1
+mcp==2.2.0
 rdflib==7.6.0
 pyshacl==0.40.1
