@@ -133,8 +133,9 @@ function buildTriples(model, opts){
   if (opts.dc){
     const s = iri(schemeUri), L = model.defaultLang || model.scheme.lang || "en";
     const dct = k => iri(NS.dcterms + k);
-    if (model.scheme.title) add(s, dct("title"), lit(model.scheme.title, L));
-    if (model.scheme.description) add(s, dct("description"), lit(model.scheme.description, L));
+    // title and description carry their own tag when it differs from the scheme's language (#114)
+    if (model.scheme.title) add(s, dct("title"), lit(model.scheme.title, model.scheme.titleLang || L));
+    if (model.scheme.description) add(s, dct("description"), lit(model.scheme.description, model.scheme.descriptionLang || L));
     // creator / publisher / contributor — an agent reference (prov:Agent) if set, else the plain literal
     const _ag = model.agents || {};
     const _resUri = (rec, id) => annexUri(model, rec, id);
@@ -355,7 +356,7 @@ function buildTriples(model, opts){
   for (const aid in (model.agents || {})){
     const a = model.agents[aid]; const au = iri(annexUri(model, a, aid));
     add(au, A, iri(NS.prov + (_agentCls[a.kind] || "Person")));
-    if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name));
+    if (a.name) add(au, iri(NS.foaf + "name"), lit(a.name, a.nameLang || ""));   // tagged only when a tag was set (#115)
     if (a.homepage) add(au, iri(NS.foaf + "homepage"), iri(a.homepage));
   }
   // foreign triples — second schemes and other subjects preserved verbatim from a
@@ -628,7 +629,7 @@ function gridToModel(grid, opts){
   const splitRef  = v => String(v || "").split(/\s*[|;]\s*|\r?\n/).map(s => s.trim()).filter(Boolean);
   // A cell may carry its own BCP-47 tag ("term@nl", "woord@nl-BE", "名@zh-Hans"); otherwise
   // it takes the row's lang column, else the import default.
-  const toLit = (v, lg) => { const m = /^(.*?)@([A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*)$/.exec(v); return m ? { val: m[1].trim(), lang: m[2] } : { val: v, lang: (lg || dl) }; };
+  const toLit = (v, lg) => { const m = /^(.*?)@([A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*)$/.exec(v); return m ? { val: m[1].trim(), lang: canonLangTag(m[2]) } : { val: v, lang: canonLangTag(lg || dl) }; };
   const slug = s => (String(s||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60)) || "concept";
   const labelToId = {};
   const pending = [];
@@ -1043,7 +1044,24 @@ function autofix(model, kind){
 // qSKOS-inspired validation
 // severity: error | warning | info
 // ============================================================================
-const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/;   // BCP 47 syntax: singletons (x-, u-) are one character
+// Language tags: BCP 47 built on ISO 639. canonLangTag rewrites only what BCP 47 itself
+// specifies -- the case convention (language lowercase, script Titlecase, region UPPERCASE,
+// lowercase after a singleton) and the IANA registry's Preferred-Value for the deprecated
+// two-letter codes -- and never the language: tl stays Tagalog, cmn stays Mandarin. "" for
+// no tag; a malformed tag comes back unchanged so the validator can report it.
+const LANG_PREFERRED = { iw: "he", in: "id", ji: "yi", jw: "jv", mo: "ro" };
+function canonLangTag(v){
+  v = (v == null ? "" : String(v)).trim(); if (!v) return "";
+  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(v)) return v;
+  const parts = v.split("-"); let lang = parts[0].toLowerCase(); lang = LANG_PREFERRED[lang] || lang; let priv = false;
+  const rest = parts.slice(1).map((x, i) => {
+    if (priv || x.length === 1){ priv = true; return x.toLowerCase(); }
+    if (i === 0 && /^[A-Za-z]{4}$/.test(x)) return x[0].toUpperCase() + x.slice(1).toLowerCase();
+    if (/^[A-Za-z]{2}$/.test(x) || /^[0-9]{3}$/.test(x)) return x.toUpperCase();
+    return x.toLowerCase(); });
+  return [lang, ...rest].join("-");
+}
 function validate(model){
   const R = [];
   const push = (severity, code, title, message, concept) => R.push({ severity, code, title, message, concept });
@@ -1099,7 +1117,7 @@ function validate(model){
 
     // 2 multiple prefLabels per language (SKOS S14)
     const byLang = {};
-    for (const l of prefs){ const k = l.lang || ""; byLang[k] = (byLang[k] || 0) + 1; }
+    for (const l of prefs){ const k = (l.lang || "").toLowerCase(); byLang[k] = (byLang[k] || 0) + 1; }   // "EN" and "en" are one language (RDF 1.1 §3.3)
     for (const [lg, n] of Object.entries(byLang)) if (n > 1)
       push("error", "multiPrefLabel", "Multiple preferred labels per language",
         `${n} skos:prefLabel values tagged "${lg || "(none)"}". SKOS allows only one per language.`, id);
@@ -1112,6 +1130,8 @@ function validate(model){
         `The ${kind} label "${l.val}" has no language tag.`, id);
       else if (!LANG_RE.test(l.lang)) push("warning", "badLang", "Malformed language tag",
         `Language tag "${l.lang}" on "${l.val}" is not well-formed (BCP-47).`, id);
+      else if (l.lang !== canonLangTag(l.lang)) push("warning", "langTagCase", "Language tag not in canonical form",
+        `Language tag "${l.lang}" on "${l.val}" should be "${canonLangTag(l.lang)}" (BCP 47 case convention; ISO 639 preferred code).`, id);
     }
     for (const kind of ["definition", "scopeNote"]) for (const l of (c[kind] || [])){
       if (l.val && l.val.trim() && !l.lang) push("info", "noteNoLang", "Documentation without language tag",
@@ -1518,6 +1538,7 @@ function parseTriples(text){
 }
 
 function triplesToModel(triples, prefixes){
+  for (const t of triples) if (t && t.o && t.o.t === "lit" && t.o.lang) t.o.lang = canonLangTag(t.o.lang);   // one canonical spelling per tag (BCP 47 / ISO 639)
   const base = guessBase(triples);
   // detect the prefix that maps to the concept base namespace (default "")
   let prefix = "";
@@ -1581,8 +1602,8 @@ function triplesToModel(triples, prefixes){
     }
     // scheme metadata
     if (model.scheme.uri && s === model.scheme.uri){
-      if (pv === D + "title") model.scheme.title = o.v;
-      else if (pv === D + "description") model.scheme.description = o.v;
+      if (pv === D + "title"){ model.scheme.title = o.v; model.scheme._titleLang = o.lang || ""; }
+      else if (pv === D + "description"){ model.scheme.description = o.v; model.scheme._descriptionLang = o.lang || ""; }
       else if (pv === D + "creator"){ if (o.t === "iri") model.scheme.creatorAgent = localOf(o.v); else model.scheme.creator = o.v; }
       else if (pv === D + "publisher"){ if (o.t === "iri") model.scheme.publisherAgent = localOf(o.v); else model.scheme.publisher = o.v; }
       else if (pv === D + "contributor" && o.t === "iri"){ (model.scheme.contributorAgents = model.scheme.contributorAgents || []).push(localOf(o.v)); }   // repeatable — collect ALL contributors (was last-wins)
@@ -1696,7 +1717,14 @@ function triplesToModel(triples, prefixes){
     const cand = triples.filter(t => t.s.v === model.scheme.uri && t.o.t === "lit" && t.o.v &&
       t.p.t === "iri" && (t.p.v === NS.skos + "prefLabel" || t.p.v === NS.rdfs + "label"));
     const pick = cand.find(t => t.o.lang === model.defaultLang) || cand[0];
-    if (pick){ model.scheme.title = pick.o.v; if (pick.o.lang && !langKnown){ model.scheme.lang = model.defaultLang = pick.o.lang; langKnown = true; } }
+    if (pick){ model.scheme.title = pick.o.v; if (pick.o.lang && !langKnown){ model.scheme.lang = model.defaultLang = pick.o.lang; langKnown = true; } else if (pick.o.lang) model.scheme._titleLang = pick.o.lang; }
+  }
+  // A title or description whose own tag differs from the vocabulary's language keeps it, so a
+  // German title on an English vocabulary does not come back as @en (#114). Tags are compared
+  // case-insensitively, as RDF 1.1 compares them.
+  for (const k of ["title", "description"]){
+    const lg = model.scheme["_" + k + "Lang"]; delete model.scheme["_" + k + "Lang"];
+    if (lg && lg.toLowerCase() !== (model.defaultLang || "").toLowerCase()) model.scheme[k + "Lang"] = lg;
   }
 
   // ---- collections: skos:Collection / skos:OrderedCollection ----
@@ -1789,7 +1817,7 @@ function triplesToModel(triples, prefixes){
       // own annex namespace, which re-derives from agentsBase (#57)
       if (model.base && uri.indexOf(model.base)!==0 && uri!==annexUri(model, null, id)) a.uri=uri;
       for (const t of triples){ if (t.s.v!==uri || t.p.t!=="iri") continue;
-        if (t.p.v===NS.foaf+"name" && t.o.t==="lit") a.name=t.o.v;
+        if (t.p.v===NS.foaf+"name" && t.o.t==="lit"){ a.name=t.o.v; a.nameLang=t.o.lang||""; }   // keep the name's tag if it has one (#115)
         else if (t.p.v===NS.foaf+"homepage" && t.o.t==="iri") a.homepage=t.o.v;
       }
       model.agents[id]=a;
@@ -2192,6 +2220,6 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, termId, emptyConcept, conceptUri, conceptRes, collectionRes, xlLabelUri, canonUuid, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toChangelog, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
+root.Core = { NS, iri, lit, canonLangTag, termId, emptyConcept, conceptUri, conceptRes, collectionRes, xlLabelUri, canonUuid, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toChangelog, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
 
 })(typeof window !== "undefined" ? window : this);
