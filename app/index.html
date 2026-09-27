@@ -2417,6 +2417,7 @@ function usedLangs(){
   const set=new Set(); const add=a=>{ if(Array.isArray(a)) for(const L of a) if(L&&L.lang) set.add(L.lang); };
   for(const id in model.concepts){ const c=model.concepts[id]; for(const k in c) add(c[k]); }
   for(const k in (model.collections||{})){ const col=model.collections[k]; if(col){ add(col.label); add(col.note); } }
+  for(const k in (model.documents||{})){ const d=model.documents[k]; if(d){ add(d.title); add(d.comment); } }
   return [...set].sort();
 }
 function langOptions(){
@@ -2642,18 +2643,19 @@ function renderScheme(){
   for(const [key,lbl,type,hint] of SCHEME_FIELDS){
     const f=document.createElement("div"); f.className="fld";
     const l=document.createElement("label"); l.textContent=lbl;
-    if(key==="title"||key==="description"){ const lc=document.createElement("span"); lc.className="subtle";
+    if(key==="title"||key==="description"){ const lc=document.createElement("span");
       lc.style.cssText="margin-left:6px;font-size:11px;font-family:var(--mono)";
-      lc.textContent="@"+((model.scheme.lang||model.defaultLang||"en")); lc.title="Exported with the scheme's language tag";
+      lc.className="subtle schemeLangTag"; lc.textContent="@"+((model.defaultLang||model.scheme.lang||"en")); lc.title="Exported with the scheme's language tag";
       l.appendChild(lc); }
     f.appendChild(l);
     let el; const getv=()=> key==="base"?model.base : key==="prefix"?(model.prefix||"") : key==="defaultLang"?model.defaultLang : model.scheme[key]||"";
     if(type==="area"){ el=document.createElement("textarea"); }
-    else if(type==="lang"){ el=mkLangBox(getv(), t=>{ model.defaultLang=t; model.scheme.lang=t; touchModified(); save(); }); }
+    else if(type==="lang"){ el=mkLangBox(getv(), t=>{ model.defaultLang=t; model.scheme.lang=t; touchModified(); save();
+      $$('#schemeGrid .schemeLangTag').forEach(x=>{ x.textContent="@"+(t||"en"); }); }); }
     else { el=document.createElement("input"); if(type==="date") el.type="date"; }
     if(key==="modified") el.id="fldModified";
     el.value=getv();
-    el.oninput=()=>{ let v=el.value; if(key==="base"){ model.base=v; } else if(key==="prefix"){ const s=v.replace(/[^A-Za-z0-9_-]/g,""); if(s!==v){ el.value=s; } model.prefix=s; } else if(key==="defaultLang"){ model.defaultLang=v.trim(); model.scheme.lang=v.trim(); } else model.scheme[key]=v; if(key!=="modified") touchModified(); save(); if(selected) $('#editor .uri')&&($('#editor .uri').textContent=Core.conceptUri(model,selected)); };
+    if(type!=="lang") el.oninput=()=>{ let v=el.value; if(key==="base"){ model.base=v; } else if(key==="prefix"){ const s=v.replace(/[^A-Za-z0-9_-]/g,""); if(s!==v){ el.value=s; } model.prefix=s; } else model.scheme[key]=v; if(key!=="modified") touchModified(); save(); if(selected) $('#editor .uri')&&($('#editor .uri').textContent=Core.conceptUri(model,selected)); };
     if(key==="base"){
       // capture the base before editing so a committed change can rebase every
       // dependent URI (XL labels, scheme URI, annex namespaces) for consistency
@@ -3901,14 +3903,14 @@ function srcIdRow(g,rec,kind,derive,rename){
   r.append(idin,sy); g.appendChild(r);
   const hint=document.createElement("div"); hint.className="subtle"; hint.style.cssText="font-size:11px;margin-top:4px"; hint.textContent="Becomes the "+(kind==="doc"?"document's":"agent's")+" URI ("+(model.prefix?model.prefix+":":"")+rec.id+") unless an explicit URI is set below. Stable once set — renaming doesn't change it."; g.appendChild(hint);
 }
-function renderSrcEditor(){ const ed=document.getElementById("srcEditor"); if(!ed) return; ed.innerHTML="";
+function renderSrcEditor(){ const ed=document.getElementById("srcEditor"); if(!ed) return; ed.innerHTML=""; closeLangPop();
   const rec=srcRecord();
   if(!rec){ srcSel=null; ed.innerHTML='<div class="edit-empty">Select a document or agent on the left, or add one above.</div>'; return; }
   const head=document.createElement("h3"); head.className="uri"; const setHead=()=>{ head.textContent=(rec.uri||((model.prefix?model.prefix+":":"")+rec.id)); }; setHead(); ed.appendChild(head);
   let focusEl=null;
   if(srcSel.kind==="doc"){ const d=rec; d.title=d.title&&d.title.length?d.title:[{lang:model.defaultLang,val:""}]; d.page=d.page&&d.page.length?d.page:[""]; d.comment=d.comment||[];
     const tg=srcGrp(ed,"Title (dcterms:title)"); const tr=document.createElement("div"); tr.className="rowline";
-    const tl=srcInput("lang","lang"); tl.value=d.title[0].lang||""; tl.oninput=()=>{ d.title[0].lang=tl.value.trim(); save(); };
+    const tl=mkLangSelect(d.title[0], ()=>save());
     const tv=srcInput("val","Title"); tv.value=d.title[0].val||""; focusEl=tv;
     tv.oninput=()=>{ d.title[0].val=tv.value; save(); renderSrcTree(); };
     tv.onchange=()=>{ if(isAutoId(d.id,"doc")&&tv.value.trim()){ const nid=slugLocalId(tv.value,d.id); if(nid&&nid!==d.id){ renameDocument(d.id,nid); renderSources(); } } };
@@ -3919,7 +3921,9 @@ function renderSrcEditor(){ const ed=document.getElementById("srcEditor"); if(!e
     const pg=srcGrp(ed,"Page URL (foaf:page)"); const pin=srcInput("val","https://…"); pin.value=d.page[0]||"";
     pin.oninput=()=>{ d.page[0]=pin.value.trim(); save(); }; attachUriGuard(pin,v=>{ d.page[0]=v; save(); }); srcRow(pg).appendChild(pin);
     const cg=srcGrp(ed,"Comment (rdfs:comment, optional)"); const cm=document.createElement("textarea"); cm.className="val"; cm.rows=3; cm.value=(d.comment[0]&&d.comment[0].val)||"";
-    cm.oninput=()=>{ if(cm.value) d.comment[0]={lang:model.defaultLang,val:cm.value}; else d.comment=[]; save(); }; srcRow(cg).appendChild(cm);
+    const cur=d.comment[0]||{lang:model.defaultLang,val:""};   // stored only once there is text
+    const cl=mkLangSelect(cur, ()=>{ if(d.comment[0]) save(); });
+    cm.oninput=()=>{ cur.val=cm.value; if(cm.value) d.comment[0]=cur; else d.comment=[]; save(); }; const cr=srcRow(cg); cr.append(cl,cm);
     const cited=Object.keys(model.concepts||{}).filter(cid=>(model.concepts[cid].source||[]).includes(d.id));
     const ft=document.createElement("div"); ft.style.cssText="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px";
     const cs=document.createElement("span"); cs.className="subtle"; cs.style.fontSize="12px"; cs.textContent=cited.length?("Cited by "+cited.length+" concept"+(cited.length===1?"":"s")+"."):"Not cited by any concept yet."; ft.appendChild(cs);
@@ -5572,6 +5576,8 @@ $$('.modal-bg').forEach(bg=>{ if(bg.id==="confirmModal"||bg.id==="promptModal") 
 // ---------- boot ----------
 function boot(){ try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}   // #41: ask the browser not to evict this origin's storage
   model.proposals=model.proposals||[]; model.idStyle=model.idStyle||"text"; if(model.prefix===undefined) model.prefix=""; model.collections=model.collections||{}; model.documents=model.documents||{}; model.agents=model.agents||{};
+  // the Default language field is the one source of truth; the scheme's stored tag mirrors it
+  if(model.scheme){ if(model.defaultLang) model.scheme.lang=model.defaultLang; else if(model.scheme.lang) model.defaultLang=model.scheme.lang; }
   // Ensure every concept carries Dublin Core (existing projects that predate the fields):
   // fill created/issued/modified with the scheme's date (or today, as the ingest proxy)
   // and creator with the vocabulary's creator. Fills empties only.
