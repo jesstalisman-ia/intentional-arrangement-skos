@@ -2382,15 +2382,33 @@ function groupShell(title, onAdd){
 const ISO_639_1 = ("aa ab ae af ak am an ar as av ay az ba be bg bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz ee el en eo es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is it iu ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky la lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu").split(" ");
 const ISO_639_1_SET = new Set(ISO_639_1);
 const LANG_NAMES = (()=>{ try{ return new Intl.DisplayNames(undefined,{type:"language"}); }catch(e){ return null; } })();
-function langName(code){ if(!code||!LANG_NAMES) return ""; try{ const n=LANG_NAMES.of(code); return n&&n!==code?n:""; }catch(e){ return ""; } }
+// A name is shown only for a code the browser does not rename. CLDR aliases tl (Tagalog) to
+// "Filipino", cmn (Mandarin) to "Chinese", sh to Serbian; for those the bare code is honest.
+function langName(code){ if(!code||!LANG_NAMES) return ""; try{ if(Intl.getCanonicalLocales(code)[0].toLowerCase()!==code.toLowerCase()) return ""; const n=LANG_NAMES.of(code); return n&&n!==code?n:""; }catch(e){ return ""; } }
 function langLabel(code){ const n=langName(code); return n?code+" · "+n:code; }
-// Canonical form of a language tag ("" for no tag), or null when it is not one.
-// A two-letter primary subtag must be an ISO 639-1 code; three-letter (ISO 639-2/3) pass.
+// Deprecated primary language subtags and the IANA registry's Preferred-Value for each (RFC 5646 §4.5).
+const LANG_PREFERRED={iw:"he",in:"id",ji:"yi",jw:"jv",mo:"ro"};
+// Canonical form of a language tag ("" for no tag), or null when it is not one. Only what
+// BCP 47 itself specifies is rewritten: letter case (language lowercase, script Titlecase,
+// region UPPERCASE, the rest lowercase) and the registry's preferred value for a deprecated
+// primary subtag. Intl.getCanonicalLocales is used to check that the tag is well formed,
+// never for its result: it applies CLDR aliases that change the language (tl → fil,
+// cmn → zh, swc → sw-CD). A two-letter primary subtag must be an ISO 639-1 code; a
+// three-letter one (ISO 639-3) passes as typed.
 function canonLang(v){
   v=(v||"").trim(); if(!v) return "";
-  const m=/^([A-Za-z]{2,3})(-[A-Za-z0-9]{1,8})*$/.exec(v); if(!m) return null;
-  if(m[1].length===2&&!ISO_639_1_SET.has(m[1].toLowerCase())) return null;
-  try{ return Intl.getCanonicalLocales(v)[0]||null; }catch(e){ return null; }
+  if(!/^([A-Za-z]{2,3})(-[A-Za-z0-9]{1,8})*$/.test(v)) return null;
+  const parts=v.split("-"); let lang=parts[0].toLowerCase();
+  lang=LANG_PREFERRED[lang]||lang;
+  if(lang.length===2&&!ISO_639_1_SET.has(lang)&&lang!=="sh") return null;   // sh: deprecated in the registry but still a registered subtag, kept as typed
+  try{ Intl.getCanonicalLocales(v); }catch(e){ return null; }
+  let priv=false;
+  const rest=parts.slice(1).map((s,i)=>{
+    if(priv||s.length===1){ priv=true; return s.toLowerCase(); }        // after a singleton (x-…, u-…) everything stays lowercase
+    if(i===0&&/^[A-Za-z]{4}$/.test(s)) return s[0].toUpperCase()+s.slice(1).toLowerCase();   // script
+    if(/^[A-Za-z]{2}$/.test(s)||/^[0-9]{3}$/.test(s)) return s.toUpperCase();               // region
+    return s.toLowerCase(); });
+  return [lang,...rest].join("-");
 }
 function usedLangs(){
   const set=new Set(); const add=a=>{ if(Array.isArray(a)) for(const L of a) if(L&&L.lang) set.add(L.lang); };
@@ -2424,8 +2442,10 @@ function mkLangBox(value, commit, opts){
   const setTitle=()=>{ const n=langName(inp.value); inp.title=(n?n+" · ":"")+"Language tag (BCP 47, e.g. nl or nl-BE). Type a code or a name; blank = no tag."; };
   setTitle();
   const accept=t=>{ const changed=t!==last; inp.value=t; last=t; setTitle(); closeLangPop(); if(changed&&typeof commit==="function") commit(t); };
-  const tryCommit=()=>{ const t=canonLang(inp.value);
-    if(t===null){ toast("“"+inp.value.trim()+"” is not a language tag — use a code like en, nl or nl-BE"); inp.value=last; closeLangPop(); return; }
+  const tryCommit=()=>{ const raw=inp.value.trim();
+    if(raw===last){ inp.value=last; closeLangPop(); return; }   // nothing typed: an imported tag is left exactly as it came
+    const t=canonLang(raw);
+    if(t===null){ toast("“"+raw+"” is not a language tag — use a code like en, nl or nl-BE"); inp.value=last; closeLangPop(); return; }
     accept(t); };
   const paint=()=>{ if(!langPop) return; [...langPop.children].forEach((el,i)=>el.classList.toggle("act", i===act)); const a=langPop.children[act]; if(a) a.scrollIntoView({block:"nearest"}); };
   const open=filter=>{   // filter=false: full list with the current tag highlighted (focus/click)
