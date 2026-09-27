@@ -2456,8 +2456,13 @@ function mkLangBox(value, commit, opts){
     const raw=inp.value.trim(), q=filter?raw.toLowerCase():"", all=langOptions();
     rows = q ? all.filter(o=>o.code.toLowerCase().startsWith(q)||o.name.toLowerCase().includes(q)) : all.slice();
     // a typed tag that is valid but not listed (nl-BE, zh-Hant …) is offered as-is
-    const typed=q?canonLang(raw):null;
-    if(typed&&!rows.some(o=>o.code.toLowerCase()===typed.toLowerCase())) rows.unshift({code:typed,name:langName(typed),used:true});
+    const typed=q?canonLang(raw):null; let demoted=false;
+    if(typed&&!rows.some(o=>o.code.toLowerCase()===typed.toLowerCase())){
+      // a bare three-letter code such as "ger" or "eng" is offered, but below the languages whose
+      // name it matches (de · German, en · English): BCP 47 wants the two-letter code where one exists
+      const nameHits=/^[A-Za-z]{3}$/.test(typed)?rows.filter(o=>o.name.toLowerCase().includes(q)).length:0;
+      const t={code:typed,name:langName(typed),used:true};
+      if(nameHits){ rows.splice(nameHits,0,t); demoted=true; } else rows.unshift(t); }
     if(!q) rows.unshift({code:"",name:"no tag",used:true});
     const pop=document.createElement("div"); pop.className="langpop"; pop.setAttribute("role","listbox");
     rows.forEach((o,i)=>{
@@ -2472,7 +2477,7 @@ function mkLangBox(value, commit, opts){
     if(below<180&&b.top>below){ pop.style.bottom=(window.innerHeight-b.top+4)+"px"; pop.style.maxHeight=Math.min(320,b.top-12)+"px"; }
     else { pop.style.top=(b.bottom+4)+"px"; pop.style.maxHeight=Math.max(100,Math.min(320,below))+"px"; }
     document.body.appendChild(pop); langPop=pop;
-    act=rows.findIndex(o=>o.code===raw); if(act<0&&rows.length) act=0; paint();
+    act=demoted?0:rows.findIndex(o=>o.code===raw); if(act<0&&rows.length) act=0; paint();
   };
   inp.onfocus=()=>{ last=inp.value; open(false); };
   inp.onclick=()=>{ if(!langPop) open(false); };
