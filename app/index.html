@@ -1862,14 +1862,16 @@ function label(id){ const c=model.concepts[id]; const p=c&&c.pref&&c.pref.find(l
 let treeView = { render:"pref", lang:"", sort:"doc" };
 try{ const s=JSON.parse(localStorage.getItem("iaskos.treeview")||"null"); if(s&&typeof s==="object") treeView=Object.assign(treeView,s); }catch(e){}
 function saveTreeView(){ try{ localStorage.setItem("iaskos.treeview", JSON.stringify(treeView)); }catch(e){} }
-function treeLangs(){ const set=new Set(); for(const id in model.concepts) for(const l of (model.concepts[id].pref||[])) if(l.val&&l.lang) set.add(l.lang); return [...set].sort(); }
+// one entry per language: "EN" and "en" are the same tag (RDF 1.1 compares them case-insensitively); the first spelling seen is shown
+function treeLangs(){ const seen=new Map(); for(const id in model.concepts) for(const l of (model.concepts[id].pref||[])) if(l.val&&l.lang){ const k=l.lang.toLowerCase(); if(!seen.has(k)) seen.set(k,l.lang); } return [...seen.values()].sort(); }
+function sameLang(a,b){ return (a||"").toLowerCase()===(b||"").toLowerCase(); }
 function nodeText(id){
   const c=model.concepts[id]; if(!c) return id;
   if(treeView.render==="iri") return Core.conceptUri(model,id);
   if(treeView.render==="qname") return (model.prefix||"")+":"+id;
   const prefs=c.pref||[]; let hit=null;
-  if(treeView.lang) hit=prefs.find(l=>l.lang===treeView.lang&&l.val);   // requested language first
-  if(!hit) hit=prefs.find(l=>l.lang===model.defaultLang&&l.val)||prefs.find(l=>l.val);   // else default, else any
+  if(treeView.lang) hit=prefs.find(l=>sameLang(l.lang,treeView.lang)&&l.val);   // requested language first
+  if(!hit) hit=prefs.find(l=>sameLang(l.lang,model.defaultLang)&&l.val)||prefs.find(l=>l.val);   // else default, else any
   return hit?hit.val:id;   // unlabeled → the id
 }
 function nodeUnlabeled(id){ if(treeView.render!=="pref") return false; const c=model.concepts[id]; return !c||!(c.pref||[]).some(l=>l.val); }
@@ -1880,7 +1882,7 @@ function initTreeOpts(){
   rSel.value=treeView.render; sSel.value=treeView.sort;
   const langs=treeLangs();
   lSel.innerHTML='<option value="">auto ('+(model.defaultLang||"—")+')</option>'+langs.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(langLabel(l))}</option>`).join("");
-  if(!langs.includes(treeView.lang)) treeView.lang="";   // language no longer present → back to auto
+  if(!langs.some(l=>sameLang(l,treeView.lang))) treeView.lang="";   // language no longer present → back to auto
   lSel.value=treeView.lang;
   const showLang=()=>{ lWrap.style.display=(treeView.render==="pref"&&treeLangs().length>1)?"inline-flex":"none"; };
   showLang();
@@ -2390,7 +2392,6 @@ const LANG_NAMES = (()=>{ try{ return new Intl.DisplayNames(undefined,{type:"lan
 function langName(code){ if(!code||!LANG_NAMES) return ""; try{ if(Intl.getCanonicalLocales(code)[0].toLowerCase()!==code.toLowerCase()) return ""; const n=LANG_NAMES.of(code); return n&&n!==code?n:""; }catch(e){ return ""; } }
 function langLabel(code){ const n=langName(code); return n?code+" · "+n:code; }
 // Deprecated primary language subtags and the IANA registry's Preferred-Value for each (RFC 5646 §4.5).
-const LANG_PREFERRED={iw:"he",in:"id",ji:"yi",jw:"jv",mo:"ro"};
 // Canonical form of a language tag ("" for no tag), or null when it is not one. Only what
 // BCP 47 itself specifies is rewritten: letter case (language lowercase, script Titlecase,
 // region UPPERCASE, the rest lowercase) and the registry's preferred value for a deprecated
@@ -2401,28 +2402,24 @@ const LANG_PREFERRED={iw:"he",in:"id",ji:"yi",jw:"jv",mo:"ro"};
 function canonLang(v){
   v=(v||"").trim(); if(!v) return "";
   if(!/^([A-Za-z]{2,3})(-[A-Za-z0-9]{1,8})*$/.test(v)) return null;
-  const parts=v.split("-"); let lang=parts[0].toLowerCase();
-  lang=LANG_PREFERRED[lang]||lang;
+  const t=Core.canonLangTag(v); const lang=t.split("-")[0];
   if(lang.length===2&&!ISO_639_1_SET.has(lang)&&lang!=="sh") return null;   // sh: deprecated in the registry but still a registered subtag, kept as typed
   try{ Intl.getCanonicalLocales(v); }catch(e){ return null; }
-  let priv=false;
-  const rest=parts.slice(1).map((s,i)=>{
-    if(priv||s.length===1){ priv=true; return s.toLowerCase(); }        // after a singleton (x-…, u-…) everything stays lowercase
-    if(i===0&&/^[A-Za-z]{4}$/.test(s)) return s[0].toUpperCase()+s.slice(1).toLowerCase();   // script
-    if(/^[A-Za-z]{2}$/.test(s)||/^[0-9]{3}$/.test(s)) return s.toUpperCase();               // region
-    return s.toLowerCase(); });
-  return [lang,...rest].join("-");
+  return t;
 }
 function usedLangs(){
-  const set=new Set(); const add=a=>{ if(Array.isArray(a)) for(const L of a) if(L&&L.lang) set.add(L.lang); };
+  // one entry per language, case-insensitively; the first spelling seen is kept
+  const seen=new Map(); const one=t=>{ if(t){ const k=String(t).toLowerCase(); if(!seen.has(k)) seen.set(k,t); } }; const add=a=>{ if(Array.isArray(a)) for(const L of a) if(L&&L.lang) one(L.lang); };
   for(const id in model.concepts){ const c=model.concepts[id]; for(const k in c) add(c[k]); }
   for(const k in (model.collections||{})){ const col=model.collections[k]; if(col){ add(col.label); add(col.note); } }
   for(const k in (model.documents||{})){ const d=model.documents[k]; if(d){ add(d.title); add(d.comment); } }
-  return [...set].sort();
+  for(const k in (model.agents||{})){ const a=model.agents[k]; if(a) one(a.nameLang); }
+  if(model.scheme){ one(model.scheme.titleLang); one(model.scheme.descriptionLang); }
+  return [...seen.values()].sort();
 }
 function langOptions(){
   const seen=new Set(), out=[];
-  for(const c of [model.defaultLang, ...usedLangs()]) if(c&&!seen.has(c)){ seen.add(c); out.push({code:c,name:langName(c),used:true}); }
+  for(const c of [model.defaultLang, ...usedLangs()]) if(c&&!seen.has(c.toLowerCase())){ seen.add(c.toLowerCase()); out.push({code:c,name:langName(c),used:true}); }
   const rest=ISO_639_1.filter(c=>!seen.has(c)).map(c=>({code:c,name:langName(c),used:false}));
   // by name; codes the browser has no name for go last, by code
   rest.sort((a,b)=> (a.name?0:1)-(b.name?0:1) || (a.name||a.code).localeCompare(b.name||b.code));
@@ -2643,15 +2640,16 @@ function renderScheme(){
   for(const [key,lbl,type,hint] of SCHEME_FIELDS){
     const f=document.createElement("div"); f.className="fld";
     const l=document.createElement("label"); l.textContent=lbl;
-    if(key==="title"||key==="description"){ const lc=document.createElement("span");
-      lc.style.cssText="margin-left:6px;font-size:11px;font-family:var(--mono)";
-      lc.className="subtle schemeLangTag"; lc.textContent="@"+((model.defaultLang||model.scheme.lang||"en")); lc.title="Exported with the scheme's language tag";
-      l.appendChild(lc); }
+    if(key==="title"||key==="description"){
+      // this field's own tag; blank means the scheme's default language, shown as the placeholder (#114)
+      const lk=key+"Lang"; const lb=mkLangBox(model.scheme[lk]||"", t=>{ model.scheme[lk]=t; touchModified(); save(); }, {placeholder:(model.defaultLang||model.scheme.lang||"en")});
+      lb.classList.add("schemeFieldLang"); lb.style.marginLeft="6px"; const li=lb.querySelector("input"); li.style.cssText="width:64px;font-size:11px;padding:1px 6px"; li.title="Language tag of this field. Blank: the scheme's default language ("+(model.defaultLang||model.scheme.lang||"en")+"). Set it only when the "+key+" is in another language.";
+      l.appendChild(lb); }
     f.appendChild(l);
     let el; const getv=()=> key==="base"?model.base : key==="prefix"?(model.prefix||"") : key==="defaultLang"?model.defaultLang : model.scheme[key]||"";
     if(type==="area"){ el=document.createElement("textarea"); }
     else if(type==="lang"){ el=mkLangBox(getv(), t=>{ model.defaultLang=t; model.scheme.lang=t; touchModified(); save();
-      $$('#schemeGrid .schemeLangTag').forEach(x=>{ x.textContent="@"+(t||"en"); }); }); }
+      $$('#schemeGrid .schemeFieldLang input').forEach(x=>{ x.placeholder=(t||"en"); }); }); }
     else { el=document.createElement("input"); if(type==="date") el.type="date"; }
     if(key==="modified") el.id="fldModified";
     el.value=getv();
@@ -3934,7 +3932,9 @@ function renderSrcEditor(){ const ed=document.getElementById("srcEditor"); if(!e
     const ng=srcGrp(ed,"Name (foaf:name)"); const nm=srcInput("val","Name"); nm.value=a.name||""; focusEl=nm;
     nm.oninput=()=>{ a.name=nm.value; save(); renderSrcTree(); };
     nm.onchange=()=>{ if(isAutoId(a.id,"agent")&&nm.value.trim()){ const nid=slugLocalId(nm.value,a.id); if(nid&&nid!==a.id){ renameAgent(a.id,nid); renderSources(); if(typeof renderScheme==="function") renderScheme(); } } };
-    srcRow(ng).appendChild(nm);
+    // optional tag on the name: blank keeps it untagged, the usual choice for a person (#115)
+    const nl=mkLangBox(a.nameLang||"", t=>{ a.nameLang=t; save(); }); nl.querySelector("input").title="Optional language tag for the name (an organisation named in one language). Blank: untagged.";
+    const nr=srcRow(ng); nr.append(nl,nm);
     srcIdRow(srcGrp(ed,"Identifier (URI local name)"),a,"agent",()=>a.name||"",(o,n)=>{ renameAgent(o,n); if(typeof renderScheme==="function") renderScheme(); });
     const ug=srcGrp(ed,"Identity URI (optional)"); const uin=srcInput("val","ORCID / ROR / homepage URI — used as the agent's URI on export"); uin.value=a.uri||"";
     const setUri=v=>{ if(v) a.uri=v; else delete a.uri; save(); setHead(); renderSrcTree(); }; uin.oninput=()=>setUri(uin.value.trim()); attachUriGuard(uin,setUri); srcRow(ug).appendChild(uin);
