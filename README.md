@@ -33,11 +33,11 @@ Or download the `app/` folder (three static files, no build step) and open `inde
 
 ## What the app does
 
-- **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, an optional `rdfs:label` alternate name and `rdfs:comment`, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it holds both ways and shows in the graph. Click a linked concept in any relationship picker to jump straight to it in the tree. Identifiers are readable slugs or opaque **RFC 9562 UUIDv7** — time-ordered, canonical dashed lowercase (`8-4-4-4-12`), your call. Language tags use BCP 47 / ISO 639.
+- **Editor.** Concepts get URIs, one preferred label per language, alternate and hidden labels, an optional `rdfs:label` alternate name and `rdfs:comment`, and the run of SKOS notes: definition, scope, change, history, editorial, example. The hierarchy is real poly-hierarchy — a concept can sit under two parents. Adding a `skos:related` link is reciprocal, the way SKOS defines it (`owl:SymmetricProperty`) — it applies both ways and shows in the graph. Click a linked concept in any relationship picker to jump straight to it in the tree. Identifiers are readable slugs or opaque **RFC 9562 UUIDv7** — time-ordered, canonical dashed lowercase (`8-4-4-4-12`), your call. Language tags are BCP 47: pick one from a `code · Name` dropdown or type any valid tag (`nl-BE`, `zh-Hant`), and the editor normalises letter case (`NL-be` → `nl-BE`) without changing the language. Retire a concept instead of deleting it: mark it `owl:deprecated`, point at its successor with `dcterms:isReplacedBy`, and it keeps its URI and its place in the scheme.
 
 - **ISO 25964 thesaurus relations** *(opt-in)*. Turn on ISO 25964 mode to get the specialised hierarchy alongside plain `skos:broader`: `iso-thes:broaderGeneric` (is-a), `broaderPartitive` (part-of), and `broaderInstantial` (instance-of), with their narrower inverses. All three assert their `skos:broader` super-property — as the iso-thes ontology declares — so plain-SKOS tools always read the hierarchy.
 
-- **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dcterms:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dcterms:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher.
+- **Sources — documents & agents.** A **Sources** tab for reusable `foaf:Document` records (`dcterms:title`, `foaf:page`, `rdfs:comment`) that concepts cite with `dcterms:source`, and `prov:Agent` records — `prov:Person` / `prov:Organization` / `prov:SoftwareAgent` with `foaf:name`/`foaf:homepage` — that you can credit as the scheme's creator, contributor, or publisher. Laid out like Build: a tree of Documents and Agents on the left, an editor on the right; renaming a record keeps its place in the export.
 
 - **Crosswalk (thesaurus building).** Align taxonomies from your workspace with the five SKOS mapping relations. Auto-match proposes links from identical/near labels; confirm or draw your own in a visual side-by-side view. Three exports, each in **Turtle, RDF/XML, or JSON-LD**: the crosswalk alone (mapping triples), the federated thesaurus (the current pair + mappings), or **the whole federation** — every taxonomy networked by mappings, in one file (available from the Crosswalk tab and from a dedicated card in the Export tab; step-by-step instructions in [Using the editor](docs/using-the-editor.md#exporting-the-federated-structure-step-by-step)). Mappings also ride along in normal exports.
 - **Display & filter.** Show the concept tree by **label** (with a language picker when the vocabulary is multilingual), **qualified name**, or **full IRI**, in document order or A–Z / Z–A. The filter box highlights matches (and matches by whatever form you're showing). Both apply to the relationship pickers as well.
@@ -48,13 +48,15 @@ Or download the `app/` folder (three static files, no build step) and open `inde
   
 - **Business view.** A reading layout for the people who aren't taxonomists: breadcrumb, definition, synonyms, narrower terms. Copy a **read-only share link** and the taxonomy rides inside the link itself. Nothing gets uploaded.
   
-- **Validate (qSKOS).** Quality checks run right in the edit loop — missing or duplicate preferred labels, label disjointness, related/broader conflicts, cyclic hierarchy, orphans, undocumented concepts — most with a one-click fix.
+- **Validate (qSKOS + the SKOS integrity conditions).** Quality checks run right in the edit loop — missing or duplicate preferred labels, label disjointness per exact literal (S13), class disjointness (S9, S37), mapping clashes (S46), related/broader conflicts, cyclic hierarchy, orphans, unmarked top concepts, undocumented concepts, non-canonical language tags, and lifecycle hygiene (a deprecated top concept, a dangling successor) — most with a one-click fix. **⬇ Report (Markdown)** downloads the findings as a checkbox work list.
   
-- **Import / export.** Out to Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV, Excel `.xlsx`, and Markdown. In from any of those RDF syntaxes — **Turtle, RDF/XML, JSON-LD, RDF/JSON** — or a spreadsheet; the import reads the file's own default language (its `dcterms:language`, else the dominant label language) so new edits aren't mistagged, and you can still override per import, row, or cell. Excel is zipped and unzipped in the browser, no library and no upload. When a file has no SKOS concepts, the tool says why instead of failing silently.
+- **Import / export.** Out to Turtle, RDF/XML, JSON-LD, RDF/JSON, CSV, Excel `.xlsx`, and Markdown, plus a **Change log**: the recorded edit history as a Keep-a-Changelog `CHANGELOG.md` (Added / Changed / Deprecated / Removed, and the deprecated concepts with their successors). In from any of those RDF syntaxes — **Turtle, RDF/XML, JSON-LD, RDF/JSON** — or a spreadsheet; the import reads the file's own default language (its `dcterms:language`, else the dominant label language) so new edits aren't mistagged, and you can still override per import, row, or cell. Excel is zipped and unzipped in the browser, no library and no upload. When a file has no SKOS concepts, the tool says why instead of failing silently.
   
 - **Visualize.** A force-directed picture of the scheme, synced to the editor — and not just concepts: toggles add the **concept scheme** as a hub (click it for its Dublin Core metadata), **sources and agents** (`dcterms:source` citations, creator/contributor/publisher attributions), and **crosswalk mappings**, with concepts mapped from other taxonomies in your workspace drawn as labelled external bubbles. The federation you build in Crosswalk is visible as one network.
   
 - **Scheme metadata.** Dublin Core for the concept scheme. `dcterms:created`/`issued`/`modified` fill themselves in, `dcterms:modified` updates on every change, and `dcterms:language` is written out and read back on import.
+  
+- **Scale.** A 9,000-concept thesaurus imports, draws its tree, validates, and navigates in milliseconds; tree, selection, and validation are linear in the number of concepts, so a large vocabulary behaves like a small one.
   
 - **Publish to a server** *(optional)*. Connect an Apache Jena Fuseki dataset to store a taxonomy and share a short link that loads it back. See [hosting Fuseki](docs/hosting-fuseki.md).
 
@@ -125,12 +127,18 @@ Dependencies and the Docker base image are kept current automatically: **Renovat
 
 [ROADMAP.md](ROADMAP.md) tracks what's shipped, in progress, and planned. Ideas and bug reports shape that list — several recent releases came straight from the community.
 
+- **What's new** → [release notes](docs/announcements/) in the repo, mirrored to [Discussions → Announcements](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions/categories/announcements)
+
 - **Ask a question / share an idea** → [Discussions](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions) — Q&A, Ideas, Show and tell
 - **Request a feature** → [feature request](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml)
 - **Report a bug** → [bug report](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml)
 - **Prefer email?** → Hello@ontologypipeline.com
 
 Rule of thumb: **Discussions** for how-to questions and half-formed ideas, **Issues** for concrete bugs and feature requests. Browse [existing issues](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues) first — a 👍 on one that fits helps it rise.
+
+## Semantic Lair — the RDF Wiki, heading to beta
+
+Semantic Lair is the RDF wiki downstream of this editor: upload a taxonomy or a whole federation export (**Taxonomies → Upload from the SKOS editor**) and tag documents against it. A beta is in preparation. To be considered for it, email [Hello@ontologypipeline.com](mailto:Hello@ontologypipeline.com?subject=Semantic%20Lair%20beta) with the subject "Semantic Lair beta". The SKOS editor stays free and full-featured either way.
 
 ## Cloud workspace — paid tier in the works
 

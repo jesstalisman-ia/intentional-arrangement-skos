@@ -34,6 +34,7 @@ Run the same engine outside the browser — in a script, a pipeline, or an AI as
 ## Project
 
 - **[Roadmap](../ROADMAP.md)** — what's shipped, in progress, and planned.
+- **[Release notes](announcements/)** — what changed in each update; the same posts go to [Discussions → Announcements](https://github.com/jesstalisman-ia/intentional-arrangement-skos/discussions/categories/announcements).
 - **Request a feature** → [feature request](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=feature_request.yml) · **Report a bug** → [bug report](https://github.com/jesstalisman-ia/intentional-arrangement-skos/issues/new?template=bug_report.yml) · **Email** → Hello@ontologypipeline.com
 
 ---

@@ -10,7 +10,7 @@ SKOS — the Simple Knowledge Organization System — is a W3C standard for writ
 
 **Concept scheme.** The container for a set of concepts that belong together, typed `skos:ConceptScheme`. Concepts point to it with `skos:inScheme`. The entry points at the top of the hierarchy are marked `skos:hasTopConcept` / `skos:topConceptOf`.
 
-**Labels.** Every concept should have exactly one preferred label per language, set with `skos:prefLabel`. Synonyms go in `skos:altLabel`. Terms you want findable but not shown — misspellings, deprecated forms — go in `skos:hiddenLabel`. The three label types must not collide: a string cannot be both a preferred and an alternate label on the same concept.
+**Labels.** Every concept should have one preferred label per language, no more and no fewer, set with `skos:prefLabel`. Synonyms go in `skos:altLabel`. Terms you want findable but not shown — misspellings, deprecated forms — go in `skos:hiddenLabel`. The three label types must not collide: a string cannot be both a preferred and an alternate label on the same concept. Each label literal takes a BCP 47 language tag (`en`, `nl-BE`, `zh-Hant`), written one canonical way, or the one-label-per-language rule cannot be checked.
 
 **Labels with identity (SKOS-XL).** Plain SKOS labels are literals — you can't say anything *about* a label itself. [SKOS-XL](https://www.w3.org/TR/skos-reference/skos-xl.html) fixes that by reifying each label as a `skosxl:Label` resource with its own URI and a `skosxl:literalForm`; `skosxl:prefLabel` / `skosxl:altLabel` / `skosxl:hiddenLabel` link a concept to those resources. Because a label is now a thing with a URI, you can attach metadata to it — provenance (`dcterms:source`), dates, or relationships between labels. The editor supports this as a per-taxonomy **Label style**; it exports SKOS-XL alongside plain labels so nothing breaks for consumers that only read plain SKOS. Reach for it when the origin of individual terms matters; otherwise plain labels are simpler.
 
@@ -24,6 +24,8 @@ SKOS — the Simple Knowledge Organization System — is a W3C standard for writ
 
 **Collections.** `skos:Collection` groups concepts for presentation (for example, "kinds of X") without adding a hierarchy level. Members go in `skos:member`.
 
+**Retiring a concept.** A published URI is a contract with everyone who indexed against it, so a concept that is no longer wanted is deprecated, never deleted or reused. Mark it `owl:deprecated`, keep it in the scheme, and point at what replaces it with `dcterms:isReplacedBy`; a `skos:changeNote` records why. Consumers filter deprecated concepts at display time and follow the successor to re-index. ISO 25964 takes the same position on identifier persistence.
+
 ## The conditions that keep it sound
 
 A vocabulary can be well-formed RDF and still be broken as a thesaurus. These are the checks worth running on every version:
@@ -33,7 +35,10 @@ A vocabulary can be well-formed RDF and still be broken as a thesaurus. These ar
 - No cycle in the `broader` / `narrower` chain — nothing is its own ancestor.
 - Every concept has a path to a top concept; no orphans floating outside the hierarchy.
 - `related` and `broader` are not asserted between the same pair.
-- Mapping relations across schemes stay consistent (an `exactMatch` and a `broadMatch` between the same two concepts contradict each other).
+- Mapping relations across schemes stay consistent: `exactMatch` never shares a target with `broadMatch`, `narrowMatch` or `relatedMatch` (S46).
+- A URI is one kind of thing: a `skos:Concept` is never also the `skos:ConceptScheme` (S9) or a `skos:Collection` (S37). Alternate and hidden labels are disjoint on the same concept too (S13).
+- A deprecated concept is not a top concept, and its successor exists.
+- Language tags are well-formed BCP 47 in canonical form, so `EN` and `en` are one language, not two.
 
 The qSKOS quality checks formalize these and more. The editor in this project runs them while you work; the REST API and MCP server run the same class of checks over a file you hand them.
 
