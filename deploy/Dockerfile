@@ -10,7 +10,7 @@
 # keeps rebuilding on an image that no longer has the current base-OS patches.
 # Renovate's dockerfile manager raises that bump automatically (renovate.json), and
 # the daily security-audit workflow fails if the pin drifts from the live tag.
-FROM eclipse-temurin:17-jre@sha256:207ecae0b2b104dfc6dfa763d1e9cd2041cb344800a180e24cb1a28ed533ff90
+FROM eclipse-temurin:17-jre@sha256:a9b54b51aaa867507be76277a98c6b11b99515cac6330891b534d070f607214c
 
 ARG FUSEKI_VERSION=5.6.0
 ARG FUSEKI_SHA512=53dfe13cdd5f6387a0c62917e275fde2cd2e2f2052bfe7515384934f24915228b8512a2dd2b50b7060cc300c976254349d991fcea239484cae48e0a59d67cd54
