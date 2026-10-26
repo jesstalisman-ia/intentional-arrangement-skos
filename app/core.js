@@ -376,21 +376,21 @@ function escLit(s){
 function qname(model, uri){
   for (const [p, ns] of Object.entries(NS)) if (uri.startsWith(ns)){
     const loc = uri.slice(ns.length);
-    if (/^[A-Za-z_][\w.-]*$/.test(loc)) return p + ":" + loc;
+    if (/^[A-Za-z_][\w.-]*$/.test(loc) && !loc.endsWith(".")) return p + ":" + loc;
   }
   if (uri.startsWith(model.base)){
     const loc = uri.slice(model.base.length);
     // allow digit-leading locals (valid Turtle PN_LOCAL) so 32-char UUID ids compact to :xxxx
-    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return (model.prefix || "") + ":" + loc;
+    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc) && !loc.endsWith(".")) return (model.prefix || "") + ":" + loc;
   }
   const _dns = annexNs(model, "doc"), _ans = annexNs(model);
   if (_dns && _dns !== _ans && uri.startsWith(_dns)){
     const loc = uri.slice(_dns.length);
-    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return "resources:" + loc;
+    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc) && !loc.endsWith(".")) return "resources:" + loc;
   }
   if (_ans && uri.startsWith(_ans)){
     const loc = uri.slice(_ans.length);
-    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc)) return "agents:" + loc;
+    if (/^[A-Za-z0-9_][\w.-]*$/.test(loc) && !loc.endsWith(".")) return "agents:" + loc;
   }
   return "<" + uri + ">";
 }
@@ -455,9 +455,19 @@ function toRdfXml(model, opts){
     if (!groups.has(k)){ groups.set(k, { s: t.s, arr: [] }); order.push(k); }
     groups.get(k).arr.push(t);
   }
-  const pfxName = uri => { for (const [p, ns] of Object.entries(NS)) if (uri.startsWith(ns)) return [p, uri.slice(ns.length)]; return null; };
+  // a predicate outside the built-in table gets a generated prefix, declared on rdf:RDF, instead of being dropped (#133)
+  const extra = {};
+  const pfxName = uri => {
+    for (const [p, ns] of Object.entries(NS)) if (uri.startsWith(ns)) return [p, uri.slice(ns.length)];
+    for (const [p, ns] of Object.entries(extra)) if (uri.startsWith(ns)) return [p, uri.slice(ns.length)];
+    const m = uri.match(/^(.*[#\/])([A-Za-z_][\w.-]*)$/); if (!m) return null;
+    const p = "ns" + (Object.keys(extra).length + 1); extra[p] = m[1]; return [p, m[2]];
+  };
+  const rdfTypeP = NS.rdf + "type";
+  for (const t of triples) if (t.p && t.p.t === "iri" && t.p.v !== rdfTypeP) pfxName(t.p.v);
   let out = '<?xml version="1.0" encoding="UTF-8"?>\n<rdf:RDF';
   for (const [p, ns] of Object.entries(NS)) out += `\n    xmlns:${p}="${ns}"`;
+  for (const [p, ns] of Object.entries(extra)) out += `\n    xmlns:${p}="${xmlEsc(ns)}"`;
   const _axml = annexNs(model), _dxml = annexNs(model, "doc");
   if (_axml) out += `\n    xmlns:agents="${xmlEsc(_axml)}"`;
   if (_dxml && _dxml !== _axml) out += `\n    xmlns:resources="${xmlEsc(_dxml)}"`;
@@ -541,7 +551,7 @@ function modelToGrid(model){
   const grid = [cols];
   for (const id of ids){
     const c = model.concepts[id]; if (!c) continue;
-    grid.push([ id, model.base + id, fmt(c.pref), fmt(c.alt), fmt(c.hidden), fmt(c.definition), fmt(c.scopeNote),
+    grid.push([ id, conceptRes(model, id), fmt(c.pref), fmt(c.alt), fmt(c.hidden), fmt(c.definition), fmt(c.scopeNote),
       fmt(c.changeNote), fmt(c.historyNote), fmt(c.editorialNote), fmt(c.example),
       c.notation || "", (c.broader || []).join(" | "), (c.related || []).join(" | "),
       (c.exactMatch || []).join(" | "), (c.closeMatch || []).join(" | "), (c.broadMatch || []).join(" | "),
@@ -589,6 +599,15 @@ function looksLikeCsv(text){
   const first = (String(text).split(/\r?\n/)[0] || "").toLowerCase();
   return /(^|[,;\t])\s*"?\s*(id|uri|preflabel|pref_label|pref label|label|term|name|broader|parent)\s*"?\s*([,;\t]|$)/.test(first);
 }
+// Page helpers with built-in fallbacks, so core.js imports spreadsheets as a library too (#135)
+function coreNewModel(){
+  return { base:"http://example.org/my-taxonomy#", prefix:"", idStyle:"text", defaultLang:"en",
+    scheme:{ uri:"http://example.org/my-taxonomy", title:"My Taxonomy", description:"", creator:"", publisher:"",
+             created:new Date().toISOString().slice(0,10), issued:"", modified:"", rights:"", license:"", version:"", lang:"en" },
+    concepts:{}, order:[], collections:{}, documents:{}, agents:{} };
+}
+function coreUniqueLocalIn(store, base){ base = base || "x"; let id = base, k = 1; while (store[id]) id = base + (++k); return id; }
+
 function gridToModel(grid, opts){
   if (!grid || !grid.length) throw new Error("empty spreadsheet");
   const norm = h => String(h).trim().toLowerCase().replace(/[\s_]+/g, "");
@@ -616,7 +635,8 @@ function gridToModel(grid, opts){
   headers.forEach((h, i) => { const k = alias[h]; if (k !== undefined && colOf[k] === undefined) colOf[k] = i; });
   if (colOf.pref === undefined && colOf.id === undefined)
     throw new Error("Spreadsheet needs a prefLabel (or id) column. Download the CSV template for the expected columns.");
-  const model = newModel();
+  const model = (typeof newModel === "function") ? newModel() : coreNewModel();
+  const uniq = (typeof uniqueLocalIn === "function") ? uniqueLocalIn : coreUniqueLocalIn;
   model.concepts = {}; model.order = [];
   model.scheme.title = "";   // don't inherit the "My Taxonomy" default — let the importer name it
   // Default language for untagged labels: caller's choice (usually the current
@@ -641,7 +661,7 @@ function gridToModel(grid, opts){
     const prefVals = splitText(cell(r, "pref"));
     if (!rawId){ const uri = cell(r, "uri").trim(); if (uri) rawId = canonUuid(uri) || (uri.split(/[\/#]/).filter(Boolean).pop() || "").replace(/[^A-Za-z0-9_.-]/g, "-"); }
     if (!rawId) rawId = slug(prefVals[0] || "concept");
-    const id = uniqueLocalIn(model.concepts, rawId);
+    const id = uniq(model.concepts, rawId);
     const cpt = emptyConcept(id);
     const rowLang = cell(r, "lang").trim() || dl;   // per-row language override (else the import default)
     prefVals.forEach(v => cpt.pref.push(toLit(v, rowLang)));
@@ -666,7 +686,7 @@ function gridToModel(grid, opts){
     if (model.concepts[ref]) return ref;
     const byLabel = labelToId[ref.trim().toLowerCase()]; if (byLabel) return byLabel;
     if (/^[a-z][a-z0-9+.-]*:/i.test(ref)) return null; // an IRI/CURIE, not a local row
-    const sid = uniqueLocalIn(model.concepts, slug(ref));
+    const sid = uniq(model.concepts, slug(ref));
     const sc = emptyConcept(sid); sc.pref.push({ val: ref, lang: dl });
     model.concepts[sid] = sc; model.order.push(sid); labelToId[ref.trim().toLowerCase()] = sid; stubs++;
     return sid;
@@ -829,7 +849,7 @@ function toMarkdown(model){
   const plab = c => { const p=(c.pref||[]).find(l=>l.lang===dl&&l.val)||(c.pref||[]).find(l=>l.val); return p?p.val:(c.id||"(untitled)"); };
   const labelOf = id => { const c=model.concepts[id]; return c?plab(c):id; };
   const litList = arr => (arr||[]).filter(l=>l&&l.val).map(l=> l.lang&&l.lang!==dl ? `${l.val} _(${l.lang})_` : l.val);
-  const uriOf = id => (model.base||"") + id;
+  const uriOf = id => (model.concepts[id] && model.concepts[id].uri) || (model.base||"") + id;   // #134
   // internal-anchor slugs (GitHub-style), de-duplicated so links resolve
   const used={}, anchor={};
   const slug = s => { let a=String(s).toLowerCase().replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"-")||"concept"; let b=a,n=1; while(used[a]) a=b+"-"+(++n); used[a]=1; return a; };
@@ -1403,6 +1423,32 @@ function parseRdfXml(text){
   for (const nd of top) nodeElem(nd, rootBase);
   return { triples, prefixes };
 }
+// One decoder for Turtle and SPARQL string escapes (#131): ECHAR (\t \b \n \r \f \" \' \\) and
+// UCHAR (\uXXXX, \UXXXXXXXX). readQuoted handles the short form and the long ("""...""") form,
+// skipping escaped characters and keeping the one or two quotes that may sit just before the delimiter.
+function readEscape(text, j){
+  const e = text[j + 1];
+  if (e === "u" && /^[0-9A-Fa-f]{4}$/.test(text.substr(j + 2, 4))) return [String.fromCodePoint(parseInt(text.substr(j + 2, 4), 16)), j + 6];
+  if (e === "U" && /^[0-9A-Fa-f]{8}$/.test(text.substr(j + 2, 8))) return [String.fromCodePoint(parseInt(text.substr(j + 2, 8), 16)), j + 10];
+  const map = { t: "\t", b: "\b", n: "\n", r: "\r", f: "\f", '"': '"', "'": "'", "\\": "\\" };
+  return [map[e] !== undefined ? map[e] : e, j + 2];
+}
+function readQuoted(text, i, q){
+  const n = text.length;
+  if (text.slice(i, i + 3) === q + q + q){
+    let k = i + 3, buf = "";
+    while (k < n){
+      if (text[k] === "\\"){ const r = readEscape(text, k); buf += r[0]; k = r[1]; continue; }
+      if (text[k] === q){ let m = k; while (m < n && text[m] === q) m++; const run = m - k; if (run >= 3){ return [buf + q.repeat(run - 3), m]; } buf += q.repeat(run); k = m; continue; }
+      buf += text[k]; k++;
+    }
+    return [buf, n];
+  }
+  let j = i + 1, buf = "";
+  while (j < n && text[j] !== q){ if (text[j] === "\\"){ const r = readEscape(text, j); buf += r[0]; j = r[1]; } else { buf += text[j]; j++; } }
+  return [buf, j + 1];
+}
+
 function parseTriples(text){
   // RDF/XML is a different syntax — detect it and hand off to the XML parser.
   const _h = text.slice(0, 1200);
@@ -1419,17 +1465,14 @@ function parseTriples(text){
     if (c === "#"){ while (i < n && text[i] !== "\n") i++; continue; }
     if (c === "<"){ let j = i + 1; while (j < n && text[j] !== ">") j++; toks.push({ t: "iri", v: text.slice(i + 1, j) }); i = j + 1; continue; }
     if (c === '"' || c === "'"){
-      const q = c; let j = i + 1, buf = "";
-      // triple-quoted?
-      if (text.slice(i, i + 3) === q + q + q){ j = i + 3; let k = j; while (k < n && text.slice(k, k + 3) !== q + q + q){ buf += text[k]; k++; } toks.push({ t: "str", v: buf }); i = k + 3; }
-      else { while (j < n && text[j] !== q){ if (text[j] === "\\"){ const e = text[j + 1]; buf += ({ n: "\n", t: "\t", r: "\r", '"': '"', "'": "'", "\\": "\\" })[e] || e; j += 2; } else { buf += text[j]; j++; } } toks.push({ t: "str", v: buf }); i = j + 1; }
+      const r = readQuoted(text, i, c); toks.push({ t: "str", v: r[0] }); i = r[1];
       continue;
     }
     if (c === "@"){ let j = i + 1; while (j < n && /[A-Za-z0-9-]/.test(text[j])) j++; toks.push({ t: "at", v: text.slice(i + 1, j) }); i = j; continue; }
     if (text.slice(i, i + 2) === "^^"){ toks.push({ t: "^^" }); i += 2; continue; }
     if (c === "." || c === ";" || c === "," || c === "[" || c === "]" || c === "(" || c === ")"){ toks.push({ t: c }); i++; continue; }
     // pname / a / keyword / number
-    let j = i; while (j < n && !isWs(text[j]) && !"#;,.<>\"'()[]".includes(text[j])) j++;
+    let j = i; while (j < n && !isWs(text[j]) && (!"#;,.<>\"'()[]".includes(text[j]) || (text[j] === "." && j + 1 < n && /[A-Za-z0-9_\-]/.test(text[j + 1])))) j++;
     toks.push({ t: "word", v: text.slice(i, j) }); i = j;
   }
 
@@ -1892,14 +1935,14 @@ class SparqlParser{
       const c = str[i];
       if (ws(c)){ i++; continue; }
       if (c === "#"){ while (i < n && str[i] !== "\n") i++; continue; }
-      if (c === "<"){ let j = i + 1; while (j < n && str[j] !== ">") j++; out.push({ t: "iri", v: str.slice(i + 1, j) }); i = j + 1; continue; }
-      if (c === '"' || c === "'"){ const q = c; let j = i + 1, buf = ""; while (j < n && str[j] !== q){ if (str[j] === "\\"){ buf += ({ n:"\n",t:"\t",r:"\r" }[str[j+1]]||str[j+1]); j += 2; } else { buf += str[j]; j++; } } let lang = "", dt = ""; j++; if (str[j] === "@"){ let k = j + 1; while (k < n && /[A-Za-z0-9-]/.test(str[k])) k++; lang = str.slice(j + 1, k); j = k; } else if (str.slice(j, j + 2) === "^^"){ j += 2; if (str[j] === "<"){ let k = j + 1; while (k < n && str[k] !== ">") k++; dt = str.slice(j + 1, k); j = k + 1; } else { let k = j; while (k < n && !ws(str[k]) && !"{}().;,".includes(str[k])) k++; dt = str.slice(j, k); j = k; } } out.push({ t: "str", v: buf, lang, dt }); i = j; continue; }
+      if (c === "<"){ let j = i + 1; while (j < n && str[j] !== ">" && !/[\s<"{}|^`\\]/.test(str[j])) j++; if (str[j] === ">"){ out.push({ t: "iri", v: str.slice(i + 1, j) }); i = j + 1; continue; } }   // #130: otherwise it is the operator
+      if (c === '"' || c === "'"){ const q = c; const rq = readQuoted(str, i, q); let buf = rq[0], j = rq[1]; let lang = "", dt = ""; if (str[j] === "@"){ let k = j + 1; while (k < n && /[A-Za-z0-9-]/.test(str[k])) k++; lang = str.slice(j + 1, k); j = k; } else if (str.slice(j, j + 2) === "^^"){ j += 2; if (str[j] === "<"){ let k = j + 1; while (k < n && str[k] !== ">") k++; dt = str.slice(j + 1, k); j = k + 1; } else { let k = j; while (k < n && !ws(str[k]) && !"{}().;,".includes(str[k])) k++; dt = str.slice(j, k); j = k; } } out.push({ t: "str", v: buf, lang, dt }); i = j; continue; }
       if (c === "?" || c === "$"){ let j = i + 1; while (j < n && /[\w]/.test(str[j])) j++; out.push({ t: "var", v: str.slice(i + 1, j) }); i = j; continue; }
       if ("{}().;,".includes(c)){ out.push({ t: c }); i++; continue; }
       if (c === "*" ){ out.push({ t: "op", v: "*" }); i++; continue; }
       if ("=!<>&|+-".includes(c)){ let two = str.slice(i, i + 2); if (["!=","<=",">=","&&","||"].includes(two)){ out.push({ t: "op", v: two }); i += 2; } else { out.push({ t: "op", v: c }); i++; } continue; }
       // word (keyword / pname / a / number / path). Exclude path/arith ops so they tokenize separately.
-      let j = i; while (j < n && !ws(str[j]) && !"{}().;,<>\"'?$=!&|+*".includes(str[j])) j++;
+      let j = i; while (j < n && !ws(str[j]) && (!"{}().;,<>\"'?$=!&|+*".includes(str[j]) || (str[j] === "." && j + 1 < n && /[A-Za-z0-9_\-]/.test(str[j + 1])))) j++;
       out.push({ t: "word", v: str.slice(i, j) }); i = j;
     }
     return out;
@@ -1938,7 +1981,7 @@ class SparqlParser{
     q.where = this.parseGroup();
     // modifiers
     while (this.peek()){
-      if (this.isWord("ORDER")){ this.next(); this.expectWord("BY"); while (this.peek() && (this.peek().t === "var" || this.isWord("ASC") || this.isWord("DESC"))){ let dir = "asc"; if (this.isWord("ASC")){ this.next(); this.next(); /*(*/ } if (this.isWord("DESC")){ this.next(); dir = "desc"; } let v; if (this.peek().t === "("){ this.next(); v = this.next().v; this.next(); } else v = this.next().v; q.order.push({ v, dir }); } }
+      if (this.isWord("ORDER")){ this.next(); this.expectWord("BY"); while (this.peek() && (this.peek().t === "var" || this.isWord("ASC") || this.isWord("DESC"))){ let dir = "asc"; if (this.isWord("ASC")){ this.next(); } else if (this.isWord("DESC")){ this.next(); dir = "desc"; } let v; if (this.peek() && this.peek().t === "("){ this.next(); v = this.next().v; if (this.peek() && this.peek().t === ")") this.next(); } else v = this.next().v; q.order.push({ v, dir }); } }
       else if (this.isWord("GROUP")){ this.next(); this.expectWord("BY"); while (this.peek() && this.peek().t === "var") q.groupBy.push(this.next().v); }
       else if (this.isWord("LIMIT")){ this.next(); q.limit = parseInt(this.next().v, 10); }
       else if (this.isWord("OFFSET")){ this.next(); q.offset = parseInt(this.next().v, 10); }
@@ -2043,7 +2086,7 @@ class SparqlParser{
 
 // ---- evaluation ----
 function matchTerm(pat, val, b){
-  if (pat.t === "var"){ if (b[pat.v] !== undefined){ return termId(b[pat.v]) === termId(val); } b = Object.assign({}, b); b[pat.v] = val; return b; }
+  if (pat.t === "var"){ if (b[pat.v] !== undefined){ return termId(b[pat.v]) === termId(val) ? b : false; } b = Object.assign({}, b); b[pat.v] = val; return b; }   // #128: hand the bindings back, never `true`
   return termId(pat) === termId(val) ? b : false;
 }
 function evalGroup(items, bindings, store){
