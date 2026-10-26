@@ -527,3 +527,87 @@ ix:XLDumbDown
       """ ;
     ] ;
 .
+
+# ===========================================================================
+# Label hygiene -- conflicts, one-way associations, whitespace (issue #127)
+# ===========================================================================
+
+ix:AltLabelIsAnotherPrefLabel
+  a sh:NodeShape ;
+  rdfs:label "altLabel equals another concept's prefLabel" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Label conflict: this concept's skos:altLabel is the skos:prefLabel of another concept in the same language. A lookup by that label is ambiguous, an entry term here and the preferred term there. Z39.19 (6.3) wants each term to lead to one concept: drop the alternative label, or make the two concepts one." ;
+      sh:select """
+        SELECT $this ?value
+        WHERE {
+          $this skos:altLabel ?value .
+          ?other a skos:Concept ;
+                 skos:prefLabel ?pref .
+          FILTER (?other != $this && str(?pref) = str(?value) && lang(?pref) = lang(?value))
+        }
+      """ ;
+    ] ;
+.
+
+ix:AsymmetricRelated
+  a sh:NodeShape ;
+  rdfs:label "skos:related asserted one way only" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Info ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "One-way skos:related: this concept is related to the value, but the value is not related back. SKOS defines skos:related as symmetric, so a reasoner infers the reverse; a client that does not reason sees the link from one side only. Assert both directions when the data will be read without inference." ;
+      sh:select """
+        SELECT $this ?value
+        WHERE {
+          $this skos:related ?value .
+          FILTER NOT EXISTS { ?value skos:related $this }
+        }
+      """ ;
+    ] ;
+.
+
+ix:LabelWhitespace
+  a sh:NodeShape ;
+  rdfs:label "whitespace in lexical labels" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Whitespace in a label: a leading or trailing space, a doubled space, a tab or a line break inside a skos:prefLabel, skos:altLabel or skos:hiddenLabel. Exact-match lookups and duplicate checks compare the characters as they are, so 'Web  Platform' and 'Web Platform' are two labels. Trim and collapse the spaces." ;
+      sh:select """
+        SELECT $this ?path ?value
+        WHERE {
+          $this ?path ?value .
+          FILTER (?path IN (skos:prefLabel, skos:altLabel, skos:hiddenLabel)
+                  && regex(str(?value), "^\\\\s|\\\\s$|  |\\\\t|\\\\n|\\\\r"))
+        }
+      """ ;
+    ] ;
+.
+
+ix:NoteWhitespace
+  a sh:NodeShape ;
+  rdfs:label "leading or trailing whitespace in notes" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Whitespace around a note: a skos:definition, skos:scopeNote, skos:example or other note begins or ends with a space or a line break. It survives into every export and shows as a stray gap or an empty line. Trim it." ;
+      sh:select """
+        SELECT $this ?path ?value
+        WHERE {
+          $this ?path ?value .
+          FILTER (?path IN (skos:definition, skos:scopeNote, skos:example, skos:note, skos:historyNote, skos:editorialNote, skos:changeNote)
+                  && regex(str(?value), "^\\\\s|\\\\s$"))
+        }
+      """ ;
+    ] ;
+.
