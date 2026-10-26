@@ -151,5 +151,39 @@ def main():
     return 1 if FAILS else 0
 
 
+def test_parse():
+    """parse_skos_vocabulary / POST /parse: content, filters, paging."""
+    v = skoslib.parse_vocabulary(T123, "turtle")
+    check("parse: schemes with title, size and top concepts", v["schemes"][0]["title"] == "Test Vocabulary" and v["schemes"][0]["concepts"] == 3 and v["schemes"][0]["top_concepts"][0].endswith("animals"), v["schemes"])
+    check("parse: counts", v["counts"]["concepts"] == 3 and v["counts"]["languages"] == ["en"], v["counts"])
+    dogs = next(c for c in v["concepts"] if c["uri"].endswith("dogs"))
+    check("parse: concept record has label, altLabels, broader, inScheme", dogs["label"] in ("Dogs", "Canines") and dogs["altLabels"] == ["Hounds"] and dogs["broader"][0].endswith("animals") and dogs["inScheme"], dogs)
+    check("parse: top flag", next(c for c in v["concepts"] if c["uri"].endswith("animals"))["top"] is True)
+    q = skoslib.parse_vocabulary(T123, "turtle", query="hound")
+    check("parse: query matches an altLabel", q["page"]["total"] == 1 and q["concepts"][0]["uri"].endswith("dogs"), q["page"])
+    sc = skoslib.parse_vocabulary(T124 + T123, "turtle", scheme="Test Vocabulary")
+    check("parse: scheme filter by title keeps that scheme's concepts only", sc["page"]["total"] == 3, sc["page"])
+    c = skoslib.parse_vocabulary(T123, "turtle", detail="counts")
+    check("parse: detail=counts has no concepts", "concepts" not in c and c["counts"]["concepts"] == 3)
+    lb = skoslib.parse_vocabulary(T123, "turtle", detail="labels")
+    check("parse: detail=labels is the compact index", set(lb["concepts"][0].keys()) == {"uri", "label", "notation", "broader"})
+    fu = skoslib.parse_vocabulary(T123, "turtle", detail="full")
+    check("parse: detail=full carries every language and the notes", "prefLabel" in fu["concepts"][0] and "notes" in fu["concepts"][0])
+    pg = skoslib.parse_vocabulary(T123, "turtle", limit=2, offset=0)
+    check("parse: paging", pg["page"]["returned"] == 2 and pg["page"]["next_offset"] == 2 and skoslib.parse_vocabulary(T123, "turtle", limit=2, offset=2)["page"]["next_offset"] is None, pg["page"])
+    import server
+    cl = server.app.test_client()
+    j = cl.post("/parse?detail=labels&query=dog", data=T123, content_type="text/turtle").get_json()
+    check("REST /parse with query and detail", j["page"]["total"] == 1 and set(j["concepts"][0].keys()) == {"uri", "label", "notation", "broader"}, j)
+    import skos_mcp
+    fn = lambda t: getattr(t, "fn", None) or getattr(t, "__wrapped__", None) or t  # noqa: E731
+    parse = fn(skos_mcp.parse_skos_vocabulary)
+    d = tempfile.mkdtemp(); open(os.path.join(d, "v.ttl"), "w").write(T123); os.environ["IA_SKOS_FILES"] = d
+    check("MCP parse_skos_vocabulary from file with query", parse(file_path=os.path.join(d, "v.ttl"), query="animals")["page"]["total"] == 1)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    rc = main()
+    test_parse()
+    print("\nFAILURES after parse tests:", FAILS or "none")
+    sys.exit(1 if FAILS else 0)

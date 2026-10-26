@@ -317,3 +317,109 @@ def profile_rdf(data, hint=None):
     report = validate_rdf(data, hint, detail="summary")
     return {"profile": report["profile"], "findings": report["structural_findings"],
             "shacl_results": report["shacl_results"], "summary": report["summary"], "triples": report["triples"]}
+
+
+# ---------------------------------------------------------------- parse: the vocabulary itself, compactly
+_NOTE_PROPS = ("definition", "scopeNote", "example", "note", "historyNote", "editorialNote", "changeNote")
+_MAPPING_PROPS = ("exactMatch", "closeMatch", "broadMatch", "narrowMatch", "relatedMatch")
+
+
+def _lit_by_lang(g, s, p):
+    """{lang: value} for a property's literal values; untagged literals go under ''."""
+    out = {}
+    for o in g.objects(s, p):
+        out.setdefault(getattr(o, "language", None) or "", str(o))
+    return out
+
+
+def _pick(d, lang):
+    """One value from a {lang: value} map: the asked-for language, then en, then untagged, then any."""
+    if not d:
+        return None
+    for k in ((lang or "").lower(), "en", ""):
+        if k in d:
+            return d[k]
+    return next(iter(d.values()))
+
+
+def parse_vocabulary(data, hint=None, scheme=None, query=None, lang=None, detail="concepts", limit=200, offset=0):
+    """The vocabulary's content as plain data, for a client or a model to ground on.
+
+    detail: "counts"   schemes and counts only
+            "labels"   each concept as uri, label, notation and broader: a compact index
+            "concepts" labels plus definition, scope note, narrower, related, scheme, top (default)
+            "full"     every note and mapping, labels in every language
+    scheme: keep concepts in this scheme (its IRI, or a substring of its IRI or title)
+    query:  keep concepts whose preferred, alternative or hidden label, or notation, contains this text
+    lang:   preferred language for the single `label` and the notes
+    Concepts are sorted by notation, then label, and paged with limit/offset.
+    """
+    g = parse_rdf(data, hint)
+    detail = detail if detail in ("counts", "labels", "concepts", "full") else "concepts"
+    limit = max(1, min(int(limit or 200), 2000)); offset = max(0, int(offset or 0))
+
+    schemes = []
+    for s in sorted(set(g.subjects(RDF.type, SKOS.ConceptScheme)), key=str):
+        title = _lit_by_lang(g, s, URIRef("http://purl.org/dc/terms/title")) or _lit_by_lang(g, s, SKOS.prefLabel) \
+            or _lit_by_lang(g, s, URIRef("http://www.w3.org/2000/01/rdf-schema#label"))
+        desc = _lit_by_lang(g, s, URIRef("http://purl.org/dc/terms/description"))
+        members = set(g.subjects(SKOS.inScheme, s)) | set(g.subjects(SKOS.topConceptOf, s))
+        tops = set(g.objects(s, SKOS.hasTopConcept)) | set(g.subjects(SKOS.topConceptOf, s))
+        schemes.append({"uri": str(s), "title": _pick(title, lang), "description": _pick(desc, lang),
+                        "concepts": len(members), "top_concepts": sorted(str(t) for t in tops)})
+
+    concepts = set(g.subjects(RDF.type, SKOS.Concept))
+    languages = sorted({getattr(o, "language", None) for c in concepts for o in g.objects(c, SKOS.prefLabel) if getattr(o, "language", None)})
+    counts = {"concepts": len(concepts), "schemes": len(schemes),
+              "collections": len(set(g.subjects(RDF.type, SKOS.Collection)) | set(g.subjects(RDF.type, SKOS.OrderedCollection))),
+              "languages": languages, "triples": len(g)}
+    if detail == "counts":
+        return {"schemes": schemes, "counts": counts}
+
+    # filters
+    if scheme:
+        want = str(scheme).lower()
+        hits = {URIRef(x["uri"]) for x in schemes if x["uri"].lower() == want or want in x["uri"].lower() or want in (x["title"] or "").lower()}
+        concepts = {c for c in concepts if any((c, SKOS.inScheme, h) in g or (c, SKOS.topConceptOf, h) in g for h in hits)}
+    if query:
+        q = str(query).lower()
+
+        def matches(c):
+            for p in (SKOS.prefLabel, SKOS.altLabel, SKOS.hiddenLabel, SKOS.notation):
+                if any(q in str(o).lower() for o in g.objects(c, p)):
+                    return True
+            return False
+        concepts = {c for c in concepts if matches(c)}
+
+    def record(c):
+        pref = _lit_by_lang(g, c, SKOS.prefLabel)
+        notation = next((str(o) for o in g.objects(c, SKOS.notation)), None)
+        r = {"uri": str(c), "label": _pick(pref, lang), "notation": notation,
+             "broader": sorted(str(o) for o in g.objects(c, SKOS.broader))}
+        if detail == "labels":
+            return r
+        r["altLabels"] = sorted(str(o) for o in g.objects(c, SKOS.altLabel) if not lang or (getattr(o, "language", None) or lang) == lang)
+        r["definition"] = _pick(_lit_by_lang(g, c, SKOS.definition), lang)
+        r["scopeNote"] = _pick(_lit_by_lang(g, c, SKOS.scopeNote), lang)
+        r["narrower"] = sorted(str(o) for o in g.objects(c, SKOS.narrower))
+        r["related"] = sorted(str(o) for o in g.objects(c, SKOS.related))
+        r["inScheme"] = sorted({str(o) for o in g.objects(c, SKOS.inScheme)} | {str(o) for o in g.objects(c, SKOS.topConceptOf)})
+        r["top"] = (c, SKOS.topConceptOf, None) in g or (None, SKOS.hasTopConcept, c) in g
+        if detail == "full":
+            r["prefLabel"] = pref
+            r["altLabel"] = [{"value": str(o), "lang": getattr(o, "language", None)} for o in g.objects(c, SKOS.altLabel)]
+            r["hiddenLabel"] = [{"value": str(o), "lang": getattr(o, "language", None)} for o in g.objects(c, SKOS.hiddenLabel)]
+            r["notes"] = {n: _lit_by_lang(g, c, getattr(SKOS, n)) for n in _NOTE_PROPS if (c, getattr(SKOS, n), None) in g}
+            r["mappings"] = {m: sorted(str(o) for o in g.objects(c, getattr(SKOS, m))) for m in _MAPPING_PROPS if (c, getattr(SKOS, m), None) in g}
+            r["deprecated"] = (c, URIRef("http://www.w3.org/2002/07/owl#deprecated"), Literal(True)) in g
+        return r
+
+    rows = [record(c) for c in concepts]
+    rows.sort(key=lambda r: ((r["notation"] or "~"), (r["label"] or "").lower(), r["uri"]))
+    total = len(rows)
+    page = rows[offset:offset + limit]
+    return {"schemes": schemes, "counts": counts,
+            "concepts": page,
+            "page": {"offset": offset, "limit": limit, "returned": len(page), "total": total,
+                     "next_offset": offset + limit if offset + limit < total else None},
+            "filters": {"scheme": scheme or None, "query": query or None, "lang": lang or None, "detail": detail}}

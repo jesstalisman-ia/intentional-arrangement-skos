@@ -8,6 +8,7 @@ Intentional Arrangement SKOS — REST API (thin Flask wrapper over skoslib).
 
   POST /validate[?detail=full|summary]   qSKOS-style validation of a SKOS vocabulary
   POST /profile                          the profile alone: counts, coverage, SHACL counts by severity
+  POST /parse                            the vocabulary itself as plain data, filtered and paged
   POST /convert?to=<fmt>                 convert between RDF serializations
   GET  /                                 self-describing index
 
@@ -72,6 +73,23 @@ def profile():
         return jsonify({"ok": False, "error": "Could not profile the submitted RDF. Check that it is well-formed and the format hint is correct."}), 400
 
 
+@app.route("/parse", methods=["POST", "OPTIONS"])
+def parse():
+    """The vocabulary's content as plain data: ?detail=counts|labels|concepts|full &scheme= &query= &lang= &limit= &offset="""
+    if request.method == "OPTIONS":
+        return Response(status=204)
+    a = request.args
+    try:
+        return jsonify(skoslib.parse_vocabulary(request.get_data(), _hint(), scheme=a.get("scheme"), query=a.get("query"),
+                                                lang=a.get("lang"), detail=a.get("detail", "concepts"),
+                                                limit=a.get("limit", 200), offset=a.get("offset", 0)))
+    except skoslib.UnsupportedFormat as e:
+        return _unsupported(e)
+    except Exception:
+        log.exception("parse failed")
+        return jsonify({"ok": False, "error": "Could not parse the submitted RDF. Check that it is well-formed and the format hint is correct."}), 400
+
+
 @app.route("/convert", methods=["POST", "OPTIONS"])
 def convert():
     if request.method == "OPTIONS":
@@ -98,6 +116,7 @@ def index():
             "POST /validate": "qSKOS-style validation (SHACL integrity + structural). Send SKOS RDF; get a JSON report. "
                               "?detail=summary groups the SHACL results by shape and drops the text report.",
             "POST /profile": "the profile alone: concepts, coverage, top concepts, structural findings, SHACL counts by severity, and sound (no violations).",
+            "POST /parse": "the vocabulary itself as plain data, paged: schemes, counts, concepts with labels, notes and relations. ?detail=counts|labels|concepts|full, ?scheme=, ?query=, ?lang=, ?limit=, ?offset=.",
             "POST /convert?to=<fmt>": "convert between " + " | ".join(skoslib.OUTPUT_FORMATS),
         },
         "input_formats": skoslib.INPUT_FORMATS,

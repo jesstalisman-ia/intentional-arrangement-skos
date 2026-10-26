@@ -23,7 +23,7 @@ Use the tool now at **https://jesstalisman-ia.github.io/intentional-arrangement-
 Run the same engine outside the browser — in a script, a pipeline, or an AI assistant.
 
 - **[REST API](../api/README.md)** — `POST /validate` and `POST /convert` over Flask + rdflib + pySHACL.
-- **[MCP server](../mcp-server/README.md)** — `validate_skos`, `convert_skos`, `skos_profile` as Model Context Protocol tools.
+- **[MCP server](../mcp-server/README.md)** — `validate_skos`, `convert_skos`, `skos_profile`, `parse_skos_vocabulary` as Model Context Protocol tools.
 
 ## Build & understand the tool
 

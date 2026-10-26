@@ -95,7 +95,7 @@ Register it with an MCP client (Claude Desktop / Claude Code):
 ```json
 { "mcpServers": { "skos": { "command": "python", "args": ["/abs/path/mcp-server/skos_mcp.py"] } } }
 ```
-Tools: `validate_skos`, `convert_skos`, `skos_profile`. See [`mcp-server/README.md`](mcp-server/README.md).
+Tools: `validate_skos`, `convert_skos`, `skos_profile`, `parse_skos_vocabulary`. See [`mcp-server/README.md`](mcp-server/README.md).
 
 ## Build it yourself
 

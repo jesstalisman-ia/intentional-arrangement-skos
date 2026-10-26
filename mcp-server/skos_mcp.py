@@ -156,5 +156,35 @@ def skos_profile(rdf: str = "", format: str = "", file_path: str = "") -> dict:
     return skoslib.profile_rdf(data, hint)
 
 
+@mcp.tool()
+def parse_skos_vocabulary(rdf: str = "", format: str = "", file_path: str = "", scheme: str = "", query: str = "",
+                          lang: str = "", detail: str = "concepts", limit: int = 200, offset: int = 0) -> dict:
+    """Read a SKOS vocabulary and return its content as plain data, to ground on.
+
+    Returns the schemes (title, description, size, top concepts), counts (concepts,
+    schemes, collections, languages, triples) and a page of concepts, each with uri,
+    label, notation, broader and, from detail "concepts" up, altLabels, definition,
+    scopeNote, narrower, related, inScheme and top. Concepts are sorted by notation,
+    then label.
+
+    Args:
+        rdf: the vocabulary as text (Turtle, RDF/XML, JSON-LD, N-Triples or RDF/JSON).
+        format: optional hint (auto-detected if blank, or from the file's extension).
+        file_path: read the vocabulary from this file instead of `rdf` (inside IA_SKOS_FILES only).
+        scheme: keep only the concepts of this scheme: its IRI, or a part of its IRI or title.
+        query: keep only concepts whose preferred, alternative or hidden label, or notation,
+            contains this text (case-insensitive). The way to look one concept up.
+        lang: preferred language for the single label and the notes (falls back to en, then any).
+        detail: "counts" (schemes and counts only), "labels" (a compact index: uri, label,
+            notation, broader), "concepts" (default), or "full" (every note and mapping, labels
+            in every language, deprecation).
+        limit, offset: paging; limit is capped at 2000. The response says the total and the
+            next offset, so a large vocabulary is read in pages, each small enough for a tool call.
+    """
+    data, hint = _input(rdf, file_path, format)
+    return skoslib.parse_vocabulary(data, hint, scheme=scheme or None, query=query or None, lang=lang or None,
+                                    detail=detail, limit=limit, offset=offset)
+
+
 if __name__ == "__main__":
     mcp.run()
