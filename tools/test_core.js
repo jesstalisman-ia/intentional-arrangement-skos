@@ -61,6 +61,21 @@
   check("#135 CSV import works wherever core.js runs", csvOk === 2, csvOk);
 
   } catch (e) { fails.push("exception: " + e.message); lines.push("EXCEPTION " + e.message + " " + String(e.stack || "").split("\n").slice(1, 3).join(" ")); }
+  // #137 labels for external mapping targets
+  try {
+    const m7 = mk("http://ex.org/t/", "t"); add(m7, "car", "Car"); add(m7, "auto", "Automobile");
+    m7.concepts.car.exactMatch = ["https://www.wikidata.org/entity/Q1420"]; m7.concepts.auto.closeMatch = ["https://www.wikidata.org/entity/Q1420"];
+    m7.extLabels = { "https://www.wikidata.org/entity/Q1420": { val: "Car (Wikidata)", lang: "en" } };
+    const ttl7 = Core.toTurtle(m7, {});
+    check("#137 export writes rdfs:label on the mapping target, once", (ttl7.match(/Car \(Wikidata\)/g) || []).length === 1 && /<https:\/\/www\.wikidata\.org\/entity\/Q1420>\s+rdfs:label\s+"Car \(Wikidata\)"@en/.test(ttl7), ttl7.slice(-400));
+    const back7 = Core.parseTurtle(ttl7);
+    check("#137 import reads the label back as an editable extLabel", back7.extLabels && back7.extLabels["https://www.wikidata.org/entity/Q1420"] && back7.extLabels["https://www.wikidata.org/entity/Q1420"].val === "Car (Wikidata)", back7.extLabels);
+    check("#137 the label is not also kept as a foreign triple", !(back7.foreign || []).some(t => t.p.v.endsWith("label") && t.s.v.includes("Q1420")), back7.foreign);
+    check("#137 round trip is stable", Core.toTurtle(back7, {}).split("\n").length === ttl7.split("\n").length);
+    check("#137 Markdown shows the label as the link text", Core.toMarkdown(m7).includes("[Car (Wikidata)](https://www.wikidata.org/entity/Q1420)"));
+    const m7b = mk("http://ex.org/t/", "t"); add(m7b, "car", "Car"); m7b.concepts.car.exactMatch = ["https://www.wikidata.org/entity/Q1420"];
+    check("#137 a mapping without a label exports as before", !/rdfs:label\s+"/.test(Core.toTurtle(m7b, {}).split("Q1420>")[1] || ""));
+  } catch (e) { fails.push("exception in #137: " + e.message); lines.push("EXCEPTION #137 " + e.message); }
   const summary = lines.join("\n") + "\n\n" + (fails.length ? "FAILURES: " + fails.join(" | ") : "ALL PASS (" + lines.length + " checks)");
   if (isNode) { console.log(summary); process.exit(fails.length ? 1 : 0); }
   root.__coreTestResult = { fails, lines, summary };

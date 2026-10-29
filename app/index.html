@@ -209,6 +209,7 @@
   .toggle input{width:15px;height:15px;accent-color:var(--accent)}
   .maprow{display:flex;gap:6px;margin-bottom:5px}
   .maprow select{width:120px;flex:0 0 auto;font-size:12px}
+  .maprow input.maplabel{flex:0 0 34%;min-width:0}
   .save-row{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:9px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;position:sticky;top:0;z-index:3}
   .save-status{font-size:12px;color:var(--faint)} .save-status.dirty{color:var(--warn);font-weight:600}
   .histbox{display:flex;flex-direction:column;gap:8px}
@@ -2609,11 +2610,16 @@ function mapGroup(c){
     sel.innerHTML=MAP_TYPES.map(t=>`<option ${t===mt?"selected":""}>${t}</option>`).join("");
     sel.onchange=()=>{ const val=c[mt][i]; c[mt].splice(i,1); const nt=sel.value; c[nt]=c[nt]||[]; c[nt].push(val); renderEditor(); save(); scheduleAuto(); };
     const inp=document.createElement("input"); inp.className="val"; inp.value=u; inp.placeholder="http://… target IRI, or a term like skos:Concept";
-    inp.oninput=()=>{ c[mt][i]=inp.value.trim(); save(); scheduleAuto(); };
-    attachUriGuard(inp,v=>{ c[mt][i]=v; save(); scheduleAuto(); });
+    const moveLabel=(from,to)=>{ if(from===to||!model.extLabels||!model.extLabels[from]) return; if(to) model.extLabels[to]=model.extLabels[from]; delete model.extLabels[from]; };
+    inp.oninput=()=>{ const prev=c[mt][i]; c[mt][i]=inp.value.trim(); moveLabel(prev,c[mt][i]); save(); scheduleAuto(); };
+    attachUriGuard(inp,v=>{ const prev=c[mt][i]; c[mt][i]=v; moveLabel(prev,v); save(); scheduleAuto(); });
+    // #137: a display name for the target, written as rdfs:label on that IRI; one label per IRI across the project
+    const lab=document.createElement("input"); lab.className="val maplabel"; lab.placeholder="Label for the target (rdfs:label), optional"; lab.title="Shown in the graph, the concept view and the Markdown export instead of the IRI; exported as rdfs:label on the target";
+    const curL=(model.extLabels||{})[u]; lab.value=curL&&curL.val?curL.val:"";
+    lab.oninput=()=>{ const uu=c[mt][i]; if(!uu) return; model.extLabels=model.extLabels||{}; const v=lab.value.trim(); if(v) model.extLabels[uu]={val:v,lang:(model.extLabels[uu]&&model.extLabels[uu].lang)||model.defaultLang||"en"}; else delete model.extLabels[uu]; save(); scheduleAuto(); };
     const rm=document.createElement("button"); rm.className="rmv"; rm.textContent="✕";
     rm.onclick=()=>{ c[mt].splice(i,1); renderEditor(); save(); scheduleAuto(); };
-    row.append(sel,inp,rm); g.appendChild(row);
+    row.append(sel,inp,lab,rm); g.appendChild(row);
   });
   return g;
 }
@@ -4251,7 +4257,7 @@ function renderBrowseDetail(id){
   if(parents.length) h+=`<div class="bd-sec"><h4>Broader</h4><div class="bd-rel">${parents.map(p=>`<a class="up" data-goto="${p}"><span class="rd"></span>${escapeHtml(plabel(p))}</a>`).join("")}</div></div>`;
   if(kids.length) h+=`<div class="bd-sec"><h4>Narrower</h4><div class="bd-rel">${kids.map(k=>`<a data-goto="${k}"><span class="rd"></span>${escapeHtml(plabel(k))}</a>`).join("")}</div></div>`;
   if(rel.length) h+=`<div class="bd-sec"><h4>Related</h4><div class="bd-rel">${rel.map(r=>`<a class="rel" data-goto="${r}"><span class="rd"></span>${escapeHtml(plabel(r))}</a>`).join("")}</div></div>`;
-  if(maps.length) h+=`<div class="bd-sec"><h4>External references</h4><div class="bd-rel">${maps.map(u=>`<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><span class="rd"></span>${escapeHtml(u)}</a>`).join("")}</div></div>`;
+  if(maps.length) h+=`<div class="bd-sec"><h4>External references</h4><div class="bd-rel">${maps.map(u=>{ const EL=(model.extLabels||{})[u]; return `<a href="${escapeHtml(u)}" title="${escapeHtml(u)}" target="_blank" rel="noopener"><span class="rd"></span>${escapeHtml(EL&&EL.val?EL.val:u)}</a>`; }).join("")}</div></div>`;
   const hist=(c.history||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
   if(hist.length){ h+=`<div class="bd-sec"><h4>Change history</h4><div class="histbox">${hist.map(e=>{let dt="";try{dt=new Date(e.ts).toLocaleString();}catch(x){} return `<div class="hist-entry"><div class="hist-ts">${dt}${e.author?` · ${escapeHtml(e.author)}`:""}</div><ul class="hist-ch">${(e.changes||[]).map(s=>`<li>${escapeHtml(s)}</li>`).join("")}</ul></div>`;}).join("")}</div></div>`; }
   h+=`<div class="bd-propose"><button class="btn" id="bdProposeChild">＋ Propose a narrower term under “${escapeHtml(plabel(id))}”</button></div></div>`;
@@ -5002,7 +5008,7 @@ function graphBuild(){
         for(const f of GMAPF)(c[f]||[]).forEach(u=>{ if(!u) return; let t;
           if(u.indexOf(model.base)===0&&model.concepts[u.slice(model.base.length)]){ t="c:"+u.slice(model.base.length); }
           else if(own[u]){ t="c:"+own[u]; }
-          else { const k="m:"+u, r=rix[u]; const n=add(k,"xc",r?r.label:String(u).split(/[#/]/).pop(),null,u); n.proj=r?r.proj:null; t=k; }
+          else { const k="m:"+u, r=rix[u], EL=(model.extLabels||{})[u]; const n=add(k,"xc",EL&&EL.val?EL.val:(r?r.label:String(u).split(/[#/]/).pop()),null,u); n.proj=r?r.proj:null; t=k; }
           if(t!=="c:"+id) edges.push({s:"c:"+id,t,rel:f}); }); }
     } }
   if(showK){ const o=model.onto;

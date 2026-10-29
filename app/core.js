@@ -118,6 +118,7 @@ function annexUri(model, rec, id, kind){
   return ns ? ns + id : conceptUri(model, id);
 }
 function buildTriples(model, opts){
+  const _extDone = new Set();   // external mapping targets already given their rdfs:label (#137)
   opts = opts || {};
   const T = [];
   // Every triple emits exactly once (#51 — plain skos:broader plus an entailing
@@ -271,6 +272,9 @@ function buildTriples(model, opts){
     // mappings
     for (const m of MAP_FIELDS)
       (c[m] || []).forEach(u => { if (u) add(s, iri(NS.skos + m), iri(u)); });
+    // the label the editor gave to an external mapping target (#137): rdfs:label on that IRI, written once
+    for (const m of MAP_FIELDS)
+      (c[m] || []).forEach(u => { const L = u && model.extLabels && model.extLabels[u]; if (L && L.val && !_extDone.has(u)){ _extDone.add(u); add(iri(u), iri(NS.rdfs + "label"), lit(L.val, L.lang || "")); } });
     // linked artifacts (documents, images, spreadsheets, wikis) as rdfs:seeAlso
     (c.artifacts || []).forEach(a => { if (a && a.url) add(s, iri(NS.rdfs + "seeAlso"), iri(a.url)); });
     // provenance timestamps + the recorded edit history, exported as skos:changeNote
@@ -901,7 +905,7 @@ function toMarkdown(model){
     // Linked data — mapping properties to other schemes / the open graph
     const maps=[];
     [["exactMatch","exact"],["closeMatch","close"],["broadMatch","broader"],["narrowMatch","narrower"],["relatedMatch","related"]].forEach(([k,disp])=>{
-      (c[k]||[]).filter(Boolean).forEach(u=>maps.push(`  - _${disp} match_ → ${extLink(u)}`)); });
+      (c[k]||[]).filter(Boolean).forEach(u=>{ const EL=(model.extLabels||{})[u]; maps.push(`  - _${disp} match_ → ${EL&&EL.val?`[${EL.val}](${u})`:extLink(u)}`); }); });
     if(maps.length) rows.push(`- **Linked data:**\n`+maps.join("\n"));
     const arts=(c.artifacts||[]).filter(a=>a&&(a.url||a.title)); if(arts.length) rows.push(`- **Resources:**\n`+arts.map(a=>`  - [${a.title||a.url}](${a.url||"#"})${a.type?` _(${a.type})_`:""}`).join("\n"));
     out += rows.join("\n")+"\n\n";
@@ -1870,7 +1874,11 @@ function triplesToModel(triples, prefixes){
   // ConceptScheme from a federated file, external resources) are preserved verbatim
   // and re-emitted on export.
   const _consumed = u => u === model.scheme.uri || _uriId[u] || xlForm[u] || docSubs[u] || agentSubs[u] || (collTypes[u] !== undefined);
-  const _mf = _maybeForeign.filter(t => t.s.t === "iri" && !_consumed(t.s.v));
+  // labels given to external mapping targets (#137): an rdfs:label on an IRI this model maps to, editable in the mapping row
+  const _mapTargets = new Set(); for (const id in model.concepts) for (const m of MAP_FIELDS) (model.concepts[id][m] || []).forEach(u => { if (u) _mapTargets.add(u); });
+  const _isExtLabel = t => t.s.t === "iri" && t.p.v === NS.rdfs + "label" && t.o.t === "lit" && _mapTargets.has(t.s.v) && !_uriId[t.s.v];
+  triples.forEach(t => { if (_isExtLabel(t)){ model.extLabels = model.extLabels || {}; if (!model.extLabels[t.s.v]) model.extLabels[t.s.v] = { val: t.o.v, lang: t.o.lang || "" }; } });
+  const _mf = _maybeForeign.filter(t => t.s.t === "iri" && !_consumed(t.s.v) && !_isExtLabel(t));
   if (_mf.length) model.foreign = _mf.map(t => ({ s:{t:"iri",v:t.s.v}, p:{t:t.p.t,v:t.p.v}, o:{t:t.o.t,v:t.o.v,lang:t.o.lang||"",dt:t.o.dt||""} }));
   return model;
 }
