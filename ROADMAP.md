@@ -8,6 +8,8 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+- **Deprecated concepts, visibly** — struck through with a badge in the tree and the browse views, a toggle to hide retired leaves, a one-press move of a deprecated concept's narrower concepts to its successor, and guidance that a rename alone is an in-place edit.
+
 - **Labels for external mappings** (#137) — each mapping row takes an optional label for its target IRI, written as `rdfs:label` on that IRI, read back on import, and shown in the graph, the concept view and the Markdown export instead of the bare IRI.
 
 ### Language tags: any BCP 47 tag, one canonical form (v0.18.13, #107 #109 #111 #112 #113 #114 #115 #116)

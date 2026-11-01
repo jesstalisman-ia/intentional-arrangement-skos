@@ -146,6 +146,11 @@
   .tdot{width:6px;height:6px;border-radius:50%;background:var(--faint);opacity:.5;flex:0 0 auto}
   .trow.top>.tdot{background:var(--teal);opacity:1;width:8px;height:8px}
   .tlabel{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* deprecated concepts (#139): struck and muted wherever concepts are listed, with a badge; never hidden by default */
+  .trow.dep .tlabel{text-decoration:line-through;color:var(--faint)}
+  .trow.dep .tdot{opacity:.45}
+  .tdep{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-radius:5px;padding:1px 5px;margin-left:2px;flex:0 0 auto}
+  .badge.dep{color:var(--muted);background:var(--surface-2)}
   .tlabel.fmatch{font-weight:700;color:#8a5a00;background:#fff3c4;border-radius:4px;padding:0 4px;box-decoration-break:clone}
   #collList .fmatch{font-weight:700;color:#8a5a00;background:#fff3c4;border-radius:4px;padding:0 4px}
   .tlabel .unl{color:var(--faint);font-style:italic}
@@ -451,6 +456,7 @@
           <label>Show <select id="tvRender" title="How concept nodes are labelled in the tree and pickers"><option value="pref">Label</option><option value="qname">Qualified name</option><option value="iri">Full IRI</option></select></label>
           <label id="tvLangWrap" style="display:none">Lang <select id="tvLang" title="Preferred label language for display"></select></label>
           <label>Sort <select id="tvSort" title="Order concepts in the tree — Document order is the order they were authored or imported (the order they appear in your file)"><option value="doc" title="The order concepts were authored or imported">Document order</option><option value="az">A–Z</option><option value="za">Z–A</option></select></label>
+          <label title="Show deprecated concepts. A deprecated concept that still has narrower concepts is always shown, struck through, so nothing beneath it disappears."><input type="checkbox" id="tvDep" checked> Deprecated</label>
           <button class="btn sm" id="tvExpand" title="Expand the whole concept tree">⊞ Expand all</button>
           <button class="btn sm" id="tvCollapse" title="Collapse to top concepts only">⊟ Collapse all</button>
         </div>
@@ -1793,6 +1799,7 @@ function duplicateConcept(id){
   clone.history=[]; seedHistory(clone, `Duplicated from “${plabel(id)}”`);
   model.concepts[nid]=clone; const idx=model.order.indexOf(id); model.order.splice(idx+1,0,nid);
   save(); renderTree(); selectConcept(nid); afterChange();
+  toast("Duplicated. Changing only the name? Edit the original's label or local name instead; duplicate and deprecate when the meaning changes.");
 }
 function doRename(oldId, newId){
   if(!newId || newId===oldId || model.concepts[newId] || !model.concepts[oldId]) return oldId;
@@ -1860,7 +1867,7 @@ function label(id){ const c=model.concepts[id]; const p=c&&c.pref&&c.pref.find(l
 // #16 — how node text renders in the tree and relationship pickers (view-only; never
 // touches the data model or exports). render: pref | qname | iri; lang: a BCP-47 tag or
 // "" (auto = default language); sort: doc | az | za.
-let treeView = { render:"pref", lang:"", sort:"doc" };
+let treeView = { render:"pref", lang:"", sort:"doc", showDeprecated:true };
 try{ const s=JSON.parse(localStorage.getItem("iaskos.treeview")||"null"); if(s&&typeof s==="object") treeView=Object.assign(treeView,s); }catch(e){}
 function saveTreeView(){ try{ localStorage.setItem("iaskos.treeview", JSON.stringify(treeView)); }catch(e){} }
 // one entry per language: "EN" and "en" are the same tag (RDF 1.1 compares them case-insensitively); the first spelling seen is shown
@@ -1889,6 +1896,7 @@ function initTreeOpts(){
   showLang();
   const reflow=()=>{ renderTree(); if(typeof renderCollections==="function") renderCollections(); };
   rSel.onchange=()=>{ treeView.render=rSel.value; saveTreeView(); showLang(); reflow(); if(selected)renderEditor(); };
+  const dSel=$('#tvDep'); if(dSel){ dSel.checked=treeView.showDeprecated!==false; dSel.onchange=()=>{ treeView.showDeprecated=dSel.checked; saveTreeView(); renderTree(); }; }
   lSel.onchange=()=>{ treeView.lang=lSel.value; saveTreeView(); reflow(); if(selected)renderEditor(); };
   sSel.onchange=()=>{ treeView.sort=sSel.value; saveTreeView(); reflow(); };
   const ex=$('#tvExpand'), co=$('#tvCollapse');
@@ -1948,19 +1956,21 @@ function renderTree(){
     warn.textContent=`No top concepts — every concept has a parent (likely a broader cycle). Showing all ${rootList.length}. Fix in Validate, or select concepts and “Make top”.`;
     host.appendChild(warn);
   }
+  if(treeView.showDeprecated===false) rootList=rootList.filter(r=>!hideDeprecated(r));
   const frag=document.createDocumentFragment();
   for(const r of sortIds(rootList)) frag.appendChild(treeNode(r, new Set()));
   host.appendChild(frag);
 }
+function hideDeprecated(id){ const c=model.concepts[id]; return !!(c&&c.deprecated&&!childrenFast(id).some(k=>!window._vis||window._vis.has(k))); }   // #139: only a deprecated leaf can be hidden
 function treeNode(id, path){
   const c=model.concepts[id];
-  const kids=sortIds(childrenFast(id).filter(k=>!window._vis||window._vis.has(k)));
+  const kids=sortIds(childrenFast(id).filter(k=>(!window._vis||window._vis.has(k))&&(treeView.showDeprecated!==false||!hideDeprecated(k))));
   const node=document.createElement("div");
   const row=document.createElement("div");
   const hasKids=kids.length>0;
   const cycle=path.has(id);
   const isOpen=openIds.has(id)||(treeFilter&&hasKids);
-  row.className="trow"+(c.top?" top":"")+(id===selected?" sel":"")+(isOpen?" open":"")+(bulkMode&&bulkSel.has(id)?" bulksel":"");
+  row.className="trow"+(c.top?" top":"")+(c.deprecated?" dep":"")+(id===selected?" sel":"")+(isOpen?" open":"")+(bulkMode&&bulkSel.has(id)?" bulksel":"");
   row.dataset.cid=id;   // lets selectConcept move the highlight without rebuilding the tree
   row.tabIndex=0;
   if(bulkMode){ const cb=document.createElement("input"); cb.type="checkbox"; cb.className="tcheck"; cb.checked=bulkSel.has(id);
@@ -1976,6 +1986,7 @@ function treeNode(id, path){
   const disp=nodeText(id); lab.innerHTML = nodeUnlabeled(id) ? '<span class="unl">'+escapeHtml(disp)+'</span>' : escapeHtml(disp);
   if(window._match&&window._match.has(id)) lab.classList.add('fmatch');   // a direct filter hit (ancestors shown but not highlighted)
   row.appendChild(lab);
+  if(c.deprecated){ const b=document.createElement("span"); b.className="tdep"; b.textContent="deprecated"; const succ=(c.isReplacedBy||[]).filter(r=>model.concepts[r]).map(plabel); b.title=succ.length?"Deprecated; replaced by "+succ.join(", "):"Deprecated; no successor named yet"; row.appendChild(b); }
   if(hasKids){ const cc=document.createElement("span"); cc.className="tcount"; cc.textContent=descCountFast(id); row.appendChild(cc); }
   if(!bulkMode){ const acts=document.createElement("span"); acts.className="tacts";
     acts.appendChild(mkBtn("＋","Add child",e=>{e.stopPropagation();openIds.add(id);addConcept(id);}));
@@ -2314,10 +2325,22 @@ function statusGroup(c){
   dep.appendChild(cb); dep.appendChild(document.createTextNode(" Deprecated (owl:deprecated)"));
   g.appendChild(dep);
   const hint=document.createElement("div"); hint.className="subtle"; hint.style.cssText="font-size:11.5px;margin:3px 0 2px";
-  hint.textContent="A deprecated concept keeps its URI and stays in the scheme so existing references don't break; consumers filter it at display time. Name its successor(s) below and add a change note explaining the retirement.";
+  hint.textContent="A deprecated concept keeps its URI and stays in the scheme so existing references don't break; consumers filter it at display time, and this editor shows it struck through. Name its successor(s) below and add a change note explaining the retirement. Changing only the name? Edit the preferred label, or the local name above, in place; deprecate when the meaning changes.";
   g.appendChild(hint);
+  // #139: the narrower concepts of a deprecated concept move to its successor in one step
+  const kidsIds=childrenOf(c.id), succ=(c.isReplacedBy||[]).filter(r=>model.concepts[r]&&r!==c.id);
+  if(c.deprecated&&kidsIds.length&&succ.length){ const row=document.createElement("div"); row.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"; let target=succ[0];
+    if(succ.length>1){ const sel=document.createElement("select"); succ.forEach(sid=>{ const o=document.createElement("option"); o.value=sid; o.textContent=plabel(sid); sel.appendChild(o); }); sel.onchange=()=>{ target=sel.value; }; row.appendChild(sel); }
+    const b=document.createElement("button"); b.className="btn sm primary"; b.type="button"; b.textContent="Move "+kidsIds.length+" narrower concept"+(kidsIds.length===1?"":"s")+(succ.length>1?" to the successor":" to “"+plabel(succ[0])+"”"); b.title="Re-parent every narrower concept of this deprecated concept under its successor, with a change note on each";
+    b.onclick=()=>moveChildrenToSuccessor(c.id,target); row.appendChild(b); g.appendChild(row); }
+  else if(c.deprecated&&kidsIds.length){ const n=document.createElement("div"); n.className="subtle"; n.style.cssText="font-size:11.5px;margin:3px 0 2px"; n.textContent="This concept still has "+kidsIds.length+" narrower concept"+(kidsIds.length===1?"":"s")+". Name a successor below and you can move them to it in one step."; g.appendChild(n); }
   return g;
 }
+function moveChildrenToSuccessor(oldId,newId){ const kids=childrenOf(oldId).filter(k=>k!==newId); if(!kids.length||!model.concepts[newId]) return; const L=model.defaultLang||"en", today=todayISO();
+  kids.forEach(k=>{ const kc=model.concepts[k]; ["broader","broaderGeneric","broaderPartitive","broaderInstantial"].forEach(f=>{ if(Array.isArray(kc[f])&&kc[f].includes(oldId)) kc[f]=kc[f].map(x=>x===oldId?newId:x).filter((x,i,a)=>a.indexOf(x)===i); });
+    kc.modified=today; (kc.changeNote=kc.changeNote||[]).push({val:"Moved from “"+plabel(oldId)+"” to “"+plabel(newId)+"” when the former was deprecated.",lang:L}); seedHistory(kc,"Re-parented from “"+plabel(oldId)+"” to “"+plabel(newId)+"”"); });
+  const oc=model.concepts[oldId]; (oc.changeNote=oc.changeNote||[]).push({val:kids.length+" narrower concept"+(kids.length===1?"":"s")+" moved to “"+plabel(newId)+"”.",lang:L}); seedHistory(oc,"Moved "+kids.length+" narrower concept"+(kids.length===1?"":"s")+" to “"+plabel(newId)+"”");
+  save(); renderTree(); renderEditor(); afterChange(); toast(kids.length+" concept"+(kids.length===1?"":"s")+" moved to “"+plabel(newId)+"”"); }
 function metaGroup(c){
   const g=document.createElement("div"); g.className="grp";
   const l=document.createElement("div"); l.className="lbl"; l.textContent="Concept metadata (Dublin Core)"; g.appendChild(l);
@@ -4220,13 +4243,14 @@ function browseNode(id,path){
   const hasKids=kids.length>0, cyc=path.has(id);
   const isOpen=browseOpen.has(id)||(browseFilter&&hasKids);
   const node=document.createElement("div");
-  const row=document.createElement("div"); row.className="trow"+(model.concepts[id].top?" top":"")+(id===browseSel?" sel":"")+(isOpen?" open":"");
+  const row=document.createElement("div"); row.className="trow"+(model.concepts[id].top?" top":"")+(model.concepts[id].deprecated?" dep":"")+(id===browseSel?" sel":"")+(isOpen?" open":"");
   const caret=document.createElement("button"); caret.className="caret"+(hasKids&&!cyc?"":" empty");
   caret.innerHTML='<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
   caret.onclick=e=>{e.stopPropagation(); browseOpen.has(id)?browseOpen.delete(id):browseOpen.add(id); renderBrowse();};
   row.appendChild(caret);
   const dot=document.createElement("span"); dot.className="tdot"; row.appendChild(dot);
   const lab=document.createElement("span"); lab.className="tlabel"; lab.textContent=plabel(id); row.appendChild(lab);
+  if(model.concepts[id].deprecated){ const b=document.createElement("span"); b.className="tdep"; b.textContent="deprecated"; row.appendChild(b); }
   if(hasKids){ const cc=document.createElement("span"); cc.className="tcount"; cc.textContent=bdesc(id); row.appendChild(cc); }
   row.onclick=()=>selectBrowse(id);
   node.appendChild(row);
@@ -4248,6 +4272,7 @@ function renderBrowseDetail(id){
   if(crumb) h+=`<div class="bd-crumb">${crumb}</div>`;
   h+=`<h2 class="bd-title">${escapeHtml(plabel(id))}</h2><div class="bd-badges">`;
   if(c.top) h+='<span class="badge root">Top term</span>';
+  if(c.deprecated){ const succ=(c.isReplacedBy||[]).filter(r=>model.concepts[r]); h+='<span class="badge dep">Deprecated'+(succ.length?' · replaced by '+escapeHtml(succ.map(plabel).join(", ")):'')+'</span>'; }
   h+= kids.length? `<span class="badge leaf">${bdesc(id)} narrower</span>`:'<span class="badge leaf">leaf term</span>';
   h+='</div>';
   h+= defs.length? `<div class="bd-def">${escapeHtml(defs[0].val)}</div>` : '<div class="bd-def" style="color:var(--faint);font-style:italic">No definition yet.</div>';
