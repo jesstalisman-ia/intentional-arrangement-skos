@@ -190,7 +190,8 @@ function buildTriples(model, opts){
     if (c.deprecated){
       add(s, iri(NS.owl + "deprecated"), lit("true", "", NS.xsd + "boolean"));
       (c.isReplacedBy || []).forEach(rid => {
-        if (model.concepts[rid]) add(s, iri(NS.dcterms + "isReplacedBy"), iri(conceptRes(model, rid)));
+        if (model.concepts[rid]){ add(s, iri(NS.dcterms + "isReplacedBy"), iri(conceptRes(model, rid))); add(iri(conceptRes(model, rid)), iri(NS.dcterms + "replaces"), s); }
+        else if (/^[a-z][a-z0-9+.-]*:/i.test(String(rid))) add(s, iri(NS.dcterms + "isReplacedBy"), iri(rid));   // #140: a successor in another scheme
       });
     }
 
@@ -1214,7 +1215,7 @@ function validate(model){
     if (c.deprecated){
       if (c.top) push("warning", "deprecatedTop", "Deprecated top concept",
         `Marked deprecated but still a top concept — it stays a scheme entry point. Unmark top, or reinstate it.`, id);
-      for (const rid of (c.isReplacedBy || [])) if (!C[rid]) push("error", "danglingReplacedBy", "Dangling successor",
+      for (const rid of (c.isReplacedBy || [])) if (!C[rid] && !/^[a-z][a-z0-9+.-]*:/i.test(String(rid))) push("error", "danglingReplacedBy", "Dangling successor",
         `dcterms:isReplacedBy points to unknown concept "${rid}".`, id);
       if (hasNarrower && !(c.isReplacedBy || []).length) push("info", "deprecatedNoSuccessor", "Deprecated without successor",
         `Deprecated concept has narrower concepts but no dcterms:isReplacedBy — record what replaces it so consumers can migrate.`, id);
@@ -1704,7 +1705,12 @@ function triplesToModel(triples, prefixes){
     // double-emit once the exporter writes them). owl:deprecated is a boolean;
     // dcterms:isReplacedBy names a successor concept (same id resolution as broader).
     else if (pv === NS.owl + "deprecated" && o.t === "lit"){ const c = ensure(s); if (c) c.deprecated = /^(true|1)$/i.test(String(o.v).trim()); }
-    else if (pv === NS.dcterms + "isReplacedBy" && o.t === "iri"){ const c = ensure(s), rc = ensure(o.v); if (c && rc){ const rid = idOf(o.v); c.isReplacedBy = c.isReplacedBy || []; if (!c.isReplacedBy.includes(rid)) c.isReplacedBy.push(rid); } }
+    else if (pv === NS.dcterms + "isReplacedBy" && o.t === "iri"){ const c = ensure(s); if (c){
+        // #140: a successor that is one of this scheme's concepts is kept by id; any other IRI (another scheme, an external vocabulary) is kept as the IRI, never minted as a concept here
+        const local = _uriId[o.v] || _typedConcept.has(o.v) || (model.base && o.v.startsWith(model.base));
+        const rid = local ? (ensure(o.v) ? idOf(o.v) : o.v) : o.v;
+        c.isReplacedBy = c.isReplacedBy || []; if (!c.isReplacedBy.includes(rid)) c.isReplacedBy.push(rid); } }
+    else if (pv === NS.dcterms + "replaces"){ /* the inverse of isReplacedBy; written again on export from the successor's side */ }
     // skos:inScheme is re-derived on export (single-scheme editor); consume it here so
     // the passthrough below doesn't duplicate what the exporter already emits.
     else if (pv === P + "inScheme"){ const c = ensure(s);

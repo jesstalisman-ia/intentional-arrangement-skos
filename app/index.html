@@ -2294,9 +2294,9 @@ function renderEditor(){
     safe("Broader — instantial", ()=>relGroup("Broader — instantial (instance of)", c, "broaderInstantial"));
   }
   safe("Related", ()=>relGroup("Related", c, "related"));
-  safe("External mappings", ()=>mapGroup(c));
   safe("Lifecycle status", ()=>statusGroup(c));
-  if(c.deprecated) safe("Replaced by", ()=>relGroup("Replaced by — successor concepts (dcterms:isReplacedBy)", c, "isReplacedBy"));
+  if(c.deprecated) safe("Replaced by", ()=>successorGroup(c));
+  safe("External mappings", ()=>mapGroup(c));
   // collections this concept belongs to (#68) — the way back from Build to the
   // Collections editor; derived from the model, no extension property needed
   safe("Collections", ()=>{ const _cs=(typeof colls==="function")?colls():(model.collections||{});
@@ -2320,20 +2320,72 @@ function statusGroup(c){
   const l=document.createElement("div"); l.className="lbl"; l.textContent="Lifecycle status"; g.appendChild(l);
   const dep=document.createElement("label"); dep.className="toggle"; dep.style.paddingTop="2px";
   const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!c.deprecated;
-  cb.onchange=()=>{ c.deprecated=cb.checked; if(c.deprecated&&!c.modified) c.modified=todayISO(); save(); renderTree(); renderEditor(); afterChange();
+  cb.onchange=()=>{ c.deprecated=cb.checked; c.modified=todayISO(); addHistoryNote(c, c.deprecated?"Deprecated "+todayISO()+".":"Reinstated "+todayISO()+"."); save(); renderTree(); renderEditor(); afterChange();
     toast(c.deprecated?"Marked deprecated — record what replaces it below":"Reinstated"); };
   dep.appendChild(cb); dep.appendChild(document.createTextNode(" Deprecated (owl:deprecated)"));
   g.appendChild(dep);
   const hint=document.createElement("div"); hint.className="subtle"; hint.style.cssText="font-size:11.5px;margin:3px 0 2px";
   hint.textContent="A deprecated concept keeps its URI and stays in the scheme so existing references don't break; consumers filter it at display time, and this editor shows it struck through. Name its successor(s) below and add a change note explaining the retirement. Changing only the name? Edit the preferred label, or the local name above, in place; deprecate when the meaning changes.";
   g.appendChild(hint);
-  // #139: the narrower concepts of a deprecated concept move to its successor in one step
-  const kidsIds=childrenOf(c.id), succ=(c.isReplacedBy||[]).filter(r=>model.concepts[r]&&r!==c.id);
-  if(c.deprecated&&kidsIds.length&&succ.length){ const row=document.createElement("div"); row.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"; let target=succ[0];
-    if(succ.length>1){ const sel=document.createElement("select"); succ.forEach(sid=>{ const o=document.createElement("option"); o.value=sid; o.textContent=plabel(sid); sel.appendChild(o); }); sel.onchange=()=>{ target=sel.value; }; row.appendChild(sel); }
-    const b=document.createElement("button"); b.className="btn sm primary"; b.type="button"; b.textContent="Move "+kidsIds.length+" narrower concept"+(kidsIds.length===1?"":"s")+(succ.length>1?" to the successor":" to “"+plabel(succ[0])+"”"); b.title="Re-parent every narrower concept of this deprecated concept under its successor, with a change note on each";
-    b.onclick=()=>moveChildrenToSuccessor(c.id,target); row.appendChild(b); g.appendChild(row); }
-  else if(c.deprecated&&kidsIds.length){ const n=document.createElement("div"); n.className="subtle"; n.style.cssText="font-size:11.5px;margin:3px 0 2px"; n.textContent="This concept still has "+kidsIds.length+" narrower concept"+(kidsIds.length===1?"":"s")+". Name a successor below and you can move them to it in one step."; g.appendChild(n); }
+  // #139/#140: the links other concepts hold to a retired concept, redirected to a same-scheme successor or removed when it moved away
+  if(c.deprecated){ const links=inboundLinks(c.id); const n=links.length; const local=(c.isReplacedBy||[]).filter(r=>model.concepts[r]&&r!==c.id); const external=(c.isReplacedBy||[]).filter(r=>!model.concepts[r]);
+    if(n&&local.length){ const row=document.createElement("div"); row.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"; let target=local[0];
+      if(local.length>1){ const sel=document.createElement("select"); local.forEach(sid=>{ const o=document.createElement("option"); o.value=sid; o.textContent=plabel(sid); sel.appendChild(o); }); sel.onchange=()=>{ target=sel.value; }; row.appendChild(sel); }
+      const b=document.createElement("button"); b.className="btn sm primary"; b.type="button"; b.textContent="Redirect "+n+" link"+(n===1?"":"s")+" ("+linkSummary(links)+")"+(local.length>1?" to the successor":" to “"+plabel(local[0])+"”"); b.title="Every broader and related link other concepts hold to this retired concept is pointed at the successor instead, with a change note on each";
+      b.onclick=()=>redirectLinks(c.id,target); row.appendChild(b); g.appendChild(row); }
+    else if(n&&external.length){ const row=document.createElement("div"); row.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px";
+      const b=document.createElement("button"); b.className="btn sm"; b.type="button"; b.textContent="Remove "+n+" link"+(n===1?"":"s")+" ("+linkSummary(links)+") to this retired concept"; b.title="The concept moved to another scheme: the broader and related links other concepts hold to it are removed, with a change note on each; the mapping keeps the trace";
+      b.onclick=()=>redirectLinks(c.id,null); row.appendChild(b); g.appendChild(row); }
+    else if(n){ const w=document.createElement("div"); w.className="subtle"; w.style.cssText="font-size:11.5px;margin:3px 0 2px"; w.textContent=n+" other concept"+(n===1?" still links":"s still link")+" to this one ("+linkSummary(links)+"). Name a successor below and you can redirect or remove those links in one step."; g.appendChild(w); }
+    // a deprecation is a major change for anyone who indexed with the scheme
+    const ver=(model.scheme&&model.scheme.version||"").trim(); const m=ver.match(/^v?(\d+)\.(\d+)(?:\.(\d+))?/); const next=m?((+m[1])+1)+".0.0":"1.0.0";
+    const vrow=document.createElement("div"); vrow.className="subtle"; vrow.style.cssText="font-size:11.5px;margin:6px 0 2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+    vrow.appendChild(document.createTextNode("A deprecation is a major change for anyone who indexed with this scheme"+(ver?" (version "+ver+")":"")+"."));
+    const vb=document.createElement("button"); vb.className="btn sm"; vb.type="button"; vb.textContent=(ver?"Bump to "+next:"Set version "+next); vb.title="Sets the scheme's owl:versionInfo and dcterms:modified; the Change log export records why";
+    vb.onclick=()=>{ model.scheme.version=next; model.scheme.modified=todayISO(); save(); renderEditor(); afterChange(); toast("Scheme version "+next); }; vrow.appendChild(vb); g.appendChild(vrow); }
+  return g;
+}
+function addHistoryNote(c, text){ const L=model.defaultLang||"en"; c.historyNote=c.historyNote||[]; if(!c.historyNote.some(n=>n&&n.val===text)) c.historyNote.push({lang:L,val:text}); }
+function inboundLinks(id){ const out=[]; for(const o of model.order){ if(o===id) continue; const oc=model.concepts[o]; if(!oc) continue; ["broader","broaderGeneric","broaderPartitive","broaderInstantial"].forEach(f=>{ if(Array.isArray(oc[f])&&oc[f].includes(id)) out.push({from:o,field:f}); }); if((oc.related||[]).includes(id)) out.push({from:o,field:"related"}); } return out; }
+function linkSummary(links){ const h=links.filter(l=>l.field!=="related").length, r=links.length-h; const p=[]; if(h) p.push(h+" narrower"); if(r) p.push(r+" related"); return p.join(", "); }
+function redirectLinks(oldId, newId){ const links=inboundLinks(oldId); if(!links.length) return; const L=model.defaultLang||"en", today=todayISO(); const touched=new Set();
+  links.forEach(({from,field})=>{ const oc=model.concepts[from]; if(!oc||from===newId) return; const arr=oc[field]||[]; oc[field]=newId?arr.map(x=>x===oldId?newId:x).filter((x,i,a)=>x!==from&&a.indexOf(x)===i):arr.filter(x=>x!==oldId); touched.add(from); });
+  if(newId&&model.concepts[newId]){ const nc=model.concepts[newId]; links.filter(l=>l.field==="related").forEach(({from})=>{ if(from!==newId){ nc.related=nc.related||[]; if(!nc.related.includes(from)) nc.related.push(from); } }); const oc=model.concepts[oldId]; oc.related=(oc.related||[]).filter(x=>!links.some(l=>l.from===x&&l.field==="related")); }
+  else { const oc=model.concepts[oldId]; oc.related=(oc.related||[]).filter(x=>!links.some(l=>l.from===x&&l.field==="related")); }
+  touched.forEach(k=>{ const kc=model.concepts[k]; kc.modified=today; (kc.changeNote=kc.changeNote||[]).push({lang:L,val:newId?"Link to “"+plabel(oldId)+"” redirected to “"+plabel(newId)+"” when the former was deprecated.":"Link to “"+plabel(oldId)+"” removed when it was deprecated and moved to another scheme."}); seedHistory(kc, newId?"Link to “"+plabel(oldId)+"” redirected to “"+plabel(newId)+"”":"Link to “"+plabel(oldId)+"” removed (deprecated, moved away)"); });
+  const oc=model.concepts[oldId]; addHistoryNote(oc, (newId?"Links from "+touched.size+" concept"+(touched.size===1?"":"s")+" redirected to “"+plabel(newId)+"”":"Links from "+touched.size+" concept"+(touched.size===1?"":"s")+" removed")+" on "+today+".");
+  save(); renderTree(); renderEditor(); afterChange(); toast(links.length+" link"+(links.length===1?"":"s")+(newId?" redirected to “"+plabel(newId)+"”":" removed")); }
+function moveChildrenToSuccessor(oldId,newId){ redirectLinks(oldId,newId); }
+// Replaced by (#140): a concept in this scheme, or any IRI (another scheme, an external vocabulary) with an optional label and, in the same step, the mapping that states how the meanings relate
+function isIriString(s){ return /^[a-z][a-z0-9+.-]*:/i.test(String(s||"")); }
+function successorGroup(c){
+  const g=document.createElement("div"); g.className="grp";
+  const l=document.createElement("div"); l.className="lbl"; l.textContent="Replaced by — successor (dcterms:isReplacedBy)"; g.appendChild(l);
+  c.isReplacedBy=c.isReplacedBy||[];
+  const chips=document.createElement("div"); chips.className="chips";
+  c.isReplacedBy.forEach((rid,i)=>{ const chip=document.createElement("span"); chip.className="chip"; const nm=document.createElement("span");
+    if(model.concepts[rid]){ nm.textContent=nodeText(rid); nm.style.cursor="pointer"; nm.title="Go to “"+nodeText(rid)+"” in the tree"; nm.onclick=()=>goToConcept(rid); }
+    else if(isIriString(rid)){ const EL=(model.extLabels||{})[rid]; const a=document.createElement("a"); a.href=rid; a.target="_blank"; a.rel="noopener"; a.textContent=(EL&&EL.val?EL.val+" · ":"")+rid; a.title="Successor in another scheme: "+rid; nm.appendChild(a); }
+    else nm.textContent=rid+" (missing)";
+    chip.appendChild(nm); const x=document.createElement("button"); x.textContent="✕"; x.onclick=()=>{ c.isReplacedBy.splice(i,1); renderEditor(); save(); afterChange(); }; chip.appendChild(x); chips.appendChild(chip); });
+  g.appendChild(chips);
+  const hint=document.createElement("div"); hint.className="subtle"; hint.style.cssText="font-size:11.5px;margin:3px 0 6px"; hint.textContent="In this scheme: pick the concept; the hierarchy and related links can then be redirected to it above. In another scheme or outside: give the IRI, a label if you like, and the mapping that says how the meanings relate (exactMatch when interchangeable, closeMatch when the meaning shifted). Both the lifecycle statement and the mapping are written; they answer different questions."; g.appendChild(hint);
+  const row1=document.createElement("div"); row1.className="reladd"; const sel=document.createElement("select");
+  const opts=model.order.filter(id=>id!==c.id&&!c.isReplacedBy.includes(id)).sort((a,b)=>plabel(a).localeCompare(plabel(b)));
+  sel.innerHTML='<option value="">a concept in this scheme…</option>'+opts.map(id=>`<option value="${escapeHtml(id)}">${escapeHtml(plabel(id))}</option>`).join("");
+  sel.onchange=()=>{ if(!sel.value) return; c.isReplacedBy.push(sel.value); addHistoryNote(c,"Replaced by “"+plabel(sel.value)+"” on "+todayISO()+"."); renderEditor(); save(); afterChange(); };
+  row1.appendChild(sel); g.appendChild(row1);
+  const row2=document.createElement("div"); row2.style.cssText="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px";
+  const iri=document.createElement("input"); iri.className="val"; iri.placeholder="https://… the successor's IRI (another scheme)"; iri.style.flex="2 1 220px";
+  const lab=document.createElement("input"); lab.className="val"; lab.placeholder="Label (rdfs:label), optional"; lab.style.flex="1 1 140px";
+  const rel=document.createElement("select"); rel.innerHTML='<option value="exactMatch">also skos:exactMatch</option><option value="closeMatch">also skos:closeMatch</option><option value="">no mapping</option>'; rel.title="The mapping written in the same step";
+  const add=document.createElement("button"); add.className="btn sm primary"; add.type="button"; add.textContent="Add successor";
+  add.onclick=()=>{ const u=iri.value.trim(); if(!isIriString(u)){ toast("Enter the successor's full IRI"); iri.focus(); return; } if(!c.isReplacedBy.includes(u)) c.isReplacedBy.push(u);
+    const lv=lab.value.trim(); if(lv){ model.extLabels=model.extLabels||{}; model.extLabels[u]={val:lv,lang:model.defaultLang||"en"}; }
+    if(rel.value){ c[rel.value]=c[rel.value]||[]; if(!c[rel.value].includes(u)) c[rel.value].push(u); }
+    addHistoryNote(c,"Moved to <"+u+">"+(lv?" (“"+lv+"”)":"")+" on "+todayISO()+(rel.value?"; mapped as skos:"+rel.value:"")+".");
+    renderEditor(); save(); afterChange(); toast("Successor recorded"+(rel.value?" with skos:"+rel.value:"")); };
+  row2.append(iri,lab,rel,add); g.appendChild(row2);
   return g;
 }
 function moveChildrenToSuccessor(oldId,newId){ const kids=childrenOf(oldId).filter(k=>k!==newId); if(!kids.length||!model.concepts[newId]) return; const L=model.defaultLang||"en", today=todayISO();
@@ -2523,7 +2575,12 @@ function labelGroup(title, c, field, isPref){
     const row=document.createElement("div"); row.className="rowline";
     const lang=mkLangSelect(L, ()=>{ save(); scheduleAuto(); });
     const val=document.createElement("input"); val.className="val"; val.value=L.val||""; val.placeholder=isPref?"preferred label":"label"; val.dataset.field=field;
+    const before=L.val||"";   // #140: the label as it was when this row was drawn, so a rename can offer to keep the old form
     val.oninput=()=>{ L.val=val.value; save(); updateTreeLabel(); scheduleAuto(); };
+    if(isPref) val.addEventListener("change",()=>{ const t=val.value.trim(); if(!before||t===before||!t) return; const have=[...(c.alt||[]),...(c.hidden||[])].some(a=>(a.val||"").toLowerCase()===before.toLowerCase()); if(have||row.querySelector(".keepold")) return;
+      const k=document.createElement("div"); k.className="keepold subtle"; k.style.cssText="flex-basis:100%;font-size:11.5px;display:flex;gap:6px;align-items:center;margin-top:2px"; k.appendChild(document.createTextNode("Keep “"+before+"” as an alternative label, so old indexing still matches?"));
+      const yes=document.createElement("button"); yes.className="btn sm"; yes.type="button"; yes.textContent="Keep it"; yes.onclick=()=>{ (c.alt=c.alt||[]).push({lang:L.lang,val:before}); save(); renderEditor(); afterChange(); toast("“"+before+"” kept as an alternative label"); };
+      const no=document.createElement("button"); no.className="btn sm"; no.type="button"; no.textContent="No"; no.onclick=()=>k.remove(); k.append(yes,no); row.appendChild(k); });
     // Trim on blur so a whitespace-only label doesn't silently persist as an empty literal.
     val.onchange=()=>{ const t=val.value.trim(); if(t!==val.value){ val.value=t; L.val=t; save(); updateTreeLabel(); }
       // #44: while the identifier still looks auto-generated (NewConcept…, a Copy of

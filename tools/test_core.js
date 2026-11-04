@@ -76,6 +76,23 @@
     const m7b = mk("http://ex.org/t/", "t"); add(m7b, "car", "Car"); m7b.concepts.car.exactMatch = ["https://www.wikidata.org/entity/Q1420"];
     check("#137 a mapping without a label exports as before", !/rdfs:label\s+"/.test(Core.toTurtle(m7b, {}).split("Q1420>")[1] || ""));
   } catch (e) { fails.push("exception in #137: " + e.message); lines.push("EXCEPTION #137 " + e.message); }
+  // #140 successors inside and outside the scheme
+  try {
+    const m8 = mk("http://ex.org/t/", "t"); add(m8, "old", "Cluster"); add(m8, "nu", "Note Cluster"); add(m8, "gone", "Board");
+    m8.concepts.old.deprecated = true; m8.concepts.old.isReplacedBy = ["nu"];
+    m8.concepts.gone.deprecated = true; m8.concepts.gone.isReplacedBy = ["https://w3id.org/pkm/systems/Board"]; m8.concepts.gone.exactMatch = ["https://w3id.org/pkm/systems/Board"];
+    m8.extLabels = { "https://w3id.org/pkm/systems/Board": { val: "Board", lang: "en" } };
+    const ttl8 = Core.toTurtle(m8, {});
+    check("#140 export writes a same-scheme successor and the inverse dcterms:replaces", /t:old[\s\S]*dcterms:isReplacedBy t:nu/.test(ttl8) && /t:nu[\s\S]*dcterms:replaces t:old/.test(ttl8), ttl8.slice(0, 600));
+    check("#140 export writes an external successor as its IRI", /t:gone[\s\S]*dcterms:isReplacedBy <https:\/\/w3id\.org\/pkm\/systems\/Board>/.test(ttl8), ttl8);
+    const back8 = Core.parseTurtle(ttl8);
+    check("#140 import keeps the external successor as an IRI and mints no concept for it", (back8.concepts.gone.isReplacedBy || [])[0] === "https://w3id.org/pkm/systems/Board" && !Object.keys(back8.concepts).some(k => /Board$/.test(k) && k !== "gone"), { succ: back8.concepts.gone && back8.concepts.gone.isReplacedBy, ids: Object.keys(back8.concepts) });
+    check("#140 import keeps the same-scheme successor by id", (back8.concepts.old.isReplacedBy || [])[0] === "nu", back8.concepts.old && back8.concepts.old.isReplacedBy);
+    check("#140 dcterms:replaces does not survive as a foreign triple", !(back8.foreign || []).some(t => /replaces$/.test(t.p.v)), back8.foreign);
+    check("#140 round trip is stable", Core.toTurtle(back8, {}).split("\n").length === ttl8.split("\n").length);
+    const rep = Core.validate ? Core.validate(m8) : null;
+    if (rep) { const items = rep.items || rep.findings || rep; check("#140 an IRI successor is not reported as dangling", !JSON.stringify(items).includes("danglingReplacedBy"), JSON.stringify(items).slice(0, 300)); }
+  } catch (e) { fails.push("exception in #140: " + e.message); lines.push("EXCEPTION #140 " + e.message); }
   const summary = lines.join("\n") + "\n\n" + (fails.length ? "FAILURES: " + fails.join(" | ") : "ALL PASS (" + lines.length + " checks)");
   if (isNode) { console.log(summary); process.exit(fails.length ? 1 : 0); }
   root.__coreTestResult = { fails, lines, summary };
