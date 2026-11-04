@@ -1088,6 +1088,7 @@ function canonLangTag(v){
   return [lang, ...rest].join("-");
 }
 function validate(model){
+  const plabelOf = id => { const k = model.concepts[id]; if (!k) return id; const p = (k.pref || []).find(l => l.val); return p ? p.val : id; };
   const R = [];
   const push = (severity, code, title, message, concept) => R.push({ severity, code, title, message, concept });
   const ids = Object.keys(model.concepts);
@@ -1188,7 +1189,7 @@ function validate(model){
 
     // 6 undocumented concepts
     const hasDoc = (c.definition || []).some(l => l.val) || (c.scopeNote || []).some(l => l.val);
-    if (!hasDoc) push("info", "undocumented", "Undocumented concept",
+    if (!hasDoc && !c.deprecated) push("info", "undocumented", "Undocumented concept",   // #144: a retired concept is not asked for a definition
       `No skos:definition or skos:scopeNote.`, id);
 
     // 7 orphan (no hierarchical — plain or ISO 25964 — or associative relations, and not top)
@@ -1219,6 +1220,18 @@ function validate(model){
         `dcterms:isReplacedBy points to unknown concept "${rid}".`, id);
       if (hasNarrower && !(c.isReplacedBy || []).length) push("info", "deprecatedNoSuccessor", "Deprecated without successor",
         `Deprecated concept has narrower concepts but no dcterms:isReplacedBy — record what replaces it so consumers can migrate.`, id);
+      // #144: a retired concept should say where its readers go next
+      const hasMapping = ["exactMatch", "closeMatch", "broadMatch", "narrowMatch", "relatedMatch"].some(f => (c[f] || []).some(Boolean));
+      if (!(c.isReplacedBy || []).length && !hasMapping) push("warning", "deprecatedNoForwarding", "Deprecated with no forwarding address",
+        `Deprecated concept has neither a successor (dcterms:isReplacedBy) nor a mapping — readers of the old URI have nowhere to go.`, id);
+    }
+    // #144: a live concept should not point at a retired one
+    if (!c.deprecated){
+      for (const f of ["broader", "broaderGeneric", "broaderPartitive", "broaderInstantial"])
+        for (const p of (c[f] || [])) if (C[p] && C[p].deprecated) push("warning", "liveLinkToDeprecated", "Live link to a deprecated concept",
+          `skos:${f === "broader" ? "broader" : f} points at the deprecated concept "${plabelOf(p)}" — redirect it to the successor, or remove it.`, id);
+      for (const r of (c.related || [])) if (C[r] && C[r].deprecated) push("warning", "liveLinkToDeprecated", "Live link to a deprecated concept",
+        `skos:related points at the deprecated concept "${plabelOf(r)}" — redirect it to the successor, or remove it.`, id);
     }
 
     // 15 reflexive relations

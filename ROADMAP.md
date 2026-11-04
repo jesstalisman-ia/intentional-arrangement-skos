@@ -8,6 +8,8 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
+- **Lifecycle checks** (#144) — the undocumented-concept check skips deprecated concepts; a live link to a deprecated concept and a retired concept with no successor and no mapping are warnings, in the in-app validator and in the SHACL shapes.
+
 - **Successors in another scheme** (#140) — Lifecycle above External mappings; Replaced by takes a concept of this scheme or any IRI, with a label and the mapping in the same step; links other concepts hold to a retired concept are redirected or removed by a button; history notes record the retirement; a one-click version bump; a rename offers to keep the old label.
 
 - **Deprecated concepts, visibly** — struck through with a badge in the tree and the browse views, a toggle to hide retired leaves, a one-press move of a deprecated concept's narrower concepts to its successor, and guidance that a rename alone is an in-place edit.

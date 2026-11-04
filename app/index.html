@@ -3464,6 +3464,8 @@ const CHECK_DOC={
   deprecatedTop:"A deprecated concept should not remain a top concept / scheme entry point.",
   danglingReplacedBy:"dcterms:isReplacedBy points to a concept that does not exist.",
   deprecatedNoSuccessor:"A deprecated concept with narrower concepts should record a successor (dcterms:isReplacedBy) so consumers can migrate.",
+  deprecatedNoForwarding:"A deprecated concept should name a successor (dcterms:isReplacedBy) or a mapping, so readers of the old URI know where to go.",
+  liveLinkToDeprecated:"A live concept should not hold a broader or related link to a deprecated concept; redirect it to the successor or remove it.",
   placeholderNamespace:"The scheme still uses the reserved example.org placeholder base — set your own namespace before publishing.",
 };
 // #61: the validation report as a downloadable Markdown work list — checkbox

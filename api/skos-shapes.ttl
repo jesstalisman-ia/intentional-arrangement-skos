@@ -44,6 +44,7 @@
   sh:declare [ sh:prefix "rdf" ;     sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ] ;
   sh:declare [ sh:prefix "rdfs" ;    sh:namespace "http://www.w3.org/2000/01/rdf-schema#"^^xsd:anyURI ] ;
   sh:declare [ sh:prefix "dcterms" ; sh:namespace "http://purl.org/dc/terms/"^^xsd:anyURI ] ;
+  sh:declare [ sh:prefix "owl" ;     sh:namespace "http://www.w3.org/2002/07/owl#"^^xsd:anyURI ] ;
 .
 
 # ===========================================================================
@@ -357,6 +358,7 @@ ix:ConceptDocumentation
         WHERE {
           FILTER NOT EXISTS { $this skos:definition ?d }
           FILTER NOT EXISTS { $this skos:scopeNote ?n }
+          FILTER NOT EXISTS { $this owl:deprecated true }
         }
       """ ;
     ] ;
@@ -607,6 +609,55 @@ ix:NoteWhitespace
           $this ?path ?value .
           FILTER (?path IN (skos:definition, skos:scopeNote, skos:example, skos:note, skos:historyNote, skos:editorialNote, skos:changeNote)
                   && regex(str(?value), "^\\\\s|\\\\s$"))
+        }
+      """ ;
+    ] ;
+.
+
+# ===========================================================================
+# Lifecycle -- live links to retired concepts, retired concepts without a forwarding address (#144)
+# ===========================================================================
+
+ix:LiveLinkToDeprecated
+  a sh:NodeShape ;
+  rdfs:label "live concept linked to a deprecated one" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "Live link to a deprecated concept: this concept is not deprecated, but its skos:broader or skos:related points at a concept that is. The retired concept keeps its URI for old references; the live structure should move on. Redirect the link to the successor named by dcterms:isReplacedBy, or remove it." ;
+      sh:select """
+        SELECT $this ?path ?value
+        WHERE {
+          $this ?path ?value .
+          FILTER (?path IN (skos:broader, skos:related))
+          ?value owl:deprecated true .
+          FILTER NOT EXISTS { $this owl:deprecated true }
+        }
+      """ ;
+    ] ;
+.
+
+ix:DeprecatedWithoutForwarding
+  a sh:NodeShape ;
+  rdfs:label "deprecated concept with no successor and no mapping" ;
+  sh:targetClass skos:Concept ;
+  sh:severity sh:Warning ;
+  sh:sparql [
+      a sh:SPARQLConstraint ;
+      sh:prefixes <https://w3id.org/skos-integrity-shapes> ;
+      sh:message "No forwarding address: this concept is deprecated but names neither a successor (dcterms:isReplacedBy) nor a mapping to a concept elsewhere. Readers who hold the old URI learn that it is retired and nothing more. Name the successor, in this scheme or another, or map it." ;
+      sh:select """
+        SELECT $this
+        WHERE {
+          $this owl:deprecated true .
+          FILTER NOT EXISTS { $this dcterms:isReplacedBy ?s }
+          FILTER NOT EXISTS { $this skos:exactMatch ?e }
+          FILTER NOT EXISTS { $this skos:closeMatch ?c }
+          FILTER NOT EXISTS { $this skos:broadMatch ?b }
+          FILTER NOT EXISTS { $this skos:narrowMatch ?n }
+          FILTER NOT EXISTS { $this skos:relatedMatch ?r }
         }
       """ ;
     ] ;

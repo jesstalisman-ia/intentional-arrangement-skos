@@ -93,6 +93,22 @@
     const rep = Core.validate ? Core.validate(m8) : null;
     if (rep) { const items = rep.items || rep.findings || rep; check("#140 an IRI successor is not reported as dangling", !JSON.stringify(items).includes("danglingReplacedBy"), JSON.stringify(items).slice(0, 300)); }
   } catch (e) { fails.push("exception in #140: " + e.message); lines.push("EXCEPTION #140 " + e.message); }
+  // #144 lifecycle checks in the in-app validator
+  try {
+    const m9 = mk("http://ex.org/t/", "t"); add(m9, "live", "Live"); add(m9, "ret", "Retired"); add(m9, "lost", "Lost"); add(m9, "kid", "Kid", ["ret"]);
+    m9.concepts.live.definition = [{ val: "A live concept.", lang: "en" }]; m9.concepts.live.related = ["ret"];
+    m9.concepts.ret.deprecated = true; m9.concepts.ret.isReplacedBy = ["live"];
+    m9.concepts.lost.deprecated = true;
+    m9.concepts.kid.definition = [{ val: "A child.", lang: "en" }];
+    const rep = Core.validate(m9); const txt = JSON.stringify(rep);
+    const codes = (rep.items || rep.findings || rep.issues || []).map(x => x.code || x.rule || x.id || "");
+    const has = code => txt.includes('"' + code + '"');
+    check("#144 a deprecated concept is not reported as undocumented", !((rep.items || rep.findings || rep.issues || []).some(x => (x.code === "undocumented" || x.rule === "undocumented") && /ret|lost/.test(JSON.stringify(x)))), txt.slice(0, 400));
+    check("#144 a live related link to a deprecated concept is a warning", has("liveLinkToDeprecated"), codes);
+    check("#144 a live broader link to a deprecated concept is a warning", (txt.match(/liveLinkToDeprecated/g) || []).length >= 2, codes);
+    check("#144 a deprecated concept with no successor and no mapping is a warning", has("deprecatedNoForwarding") && /lost/.test(txt), codes);
+    check("#144 a deprecated concept with a successor is not reported for forwarding", !/deprecatedNoForwarding[^}]*"ret"/.test(txt));
+  } catch (e) { fails.push("exception in #144: " + e.message); lines.push("EXCEPTION #144 " + e.message); }
   const summary = lines.join("\n") + "\n\n" + (fails.length ? "FAILURES: " + fails.join(" | ") : "ALL PASS (" + lines.length + " checks)");
   if (isNode) { console.log(summary); process.exit(fails.length ? 1 : 0); }
   root.__coreTestResult = { fails, lines, summary };

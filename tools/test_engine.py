@@ -147,6 +147,20 @@ def main():
     except skoslib.UnsupportedFormat:
         check("MCP unsupported target raises", True)
 
+
+    # #144 lifecycle shapes
+    T144 = SKOS + """@prefix ex: <http://example.org/> . @prefix owl: <http://www.w3.org/2002/07/owl#> .
+ex:s a skos:ConceptScheme ; dct:title "Lifecycle"@en ; dct:created "2026-01-01"^^<http://www.w3.org/2001/XMLSchema#date> ; dct:publisher "Test" ; skos:hasTopConcept ex:live , ex:ret , ex:lost .
+ex:live a skos:Concept ; skos:prefLabel "Live"@en ; skos:definition "A live concept."@en ; skos:inScheme ex:s ; skos:topConceptOf ex:s ; skos:related ex:ret .
+ex:ret a skos:Concept ; skos:prefLabel "Retired"@en ; owl:deprecated true ; dct:isReplacedBy ex:live ; skos:inScheme ex:s ; skos:topConceptOf ex:s .
+ex:lost a skos:Concept ; skos:prefLabel "Lost"@en ; owl:deprecated true ; skos:inScheme ex:s ; skos:topConceptOf ex:s ."""
+    r = skoslib.validate_rdf(T144, "turtle")
+    hit = {}
+    for x in r["shacl_results"]:
+        hit.setdefault(x["shape"], []).append(x["focus_node"].split("/")[-1])
+    check("#144 the documentation shape skips deprecated concepts", not any(f in ("ret", "lost") for f in hit.get("ix:ConceptDocumentation", [])), hit)
+    check("#144 a live link to a deprecated concept fires", "live" in hit.get("ix:LiveLinkToDeprecated", []), hit)
+    check("#144 a deprecated concept with no forwarding address fires, one with a successor does not", hit.get("ix:DeprecatedWithoutForwarding") == ["lost"], hit)
     print("\nFAILURES:", FAILS or "none")
     return 1 if FAILS else 0
 
