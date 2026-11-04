@@ -40,15 +40,18 @@ def _hint():
 
 
 def _unsupported():
-    """A format the engine does not offer: say which was asked for, and what is
+    """A format the engine does not offer: say which was asked for and what is
     offered, so it is never mistaken for bad input. The message is built from the
     request's own format names, never from exception text (code-scanning:
-    py/stack-trace-exposure)."""
-    asked = f"source '{_hint() or '(none)'}'"
-    if request.args.get("to"):
-        asked += f", target '{request.args.get('to')}'"
+    py/stack-trace-exposure). The engine checks the target before the source, so
+    the same order decides which one is named here."""
+    to = (request.args.get("to") or "").lower()
+    if to and to not in skoslib.SERIALIZE:
+        what = f"unsupported target format '{to}'"
+    else:
+        what = f"unsupported source format '{_hint() or '(none)'}'"
     return jsonify({"ok": False,
-                    "error": f"unsupported format ({asked}). Input formats: {', '.join(skoslib.INPUT_FORMATS)}; "
+                    "error": f"{what}. Input formats: {', '.join(skoslib.INPUT_FORMATS)}; "
                              f"output formats: {', '.join(skoslib.OUTPUT_FORMATS)}.",
                     "supported_input": skoslib.INPUT_FORMATS, "supported_output": skoslib.OUTPUT_FORMATS}), 400
 
