@@ -54,8 +54,12 @@
   check("#133 RDF/XML keeps a predicate outside the namespace table", /xmlns:ns1="http:\/\/schema\.org\/"/.test(xml) && /<ns1:sameAs rdf:resource="http:\/\/example\.org\/y"/.test(xml), xml.slice(0, 300));
   // #134
   const m4 = mk("http://ex.org/t/", "t"); add(m4, "f", "F", null, { uri: "http://other.org/f" });
-  check("#134 CSV honours the concept's own URI", Core.toCsv(m4).includes("http://other.org/f") && !Core.toCsv(m4).includes("http://ex.org/t/f"));
-  check("#134 Markdown honours the concept's own URI", Core.toMarkdown(m4).includes("http://other.org/f") && !Core.toMarkdown(m4).includes("http://ex.org/t/f"));
+  // compare the exported URI cells as whole values (a substring test on a URL
+  // literal reads as a broken origin check to code scanning; it was never one)
+  const csvUris = Core.toCsv(m4).split(/\r?\n/).slice(1).map(r => (r.split(",")[1] || "").replace(/^"|"$/g, ""));   // the uri column
+  check("#134 CSV honours the concept's own URI", csvUris.some(u => u === "http://other.org/f") && !csvUris.some(u => u === "http://ex.org/t/f"), csvUris);
+  const mdUris = (Core.toMarkdown(m4).match(/\*\*URI:\*\* `[^`]*`/g) || []).map(s => s.slice(s.indexOf("`") + 1, -1));
+  check("#134 Markdown honours the concept's own URI", mdUris.some(u => u === "http://other.org/f") && !mdUris.some(u => u === "http://ex.org/t/f"), mdUris);
   // #135
   let csvOk = null; try { const cm = Core.csvToModel("id,label\na,Alpha\nb,Beta\n"); csvOk = Object.keys(cm.concepts).length; } catch (e) { csvOk = "ERR " + e.message; }
   check("#135 CSV import works wherever core.js runs", csvOk === 2, csvOk);

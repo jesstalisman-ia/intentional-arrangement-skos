@@ -39,9 +39,17 @@ def _hint():
     return (request.args.get("from") or (request.content_type or "").split(";")[0].strip() or "").lower()
 
 
-def _unsupported(e):
-    """A format the engine does not offer: say which, and what is offered, so it is never mistaken for bad input."""
-    return jsonify({"ok": False, "error": str(e),
+def _unsupported():
+    """A format the engine does not offer: say which was asked for, and what is
+    offered, so it is never mistaken for bad input. The message is built from the
+    request's own format names, never from exception text (code-scanning:
+    py/stack-trace-exposure)."""
+    asked = f"source '{_hint() or '(none)'}'"
+    if request.args.get("to"):
+        asked += f", target '{request.args.get('to')}'"
+    return jsonify({"ok": False,
+                    "error": f"unsupported format ({asked}). Input formats: {', '.join(skoslib.INPUT_FORMATS)}; "
+                             f"output formats: {', '.join(skoslib.OUTPUT_FORMATS)}.",
                     "supported_input": skoslib.INPUT_FORMATS, "supported_output": skoslib.OUTPUT_FORMATS}), 400
 
 
@@ -51,8 +59,8 @@ def validate():
         return Response(status=204)
     try:
         return jsonify(skoslib.validate_rdf(request.get_data(), _hint(), request.args.get("detail", "full")))
-    except skoslib.UnsupportedFormat as e:
-        return _unsupported(e)
+    except skoslib.UnsupportedFormat:
+        return _unsupported()
     except Exception:
         # Log the detail server-side; never return exception/stack text to the
         # client (code-scanning: py/stack-trace-exposure).
@@ -66,8 +74,8 @@ def profile():
         return Response(status=204)
     try:
         return jsonify(skoslib.profile_rdf(request.get_data(), _hint()))
-    except skoslib.UnsupportedFormat as e:
-        return _unsupported(e)
+    except skoslib.UnsupportedFormat:
+        return _unsupported()
     except Exception:
         log.exception("profile failed")
         return jsonify({"ok": False, "error": "Could not profile the submitted RDF. Check that it is well-formed and the format hint is correct."}), 400
@@ -83,8 +91,8 @@ def parse():
         return jsonify(skoslib.parse_vocabulary(request.get_data(), _hint(), scheme=a.get("scheme"), query=a.get("query"),
                                                 lang=a.get("lang"), detail=a.get("detail", "concepts"),
                                                 limit=a.get("limit", 200), offset=a.get("offset", 0)))
-    except skoslib.UnsupportedFormat as e:
-        return _unsupported(e)
+    except skoslib.UnsupportedFormat:
+        return _unsupported()
     except Exception:
         log.exception("parse failed")
         return jsonify({"ok": False, "error": "Could not parse the submitted RDF. Check that it is well-formed and the format hint is correct."}), 400
@@ -99,8 +107,8 @@ def convert():
         resp = Response(text, mimetype=mime)
         resp.headers["Content-Disposition"] = f'inline; filename="vocabulary.{ext}"'
         return resp
-    except skoslib.UnsupportedFormat as e:
-        return _unsupported(e)
+    except skoslib.UnsupportedFormat:
+        return _unsupported()
     except Exception:
         # Log the detail server-side; never return exception/stack text to the
         # client (code-scanning: py/stack-trace-exposure).
