@@ -8,13 +8,13 @@ Legend: ✅ Shipped · 🚧 In progress · 🔜 Next · 💡 Planned
 
 ## ✅ Recently shipped
 
-- **Lifecycle checks** (#144) — the undocumented-concept check skips deprecated concepts; a live link to a deprecated concept and a retired concept with no successor and no mapping are warnings, in the in-app validator and in the SHACL shapes.
+- **Lifecycle checks** (v0.19.1, #144) — the undocumented-concept check skips deprecated concepts; a live link to a deprecated concept and a retired concept with no successor and no mapping are warnings, in the in-app validator and in the SHACL shapes.
 
-- **Successors in another scheme** (#140) — Lifecycle above External mappings; Replaced by takes a concept of this scheme or any IRI, with a label and the mapping in the same step; links other concepts hold to a retired concept are redirected or removed by a button; history notes record the retirement; a one-click version bump; a rename offers to keep the old label.
+- **Successors in another scheme** (v0.19.1, #140) — Lifecycle above External mappings; Replaced by takes a concept of this scheme or any IRI, with a label and the mapping in the same step; links other concepts hold to a retired concept are redirected or removed by a button; history notes record the retirement; a one-click version bump; a rename offers to keep the old label.
 
-- **Deprecated concepts, visibly** — struck through with a badge in the tree and the browse views, a toggle to hide retired leaves, a one-press move of a deprecated concept's narrower concepts to its successor, and guidance that a rename alone is an in-place edit.
+- **Deprecated concepts, visibly** (v0.19.0, #139) — struck through with a badge in the tree and the browse views, a toggle to hide retired leaves, a one-press move of a deprecated concept's narrower concepts to its successor, and guidance that a rename alone is an in-place edit.
 
-- **Labels for external mappings** (#137) — each mapping row takes an optional label for its target IRI, written as `rdfs:label` on that IRI, read back on import, and shown in the graph, the concept view and the Markdown export instead of the bare IRI.
+- **Labels for external mappings** (v0.19.0, #137) — each mapping row takes an optional label for its target IRI, written as `rdfs:label` on that IRI, read back on import, and shown in the graph, the concept view and the Markdown export instead of the bare IRI.
 
 ### Language tags: any BCP 47 tag, one canonical form (v0.18.13, #107 #109 #111 #112 #113 #114 #115 #116)
 - The six-language `<select>` for labels, definitions and notes, the import dialog's separate 16-language list, and the free-text scheme default language are replaced by **one language-tag field**: a compact box that opens a `code · Name` dropdown filtering as you type, by code or by name (`nl` and `Dutch` both find Dutch). The scheme default and every tag already in use list first, then all 183 ISO 639-1 codes. Any valid BCP 47 tag can be typed — `nl-BE`, `zh-Hant`, a three-letter ISO 639-2/3 code — and a non-tag such as `english` is rejected with the previous value restored. Names come from the browser's `Intl.DisplayNames`, so the app stays offline and CSP-clean. Requested by @tom-around for German preferred labels (#107); contributed by @abaronbo (#109, #112).
