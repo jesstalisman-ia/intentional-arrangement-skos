@@ -113,6 +113,21 @@
     check("#144 a deprecated concept with no successor and no mapping is a warning", has("deprecatedNoForwarding") && /lost/.test(txt), codes);
     check("#144 a deprecated concept with a successor is not reported for forwarding", !/deprecatedNoForwarding[^}]*"ret"/.test(txt));
   } catch (e) { fails.push("exception in #144: " + e.message); lines.push("EXCEPTION #144 " + e.message); }
+  // language tags: one canonical form everywhere (editor #111 #116)
+  try {
+    const cl = Core.canonLangTag;
+    check("lang: BCP 47 case convention", cl("EN") === "en" && cl("nl-be") === "nl-BE" && cl("zh-hant") === "zh-Hant" && cl("sr-latn-rs") === "sr-Latn-RS", [cl("EN"), cl("nl-be"), cl("zh-hant"), cl("sr-latn-rs")]);
+    check("lang: a deprecated two-letter code takes the registry's preferred value", cl("iw") === "he" && cl("in") === "id" && cl("IW-il") === "he-IL", [cl("iw"), cl("in"), cl("IW-il")]);
+    check("lang: the language itself is never changed", cl("tl") === "tl" && cl("cmn") === "cmn", [cl("tl"), cl("cmn")]);
+    check("lang: no tag stays empty; a malformed tag comes back unchanged for the validator", cl("") === "" && cl(null) === "" && cl("not a tag") === "not a tag", [cl(""), cl(null), cl("not a tag")]);
+    const tL = '@prefix skos: <' + SKOS + '> . <http://ex.org/t/a> a skos:Concept ; skos:prefLabel "A"@EN ; skos:altLabel "Een"@NL-be .';
+    const ca = Object.values(Core.parseTurtle(tL).concepts)[0];
+    check("lang: import canonicalises tags", ca.pref[0].lang === "en" && ca.alt[0].lang === "nl-BE", { pref: ca.pref, alt: ca.alt });
+    const mL = mk("http://ex.org/t/", "t"); add(mL, "a", "A"); mL.concepts.a.pref = [{ val: "A", lang: "EN" }, { val: "A again", lang: "en" }];
+    const repL = JSON.stringify(Core.validate(mL));
+    check("lang: a stored tag that is not canonical is a warning", repL.includes("langTagCase"), repL.slice(0, 300));
+    check("lang: EN and en are one language in the one-preferred-label check", repL.includes("multiPrefLabel"), repL.slice(0, 300));
+  } catch (e) { fails.push("exception in lang: " + e.message); lines.push("EXCEPTION lang " + e.message); }
   const summary = lines.join("\n") + "\n\n" + (fails.length ? "FAILURES: " + fails.join(" | ") : "ALL PASS (" + lines.length + " checks)");
   if (isNode) { console.log(summary); process.exit(fails.length ? 1 : 0); }
   root.__coreTestResult = { fails, lines, summary };
