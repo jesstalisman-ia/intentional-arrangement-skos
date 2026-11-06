@@ -568,6 +568,89 @@ function modelToGrid(model){
 function toCsv(model){ return gridToCsv(modelToGrid(model)); }
 
 // ============================================================================
+// SSSOM/TSV export (#145) — the mappings between a source and a target
+// taxonomy as a Simple Standard for Sharing Ontological Mappings file:
+// a '# '-prefixed YAML metadata header (curie_map, mapping_set_id, license,
+// creator) followed by one TSV row per mapping. Pair-scoped like the
+// Crosswalk tab's "Mappings only" export: only mappings whose object is a
+// concept of the chosen target taxonomy. mapping_justification defaults to
+// semapv:UnspecifiedMatching until the editor records one per mapping.
+// Client-side, zero dependencies. https://w3id.org/sssom/
+function toSssom(model, target){
+  const nsmap = { "http://www.w3.org/2004/02/skos/core#": "skos",
+                  "https://w3id.org/semapv/vocab/": "semapv",
+                  "http://www.wikidata.org/entity/": "wikidata",
+                  "http://dbpedia.org/resource/": "dbr" };
+  const used = { skos: "http://www.w3.org/2004/02/skos/core#",
+                 semapv: "https://w3id.org/semapv/vocab/" };
+  // wikidata/dbr join `used` (and so the curie_map) only when a row needs them
+  const lazyNs = { wikidata: "http://www.wikidata.org/entity/", dbr: "http://dbpedia.org/resource/" };
+  const taken = new Set(Object.keys(used).concat(Object.keys(lazyNs)));
+  let autoN = 0;
+  const mintPrefix = (ns, hint) => {
+    if (nsmap[ns]) return nsmap[ns];
+    let p = String(hint || "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (!p || taken.has(p)) { do { p = "ns" + (++autoN); } while (taken.has(p)); }
+    taken.add(p); nsmap[ns] = p; used[p] = ns; return p;
+  };
+  // register the pair's own namespaces first so their CURIEs read well
+  if (model.base) mintPrefix(model.base, model.prefix || "src");
+  if (target && target.base) mintPrefix(target.base, target.prefix || "tgt");
+  const curie = u => {
+    for (const ns in nsmap) if (u.startsWith(ns) && u.length > ns.length){
+      const local = u.slice(ns.length);
+      if (/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(local)){ const p = nsmap[ns]; if (!used[p]) used[p] = ns; return p + ":" + local; }
+    }
+    const cut = Math.max(u.lastIndexOf("#"), u.lastIndexOf("/"));
+    if (cut > 7 && cut < u.length - 1){
+      const local = u.slice(cut + 1);
+      if (/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(local)) return mintPrefix(u.slice(0, cut + 1)) + ":" + local;
+    }
+    return u; // no clean CURIE — SSSOM accepts a full IRI
+  };
+  const cell = v => String(v == null ? "" : v).replace(/[\t\r\n]+/g, " ").trim();
+  const dl = model.defaultLang || "en";
+  const plab = c => { const p = (c.pref || []).find(l => l.lang === dl && l.val) || (c.pref || []).find(l => l.val); return p ? p.val : (c.id || ""); };
+  // labels for target-side IRIs: the target taxonomy's concepts, then the
+  // labels the editor recorded on external mapping targets (#137)
+  const tLabel = {};
+  if (target) for (const id of (target.order || [])){ const c = target.concepts[id]; if (c) tLabel[conceptRes(target, id)] = plab(c); }
+  const extL = model.extLabels || {};
+  const tset = target ? new Set((target.order || []).map(id => conceptRes(target, id))) : null;
+  // rows
+  const cols = ["subject_id","subject_label","predicate_id","object_id","object_label",
+                "mapping_justification","subject_source","object_source","comment"];
+  const srcScheme = (model.scheme && model.scheme.uri) || model.base || "";
+  const tgtScheme = target ? ((target.scheme && target.scheme.uri) || target.base || "") : "";
+  const rows = [];
+  const ids = model.order && model.order.length ? model.order : Object.keys(model.concepts || {});
+  for (const id of ids){
+    const c = model.concepts[id]; if (!c) continue;
+    const su = conceptRes(model, id);
+    for (const m of MAP_FIELDS)
+      for (const u of (c[m] || [])){
+        if (!u) continue;
+        if (tset && !tset.has(u)) continue; // pair-scoped, like "Mappings only"
+        const ol = tLabel[u] || (extL[u] && extL[u].val) || "";
+        rows.push([ curie(su), cell(plab(c)), "skos:" + m, curie(u), cell(ol),
+                    "semapv:UnspecifiedMatching", srcScheme, tgtScheme, "" ]);
+      }
+  }
+  // metadata header — written AFTER the rows so curie_map holds every prefix
+  // the rows minted. Values YAML-quoted; '# ' prefix per the SSSOM TSV spec.
+  const yq = v => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+  const setId = srcScheme ? srcScheme.replace(/[#/]+$/, "") + "/mappings" : "https://example.org/mappings";
+  const head = ["# curie_map:"];
+  for (const p of Object.keys(used).sort()) head.push("#   " + p + ": " + yq(used[p]));
+  head.push("# mapping_set_id: " + yq(setId));
+  head.push("# mapping_set_description: " + yq("Mappings from “" + ((model.scheme && model.scheme.title) || "source") + "”" + (target ? " to “" + ((target.scheme && target.scheme.title) || "target") + "”" : "") + ", exported by the Intentional Arrangement SKOS editor."));
+  head.push("# license: " + yq((model.scheme && model.scheme.license) || "https://w3id.org/sssom/license/unspecified"));
+  if (model.scheme && model.scheme.creator) head.push("# creator_label: " + yq(model.scheme.creator));
+  head.push("# mapping_date: " + yq(new Date().toISOString().slice(0, 10)));
+  return head.join("\n") + "\n" + cols.join("\t") + "\n" + rows.map(r => r.join("\t")).join("\n") + (rows.length ? "\n" : "");
+}
+
+// ============================================================================
 // Spreadsheet import — CSV and Excel (.xlsx) → model. Client-side only, no
 // network. Template columns (header row, case-insensitive; underscores/spaces
 // ignored): id, prefLabel, altLabel, hiddenLabel, definition, scopeNote,
@@ -2290,6 +2373,6 @@ function termStr(t){
   return s;
 }
 
-root.Core = { NS, iri, lit, canonLangTag, termId, emptyConcept, conceptUri, conceptRes, collectionRes, xlLabelUri, canonUuid, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toMarkdown, toChangelog, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
+root.Core = { NS, iri, lit, canonLangTag, termId, emptyConcept, conceptUri, conceptRes, collectionRes, xlLabelUri, canonUuid, buildTriples, toTurtle, toRdfXml, toJsonLd, toCsv, toSssom, toMarkdown, toChangelog, toRdfJson, toAuditCsv, validate, autofix, parseTurtle, parseTriples, parseRdfXml, triplesToModel, sparql, termStr, safeLocal, parseCsvText, csvToModel, gridToModel, gridToCsv, looksLikeCsv, parseXlsx, csvTemplate, modelToGrid, toXlsx, ISO_BROADER, ISO_INVERSE, ISO_ENTAILS_SKOS };
 
 })(typeof window !== "undefined" ? window : this);

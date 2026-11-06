@@ -956,13 +956,13 @@
           <b style="font-size:12.5px">Export</b>
           <select id="xwScope" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text);max-width:340px"></select>
           <select id="xwFmt" title="File format" style="padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--text)">
-            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option>
+            <option value="ttl">Turtle</option><option value="rdf">RDF/XML</option><option value="jsonld">JSON-LD</option><option value="sssom" title="Simple Standard for Sharing Ontological Mappings — TSV with a metadata header. Mappings-only scope.">SSSOM/TSV</option>
           </select>
           <label class="toggle" title="Emit labels as skosxl:Label resources (plus plain skos labels for compatibility)"><input type="checkbox" id="xwXl"> SKOS-XL labels</label>
           <button class="btn sm primary" id="xwGo">⬇ Download</button>
         </div>
         <div class="subtle" id="xwExpSummary" style="font-size:11.5px;padding:2px 0 0"></div>
-        <div class="xw-hint subtle"><b>v0.19.1</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
+        <div class="xw-hint subtle"><b>v0.20.0</b> · Align concepts across two taxonomies with SKOS mapping properties to build a federated <b>thesaurus</b>. Auto-match proposes links from identical/near labels; confirm or add your own, then export the crosswalk or the full thesaurus — the <b>Mappings only</b> scope also exports <b>SSSOM/TSV</b>, the mapping-interchange standard. Mappings are stored on the source concepts, so they also flow into normal RDF export. Mapping to an <b>external vocabulary</b> (SKOS itself, Schema.org, Dublin Core…)? Add it on the concept — Build tab → <b>External mappings</b> — where you can type a full IRI or a term like <code>skos:Concept</code>.</div>
         <div class="xw-status subtle" id="xwStatus"></div>
       </div>
 
@@ -3291,7 +3291,7 @@ if($('#xwTarget')){
   if($('#xwViewTable')) $('#xwViewTable').onclick=()=>xwSetView('table');
   let _xwRz; window.addEventListener('resize',()=>{ clearTimeout(_xwRz); _xwRz=setTimeout(()=>{ if(xwView==='visual'&&xwTargetModel&&($('.panel[data-panel=crosswalk]')||{classList:{contains:()=>false}}).classList.contains('active')) renderXwVisual(); },200); });
   function xwFmtInfo(){ const f=($('#xwFmt')||{}).value||'ttl';
-    return f==='rdf' ? {f,ext:'rdf',mime:'application/rdf+xml'} : f==='jsonld' ? {f,ext:'jsonld',mime:'application/ld+json'} : {f:'ttl',ext:'ttl',mime:'text/turtle'}; }
+    return f==='rdf' ? {f,ext:'rdf',mime:'application/rdf+xml'} : f==='jsonld' ? {f,ext:'jsonld',mime:'application/ld+json'} : f==='sssom' ? {f,ext:'sssom.tsv',mime:'text/tab-separated-values'} : {f:'ttl',ext:'ttl',mime:'text/turtle'}; }
   function xwSerialize(triples, fmt){
     if(fmt==='rdf') return Core.toRdfXml(xwSourceModel,{_triples:triples});
     if(fmt==='jsonld') return JSON.stringify(Core.toJsonLd(xwSourceModel,{_triples:triples}),null,2);
@@ -3338,16 +3338,29 @@ if($('#xwTarget')){
       pair: pair?`One file holding BOTH taxonomies in full — “${A}” and “${B}”, every concept, both concept schemes — plus the ${n} mappings that join them: a complete federated thesaurus.`:"",
       fed: `One file with EVERY taxonomy in this workspace that takes part in any crosswalk (${fed.length?fed.join(", "):"none yet"}), all schemes and all mappings — the whole network.`};
     if(sum) sum.textContent=txt[sc.value]||"";
+    // SSSOM is a mappings interchange format (#145): only the "Mappings only"
+    // scope fits it — a whole taxonomy is not a mapping set
+    const fm=$('#xwFmt');
+    if(fm){ const so=[...fm.options].find(o=>o.value==='sssom');
+      if(so){ so.disabled=sc.value!=='map'; if(so.disabled&&fm.value==='sssom') fm.value='ttl'; } }
   }
   if($('#xwScope')) $('#xwScope').onchange=xwUpdateExportUI;
   if($('#xwXl')) $('#xwXl').onchange=()=>{ $('#xwXl').dataset.touched="1"; };
   if($('#xwGo')) $('#xwGo').onclick=()=>{
     const scope=($('#xwScope')||{}).value||"fed"; const xl=!!($('#xwXl')&&$('#xwXl').checked);
+    if(($('#xwFmt')||{}).value==='sssom'&&scope!=='map'){ toast("SSSOM is a mappings format — choose the “Mappings only” scope"); return; }
     if(scope==="fed"){ federationExport(($('#xwFmt')||{}).value||'ttl', xl); return; }
     if(!xwSourceModel||!xwTargetModel){ toast("Choose a source and target taxonomy first"); return; }
     const {f,ext,mime}=xwFmtInfo();
     const slug=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-    if(scope==="map"){ const tr=xwCombinedTriples(true,false);
+    if(scope==="map"){
+      if(f==='sssom'){
+        const tsv=Core.toSssom(xwSourceModel, xwTargetModel);
+        const n=(tsv.match(/\n/g)||[]).length - (tsv.match(/^#/gm)||[]).length - 1; // rows = lines − header comments − column row
+        if(n<1){ toast("No mappings between this pair yet — draw some or run Auto-match"); return; }
+        xwDownload("crosswalk-"+slug(xwProjName(xwSourcePid))+"-"+slug(xwProjName(xwTargetPid))+"."+ext, tsv, mime);
+        toast(`Downloaded ${n} mappings as SSSOM/TSV — metadata header + one row per mapping`); return; }
+      const tr=xwCombinedTriples(true,false);
       if(!tr.length){ toast("No mappings between this pair yet — draw some or run Auto-match"); return; }
       xwDownload("crosswalk-"+slug(xwProjName(xwSourcePid))+"-"+slug(xwProjName(xwTargetPid))+"."+ext, xwSerialize(tr,f), mime);
       toast(`Downloaded ${tr.length} mapping triples — links only, no concepts (${ext})`); return; }
